@@ -1,0 +1,24 @@
+name: Scheduled Merge Remote Action
+on: 
+  schedule:
+    # This runs every day at midnight (UTC)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allows you to run this manually if needed
+
+jobs:
+  merge-upstream:
+    runs-on: ubuntu-latest
+    steps: 
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: main             # OR 'master' (check your default branch name)
+          fetch-depth: 0 
+      
+      - name: Git Sync Action
+        uses: wei/git-sync@v3
+        with:
+          source_repo: "GoogleCloudPlatform/dataplex-business-user-interface" # <--- REPLACE THIS
+          source_branch: "main"                            # <--- REPLACE IF NEEDED
+          destination_branch: "main"                       # <--- REPLACE IF NEEDED
+          github_token: ${{ secrets.GITHUB_TOKEN }}
