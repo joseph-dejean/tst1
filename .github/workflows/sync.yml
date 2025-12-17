@@ -1,24 +1,43 @@
-name: Scheduled Merge Remote Action
-on: 
+name: Sync with Upstream (Merge)
+
+on:
   schedule:
-    # This runs every day at midnight (UTC)
+    # Runs every day at midnight
     - cron: '0 0 * * *'
-  workflow_dispatch: # Allows you to run this manually if needed
+  workflow_dispatch: # Allows manual run
 
 jobs:
   merge-upstream:
     runs-on: ubuntu-latest
-    steps: 
+    permissions:
+      contents: write # Important: Allows the script to push changes
+
+    steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          ref: main             # OR 'master' (check your default branch name)
-          fetch-depth: 0 
-      
-      - name: Git Sync Action
-        uses: wei/git-sync@v3
-        with:
-          source_repo: "GoogleCloudPlatform/dataplex-business-user-interface" # <--- REPLACE THIS
-          source_branch: "main"                            # <--- REPLACE IF NEEDED
-          destination_branch: "main"                       # <--- REPLACE IF NEEDED
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+          fetch-depth: 0 # Fetches all history for merging
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Merge Upstream
+        run: |
+          # 1. Add Google's repo as 'upstream'
+          git remote add upstream https://github.com/GoogleCloudPlatform/dataplex-business-user-interface.git
+          
+          # 2. Fetch the latest code from Google
+          git fetch upstream
+
+          # 3. Attempt to merge Google's code into yours
+          # This command tries to combine them. If there is a conflict, it will fail and notify you.
+          git merge upstream/main --no-edit || {
+            echo "::error::Merge conflict detected. You must resolve this manually."
+            exit 1
+          }
+
+          # 4. Push the combined code to your repo
+          git push origin main

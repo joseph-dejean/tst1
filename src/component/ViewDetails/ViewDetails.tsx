@@ -1,3 +1,4 @@
+import ChatTab from '../ConversationalAnalytics/ChatTab';
 import React, { useEffect, useState } from 'react'
 import { Box, Tab, Tabs, Tooltip } from '@mui/material'
 import { ArrowBack } from '@mui/icons-material'
@@ -483,10 +484,12 @@ useEffect(() => {
                               <Tab key="lineage" label="Lineage" {...tabProps(2)} />,
                               <Tab key="dataProfile" label="Data Profile" {...tabProps(3)} />,
                               <Tab key="dataQuality" label="Data Quality" {...tabProps(4)} />
+                              
                             ] : getEntryType(entry.name, '/') === 'Datasets' ? [
                               <Tab key="overview" label="Overview" {...tabProps(0)} />,
                               <Tab key="entryList" label="Entry List" {...tabProps(1)} />,
-                              <Tab key="annotations" label="Aspects" {...tabProps(2)} />
+                              <Tab key="annotations" label="Aspects" {...tabProps(2)} />,
+                              <Tab key="chat" label="Conversational Analytics" {...tabProps(5)} />
                             ] : [
                               <Tab key="overview" label="Overview" {...tabProps(0)} />,
                               <Tab key="annotations" label="Aspects" {...tabProps(1)} />,
@@ -525,6 +528,17 @@ useEffect(() => {
                         </CustomTabPanel>
                         <CustomTabPanel value={tabValue} index={4}>
                             <DataQuality scanName={dqScanName} />
+                        </CustomTabPanel>
+                        
+                        <CustomTabPanel value={tabValue} index={5}>
+                            <Box sx={{ 
+                              borderRadius: '8px', 
+                              border: '1px solid #DADCE0', 
+                              background: '#ffffff',
+                              minHeight: '500px'
+                            }}>
+                              <ChatTab entry={entry} />
+                            </Box>
                         </CustomTabPanel>
                       </>
                     ) : getEntryType(entry.name, '/') === 'Datasets' ? (

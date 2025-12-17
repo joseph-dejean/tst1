@@ -1,4 +1,5 @@
 // server.js
+const { VertexAI } = require('@google-cloud/vertexai');
 const express = require('express');
 const fs = require('fs').promises;
 const { GoogleAuth, OAuth2Client } = require('google-auth-library');
@@ -35,6 +36,48 @@ class CustomGoogleAuth extends GoogleAuth {
 
 
 const app = express();
+// --- START CONVERSATIONAL ANALYTICS CODE ---
+
+// Initialize Vertex AI
+// Note: Ensure GCP_LOCATION env var is set in Cloud Run (e.g., us-central1)
+const vertex_ai = new VertexAI({
+  project: process.env.GOOGLE_CLOUD_PROJECT_ID,
+  location: process.env.GCP_LOCATION || 'us-central1'
+});
+const gemini_model = 'gemini-1.5-flash-001';
+
+app.post('/api/v1/chat', async (req, res) => {
+  try {
+    const { message, context } = req.body;
+    
+    // Initialize the model
+    const generativeModel = vertex_ai.getGenerativeModel({ model: gemini_model });
+    
+    // Create a prompt that gives the AI context about the data
+    const prompt = `
+      You are a helpful Data Steward assistant for Dataplex.
+      
+      Here is the metadata for the dataset the user is looking at:
+      Name: ${context.name}
+      Description: ${context.description}
+      Schema/Columns: ${JSON.stringify(context.schema)}
+      
+      User Question: ${message}
+      
+      Answer the user's question based strictly on the metadata provided above. Keep it concise.
+    `;
+
+    const result = await generativeModel.generateContent(prompt);
+    const response = result.response;
+    const text = response.candidates[0].content.parts[0].text;
+
+    res.json({ reply: text });
+  } catch (err) {
+    console.error("Vertex AI Error:", err);
+    res.status(500).json({ error: "Failed to generate response from AI." });
+  }
+});
+// --- END CONVERSATIONAL ANALYTICS CODE ---
 const PORT = process.env.PORT || 8080;
 
 app.use(cors());
