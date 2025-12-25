@@ -1,6 +1,8 @@
 // server.js
+console.log("Starting server.js...");
 require('dotenv').config();
 const { VertexAI } = require('@google-cloud/vertexai');
+
 const express = require('express');
 const fs = require('fs').promises;
 const { GoogleAuth, OAuth2Client } = require('google-auth-library');
@@ -41,10 +43,20 @@ const app = express();
 
 // Initialize Vertex AI
 // Note: Ensure GCP_LOCATION env var is set in Cloud Run (e.g., us-central1)
-const vertex_ai = new VertexAI({
-  project: process.env.GOOGLE_CLOUD_PROJECT_ID,
-  location: process.env.GCP_LOCATION || 'us-central1'
-});
+let vertex_ai;
+if (process.env.GOOGLE_CLOUD_PROJECT_ID) {
+  try {
+    vertex_ai = new VertexAI({
+      project: process.env.GOOGLE_CLOUD_PROJECT_ID,
+      location: process.env.GCP_LOCATION || 'us-central1'
+    });
+    console.log("Vertex AI initialized.");
+  } catch (e) {
+    console.error("Failed to initialize Vertex AI:", e);
+  }
+} else {
+  console.warn("GOOGLE_CLOUD_PROJECT_ID not set. Vertex AI features will be disabled.");
+}
 const gemini_model = 'gemini-1.5-flash-001';
 
 app.post('/api/v1/chat', async (req, res) => {
@@ -1587,7 +1599,7 @@ app.get('/', (req, res) => {
 
 // For any other routes, serve the React index.html
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
