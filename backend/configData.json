@@ -1,7 +1,31 @@
 {
-  "aspectType": {
-  },
-  "assets": {
-  },
-  "products": []
+  "aspectType": {},
+  "assets": {},
+  "products": [],
+  "dataProducts": [
+    {
+      "id": "marketing-analytics",
+      "displayName": "Marketing Analytics",
+      "description": "Consolidated view of marketing campaigns, customer interactions, and conversion metrics.",
+      "region": "us-central1",
+      "owner": "marketing-data-stewards@example.com",
+      "assets": []
+    },
+    {
+      "id": "finance-reporting",
+      "displayName": "Finance Reporting",
+      "description": "Financial data for quarterly reporting, including revenue, expenses, and forecasts.",
+      "region": "europe-west1",
+      "owner": "finance-dept@example.com",
+      "assets": []
+    },
+    {
+      "id": "customer-360",
+      "displayName": "Customer 360",
+      "description": "Unified customer profile data aggregated from sales, support, and website activity.",
+      "region": "global",
+      "owner": "customer-success@example.com",
+      "assets": []
+    }
+  ]
 }
