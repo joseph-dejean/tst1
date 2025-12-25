@@ -303,291 +303,96 @@ const ViewDetails = () => {
               </div>
             </div>
 
-  //   }, []);
+            {/* Tabs Navigation */}
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', marginTop: '1rem' }}>
+              <Tabs value={tabValue} onChange={handleTabChange} aria-label="entry details tabs">
+                <Tab label="Overview" {...tabProps(0)} />
+                {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Aspects" {...tabProps(1)} />}
+                {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Lineage" {...tabProps(2)} />}
+                {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Data Profile" {...tabProps(3)} />}
+                {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Data Quality" {...tabProps(4)} />}
 
-  useEffect(() => {
-    // Only fetch if we have a token and haven't fetched yet
-    if (id_token) { // && allScansStatus === 'idle') {
-              dispatch(fetchAllDataScans({ id_token: id_token, projectId: entry?.entrySource?.resource.split('/')[1] || '' }));
-    }
-  }, []);//[dispatch, id_token, allScansStatus]);
+                {getEntryType(entry.name, '/') === 'Datasets' && <Tab label="Entry List" {...tabProps(1)} />}
+                {getEntryType(entry.name, '/') === 'Datasets' && <Tab label="Aspects" {...tabProps(2)} />}
 
-  useEffect(() => {
-    if (
-            entryStatus === 'succeeded' &&
-            allScansStatus === 'succeeded' &&
-            entry?.entrySource?.resource &&
-            allScans
-            ) {
-      // console.log("All data scans from API:", allScans);
+                {getEntryType(entry.name, '/') !== 'Tables' && getEntryType(entry.name, '/') !== 'Datasets' && <Tab label="Aspects" {...tabProps(1)} />}
+              </Tabs>
+            </Box>
+          </div>
 
-      const resourceName = entry.entrySource.resource;
+          {/* Tab Content */}
+          <Box sx={{ padding: '24px 0' }}>
+            {/* Overview Tab */}
+            <CustomTabPanel value={tabValue} index={0}>
+              {overviewTab}
+            </CustomTabPanel>
 
-            // Find the Data Quality scan
-            const dqScan = allScans.find(
-        (scan: any) =>
-            scan.data.resource.includes(resourceName) && scan.type === 'DATA_QUALITY'
-            );
-            setDqScanName(dqScan ? dqScan.name : null);
-
-            // Find the Data Profile scan
-            const dpScan = allScans.find(
-        (scan: any) =>
-            scan.data.resource.includes(resourceName) && scan.type === 'DATA_PROFILE'
-            );
-            setDpScanName(dpScan ? dpScan.name : null);
-
-      // console.log(`For resource [${resourceName}], found DQ scan: ${dqScan ? dqScan.name : 'None'}`);
-      // console.log(`For resource [${resourceName}], found DP scan: ${dpScan ? dpScan.name : 'None'}`);
-
-    }
-  }, [entry, entryStatus, allScans, allScansStatus, entry?.entrySource?.resource]);
-
-
-  useEffect(() => {
-    if (sampleDataStatus === 'succeeded') {
-      // schema = <Schema entry={entry} css={{ width: "100%" }} />;
-      if (entry.entrySource?.system.toLowerCase() === 'bigquery') {
-              setSampleTableData(sampleData);
-            console.log("Sample Data:", sampleData);
-      }
-    }
-  }, [sampleData]);
-
-  useEffect(() => {
-    if (entryStatus === 'loading') {
-              setLoading(true);
-    }
-            if (entryStatus === 'succeeded') {
-              // schema = <Schema entry={entry} css={{width:"100%"}} />;
-              setLoading(false);
-            if (getEntryType(entry.name, '/') == 'Tables' && entry.entrySource?.system.toLowerCase() === 'bigquery') {
-              dispatch(getSampleData({ fqn: entry.fullyQualifiedName, id_token: id_token }));
-      }
-      // console.log("loader:", loading);
-    }
-  }, [entryStatus]);
-
-  // Handle case where entry is already loaded from persistence
-  useEffect(() => {
-    if (entry && entryStatus === 'succeeded' && !loading) {
-              // Entry is already loaded, no need to show loading state
-              setLoading(false);
-    }
-  }, [entry, entryStatus, loading]);
-
-  // Reset tab value when entry changes to prevent tab index issues
-  useEffect(() => {
-    if (entry) {
-              setTabValue(0);
-    }
-  }, [entry?.name]);
-            // Lineage tab with full Lineage component
-            const lineageTab = <Lineage entry={entry} />;
-
-            return (
-            <div style={{ display: "flex", flexDirection: "column", padding: "0px 1rem", background: "#F8FAFD", minHeight: "100vh" }}>
-              <div style={{ display: "flex", flexDirection: "column", borderRadius: "20px", background: "#ffffff", minHeight: "95vh", marginBottom: "2rem" }}>
-                {loading ? (<div style={{ margin: "0px 20px" }}>
-                  <div style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    padding: "24px 0px 16px 0px",
-                    minHeight: "500px",
-                  }}>
-                    <ShimmerLoader count={6} type="card" />
-                  </div>
-                </div>) : (<div style={{ padding: "0px 0rem" }}>
-                  {/* Sticky Header Container */}
-                  <div style={{
-                    position: 'sticky',
-                    top: '64px',
-                    backgroundColor: '#ffffff',
-                    zIndex: 1000,
-                    borderRadius: '20px 20px 0 0'
-                  }}>
-
-                    {/* Primary Title Bar */}
-                    <div style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "24px 0px 4px 0px"
-                    }}>
-                      {/* Left Side - Back Arrow, Title, and Tags */}
-                      <div style={{
-                        display: "flex",
-                        alignItems: "center"
-                      }}>
-                        <button
-                          onClick={goBack}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            color: "#0B57D0",
-                            cursor: "pointer",
-                            padding: "4px",
-                            display: "flex",
-                            alignItems: "center",
-                            marginRight: "1rem"
-                          }}
-                        >
-                          <ArrowBack style={{ fontSize: "24px" }} />
-                        </button>
-                        <Tooltip
-                          title={
-                            entry.entrySource.displayName.length > 0
-                              ? entry.entrySource.displayName
-                              : getName(entry.name || '', '/')
-                          }
-                        >
-                          <div style={{
-                            fontSize: "24px",
-                            fontWeight: 500,
-                            color: "#1F1F1F",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            maxWidth: "600px",
-                            marginRight: "1rem"
-                          }}>
-                            {entry.entrySource.displayName.length > 0
-                              ? entry.entrySource.displayName
-                              : getName(entry.name || '', '/')}
-                          </div>
-                        </Tooltip>
-                        <div style={{ display: "flex", gap: "8px" }}>
-                          <Tag
-                            label={getEntryType(entry.name, '/')}
-                            color="#E8F0FE"
-                            textColor="#1967D2"
-                          />
-                          {/* Add more tags here if needed */}
-                        </div>
-                      </div>
-
-                      {/* Right Side - Action Buttons */}
-                      <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                        {/* Open in BigQuery Button */}
-                        {entry.entrySource?.system.toLowerCase() === 'bigquery' && (
-                          <Tooltip title="Open in BigQuery Console">
-                            <Button
-                              variant="outlined"
-                              startIcon={<Box component="img" src="https://www.gstatic.com/images/branding/product/1x/bigquery_48dp.png" sx={{ width: 20, height: 20 }} />}
-                              onClick={() => window.open(generateBigQueryLink(entry.fullyQualifiedName), '_blank')}
-                              sx={{ textTransform: 'none', borderColor: '#e0e0e0', color: '#3c4043' }}
-                            >
-                              Open in BigQuery
-                            </Button>
-                          </Tooltip>
-                        )}
-
-                        {/* Explore with Looker Studio Button */}
-                        {entry.entrySource?.system.toLowerCase() === 'bigquery' && (
-                          <Tooltip title="Create report in Looker Studio">
-                            <Button
-                              variant="outlined"
-                              startIcon={<Box component="img" src="https://www.gstatic.com/images/branding/product/1x/looker_studio_48dp.png" sx={{ width: 20, height: 20 }} />}
-                              onClick={() => window.open(generateLookerStudioLink(entry.fullyQualifiedName), '_blank')}
-                              sx={{ textTransform: 'none', borderColor: '#e0e0e0', color: '#3c4043' }}
-                            >
-                              Explore
-                            </Button>
-                          </Tooltip>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Tabs Navigation */}
-                    <Box sx={{ borderBottom: 1, borderColor: 'divider', marginTop: '1rem' }}>
-                      <Tabs value={tabValue} onChange={handleTabChange} aria-label="entry details tabs">
-                        <Tab label="Overview" {...tabProps(0)} />
-                        {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Aspects" {...tabProps(1)} />}
-                        {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Lineage" {...tabProps(2)} />}
-                        {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Data Profile" {...tabProps(3)} />}
-                        {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Data Quality" {...tabProps(4)} />}
-
-                        {getEntryType(entry.name, '/') === 'Datasets' && <Tab label="Entry List" {...tabProps(1)} />}
-                        {getEntryType(entry.name, '/') === 'Datasets' && <Tab label="Aspects" {...tabProps(2)} />}
-
-                        {getEntryType(entry.name, '/') !== 'Tables' && getEntryType(entry.name, '/') !== 'Datasets' && <Tab label="Aspects" {...tabProps(1)} />}
-                      </Tabs>
-                    </Box>
-                  </div>
-
-                  {/* Tab Content */}
-                  <Box sx={{ padding: '24px 0' }}>
-                    {/* Overview Tab */}
-                    <CustomTabPanel value={tabValue} index={0}>
-                      {overviewTab}
-                    </CustomTabPanel>
-
-                    {/* Aspects Tab (Index 1 for Tables/Others, Index 2 for Datasets) */}
-                    <CustomTabPanel value={tabValue} index={getEntryType(entry.name, '/') === 'Datasets' ? 2 : 1}>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <AnnotationFilter
-                          entry={entry}
-                        // setFilteredEntry={setFilteredEntry}
-                        />
-                        {annotationTab}
-                      </Box>
-                    </CustomTabPanel>
-
-                    {/* Lineage Tab (Index 2 for Tables) */}
-                    {getEntryType(entry.name, '/') === 'Tables' && (
-                      <CustomTabPanel value={tabValue} index={2}>
-                        {lineageTab}
-                      </CustomTabPanel>
-                    )}
-
-                    {/* Data Profile Tab (Index 3 for Tables) */}
-                    {getEntryType(entry.name, '/') === 'Tables' && (
-                      <CustomTabPanel value={tabValue} index={3}>
-                        <DataProfile scanName={dpScanName} />
-                      </CustomTabPanel>
-                    )}
-
-                    {/* Data Quality Tab (Index 4 for Tables) */}
-                    {getEntryType(entry.name, '/') === 'Tables' && (
-                      <CustomTabPanel value={tabValue} index={4}>
-                        <DataQuality scanName={dqScanName} />
-                      </CustomTabPanel>
-                    )}
-
-                    {/* Entry List Tab (Index 1 for Datasets) */}
-                    {getEntryType(entry.name, '/') === 'Datasets' && (
-                      <CustomTabPanel value={tabValue} index={1}>
-                        <EntryList entry={entry} />
-                      </CustomTabPanel>
-                    )}
-                  </Box>
-                </div>)}
-              </div>
-
-              {/* Chat Button */}
-              <Box sx={{ position: 'fixed', bottom: 30, right: 30, zIndex: 1000 }}>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  startIcon={<SmartToy />}
-                  onClick={() => setChatOpen(true)}
-                  sx={{ borderRadius: '28px', padding: '12px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
-                >
-                  Chat with Table
-                </Button>
+            {/* Aspects Tab (Index 1 for Tables/Others, Index 2 for Datasets) */}
+            <CustomTabPanel value={tabValue} index={getEntryType(entry.name, '/') === 'Datasets' ? 2 : 1}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <AnnotationFilter
+                  entry={entry}
+                // setFilteredEntry={setFilteredEntry}
+                />
+                {annotationTab}
               </Box>
+            </CustomTabPanel>
 
-              <ChatInterface
-                open={chatOpen}
-                onClose={() => setChatOpen(false)}
-                context={{
-                  type: 'table',
-                  name: entryName || 'Table',
-                  description: 'Data table analysis'
-                }}
-              />
-            </div>
-            );
+            {/* Lineage Tab (Index 2 for Tables) */}
+            {getEntryType(entry.name, '/') === 'Tables' && (
+              <CustomTabPanel value={tabValue} index={2}>
+                {lineageTab}
+              </CustomTabPanel>
+            )}
+
+            {/* Data Profile Tab (Index 3 for Tables) */}
+            {getEntryType(entry.name, '/') === 'Tables' && (
+              <CustomTabPanel value={tabValue} index={3}>
+                <DataProfile scanName={dpScanName} />
+              </CustomTabPanel>
+            )}
+
+            {/* Data Quality Tab (Index 4 for Tables) */}
+            {getEntryType(entry.name, '/') === 'Tables' && (
+              <CustomTabPanel value={tabValue} index={4}>
+                <DataQuality scanName={dqScanName} />
+              </CustomTabPanel>
+            )}
+
+            {/* Entry List Tab (Index 1 for Datasets) */}
+            {getEntryType(entry.name, '/') === 'Datasets' && (
+              <CustomTabPanel value={tabValue} index={1}>
+                <EntryList entry={entry} />
+              </CustomTabPanel>
+            )}
+          </Box>
+        </div>)}
+      </div>
+
+      {/* Chat Button */}
+      <Box sx={{ position: 'fixed', bottom: 30, right: 30, zIndex: 1000 }}>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<SmartToy />}
+          onClick={() => setChatOpen(true)}
+          sx={{ borderRadius: '28px', padding: '12px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
+        >
+          Chat with Table
+        </Button>
+      </Box>
+
+      <ChatInterface
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        context={{
+          type: 'table',
+          name: entryName || 'Table',
+          description: 'Data table analysis'
+        }}
+      />
+    </div>
+  );
 };
 
-            export default ViewDetails;
+export default ViewDetails;
