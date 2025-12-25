@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Box, Typography, Button, Paper, List, ListItem, ListItemText, Divider, Chip } from '@mui/material';
 import { ArrowBack, OpenInNew } from '@mui/icons-material';
