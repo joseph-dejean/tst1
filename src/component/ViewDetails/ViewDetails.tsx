@@ -308,64 +308,29 @@ const ViewDetails = () => {
               <Tabs value={tabValue} onChange={handleTabChange} aria-label="entry details tabs">
                 <Tab label="Overview" {...tabProps(0)} />
                 {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Aspects" {...tabProps(1)} />}
-                {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Lineage" {...tabProps(2)} />}
-                {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Data Profile" {...tabProps(3)} />}
-                {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Data Quality" {...tabProps(4)} />}
+                <Box sx={{ position: 'fixed', bottom: 30, right: 30, zIndex: 1000 }}>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={<SmartToy />}
+                    onClick={() => setChatOpen(true)}
+                    sx={{ borderRadius: '28px', padding: '12px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
+                  >
+                    Chat with Table
+                  </Button>
+                </Box>
 
-                {getEntryType(entry.name, '/') === 'Datasets' && <Tab label="Entry List" {...tabProps(1)} />}
-                {getEntryType(entry.name, '/') === 'Datasets' && <Tab label="Aspects" {...tabProps(2)} />}
-
-                {getEntryType(entry.name, '/') !== 'Tables' && getEntryType(entry.name, '/') !== 'Datasets' && <Tab label="Aspects" {...tabProps(1)} />}
-              </Tabs>
-            </Box>
-            {/* Data Profile Tab (Index 3 for Tables) */}
-            {getEntryType(entry.name, '/') === 'Tables' && (
-              <CustomTabPanel value={tabValue} index={3}>
-                <DataProfile scanName={dpScanName} />
-              </CustomTabPanel>
-            )}
-
-            {/* Data Quality Tab (Index 4 for Tables) */}
-            {getEntryType(entry.name, '/') === 'Tables' && (
-              <CustomTabPanel value={tabValue} index={4}>
-                <DataQuality scanName={dqScanName} />
-              </CustomTabPanel>
-            )}
-
-            {/* Entry List Tab (Index 1 for Datasets) */}
-            {getEntryType(entry.name, '/') === 'Datasets' && (
-              <CustomTabPanel value={tabValue} index={1}>
-                <EntryList entry={entry} />
-              </CustomTabPanel>
-            )}
-          </Box>
-        </div>)}
-      </div>
-
-      {/* Chat Button */}
-      <Box sx={{ position: 'fixed', bottom: 30, right: 30, zIndex: 1000 }}>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<SmartToy />}
-          onClick={() => setChatOpen(true)}
-          sx={{ borderRadius: '28px', padding: '12px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
-        >
-          Chat with Table
-        </Button>
-      </Box>
-
-      <ChatInterface
-        open={chatOpen}
-        onClose={() => setChatOpen(false)}
-        context={{
-          type: 'table',
-          name: entryName || 'Table',
-          description: 'Data table analysis'
-        }}
-      />
-    </div>
-  );
+                <ChatInterface
+                  open={chatOpen}
+                  onClose={() => setChatOpen(false)}
+                  context={{
+                    type: 'table',
+                    name: entryName || 'Table',
+                    description: 'Data table analysis'
+                  }}
+                />
+              </div>
+              );
 };
 
-export default ViewDetails;
+              export default ViewDetails;
