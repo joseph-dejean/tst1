@@ -257,80 +257,52 @@ const ViewDetails = () => {
                     marginRight: "1rem"
                   }}>
                     {entry.entrySource.displayName.length > 0
-                      ? entry.entrySource.displayName
-                      : getName(entry.name || '', '/')}
+                      < div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                    {/* Open in BigQuery Button */}
+                    {entry.entrySource?.system.toLowerCase() === 'bigquery' && (
+                      <Tooltip title="Open in BigQuery Console">
+                        <Button
+                          variant="outlined"
+                          startIcon={<Box component="img" src="https://www.gstatic.com/images/branding/product/1x/bigquery_48dp.png" sx={{ width: 20, height: 20 }} />}
+                          onClick={() => window.open(generateBigQueryLink(entry.fullyQualifiedName), '_blank')}
+                          sx={{ textTransform: 'none', borderColor: '#e0e0e0', color: '#3c4043' }}
+                        >
+                          Open in BigQuery
+                        </Button>
+                      </Tooltip>
+                    )}
+
+                    {/* Explore with Looker Studio Button */}
+                    {entry.entrySource?.system.toLowerCase() === 'bigquery' && (
+                      <Tooltip title="Create report in Looker Studio">
+                        <Button
+                          variant="outlined"
+                          startIcon={<Box component="img" src="https://www.gstatic.com/images/branding/product/1x/looker_studio_48dp.png" sx={{ width: 20, height: 20 }} />}
+                          onClick={() => window.open(generateLookerStudioLink(entry.fullyQualifiedName), '_blank')}
+                          sx={{ textTransform: 'none', borderColor: '#e0e0e0', color: '#3c4043' }}
+                        >
+                          Explore
+                        </Button>
+                      </Tooltip>
+                    )}
                   </div>
-                </Tooltip>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <Tag
-                    label={getEntryType(entry.name, '/')}
-                    color="#E8F0FE"
-                    textColor="#1967D2"
-                  />
-                  {/* Add more tags here if needed */}
-                </div>
               </div>
 
-              {/* Right Side - Action Buttons */}
-              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                {/* Open in BigQuery Button */}
-                {entry.entrySource?.system.toLowerCase() === 'bigquery' && (
-                  <Tooltip title="Open in BigQuery Console">
-                    <Button
-                      variant="outlined"
-                      startIcon={<Box component="img" src="https://www.gstatic.com/images/branding/product/1x/bigquery_48dp.png" sx={{ width: 20, height: 20 }} />}
-                      onClick={() => window.open(generateBigQueryLink(entry.fullyQualifiedName), '_blank')}
-                      sx={{ textTransform: 'none', borderColor: '#e0e0e0', color: '#3c4043' }}
-                    >
-                      Open in BigQuery
-                    </Button>
-                  </Tooltip>
-                )}
+              {/* Tabs Navigation */}
+              <Box sx={{ borderBottom: 1, borderColor: 'divider', marginTop: '1rem' }}>
+                <Tabs value={tabValue} onChange={handleTabChange} aria-label="entry details tabs">
+                  <Tab label="Overview" {...tabProps(0)} />
+                  {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Aspects" {...tabProps(1)} />}
+                  {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Lineage" {...tabProps(2)} />}
+                  {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Data Profile" {...tabProps(3)} />}
+                  {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Data Quality" {...tabProps(4)} />}
 
-                {/* Explore with Looker Studio Button */}
-                {entry.entrySource?.system.toLowerCase() === 'bigquery' && (
-                  <Tooltip title="Create report in Looker Studio">
-                    <Button
-                      variant="outlined"
-                      startIcon={<Box component="img" src="https://www.gstatic.com/images/branding/product/1x/looker_studio_48dp.png" sx={{ width: 20, height: 20 }} />}
-                      onClick={() => window.open(generateLookerStudioLink(entry.fullyQualifiedName), '_blank')}
-                      sx={{ textTransform: 'none', borderColor: '#e0e0e0', color: '#3c4043' }}
-                    >
-                      Explore
-                    </Button>
-                  </Tooltip>
-                )}
-              </div>
-            </div>
+                  {getEntryType(entry.name, '/') === 'Datasets' && <Tab label="Entry List" {...tabProps(1)} />}
+                  {getEntryType(entry.name, '/') === 'Datasets' && <Tab label="Aspects" {...tabProps(2)} />}
 
-            {/* Tabs Navigation */}
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', marginTop: '1rem' }}>
-              <Tabs value={tabValue} onChange={handleTabChange} aria-label="entry details tabs">
-                <Tab label="Overview" {...tabProps(0)} />
-                {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Aspects" {...tabProps(1)} />}
-                {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Lineage" {...tabProps(2)} />}
-                {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Data Profile" {...tabProps(3)} />}
-                {getEntryType(entry.name, '/') === 'Tables' && <Tab label="Data Quality" {...tabProps(4)} />}
-
-                {getEntryType(entry.name, '/') === 'Datasets' && <Tab label="Entry List" {...tabProps(1)} />}
-                {getEntryType(entry.name, '/') === 'Datasets' && <Tab label="Aspects" {...tabProps(2)} />}
-
-                {getEntryType(entry.name, '/') !== 'Tables' && getEntryType(entry.name, '/') !== 'Datasets' && <Tab label="Aspects" {...tabProps(1)} />}
-              </Tabs>
-            </Box>
-          </div>
-
-          {/* Tab Content */}
-          <Box sx={{ padding: '24px 0' }}>
-            {/* Overview Tab */}
-            <CustomTabPanel value={tabValue} index={0}>
-              {overviewTab}
-              {getEntryType(entry.name, '/') === 'Tables' && (
-                <CustomTabPanel value={tabValue} index={2}>
-                  {lineageTab}
-                </CustomTabPanel>
-              )}
-
+                  {getEntryType(entry.name, '/') !== 'Tables' && getEntryType(entry.name, '/') !== 'Datasets' && <Tab label="Aspects" {...tabProps(1)} />}
+                </Tabs>
+              </Box>
               {/* Data Profile Tab (Index 3 for Tables) */}
               {getEntryType(entry.name, '/') === 'Tables' && (
                 <CustomTabPanel value={tabValue} index={3}>
@@ -351,34 +323,34 @@ const ViewDetails = () => {
                   <EntryList entry={entry} />
                 </CustomTabPanel>
               )}
-          </Box>
-        </div>)}
-      </div>
+            </Box>
+          </div>)}
+        </div>
 
       {/* Chat Button */}
-      <Box sx={{ position: 'fixed', bottom: 30, right: 30, zIndex: 1000 }}>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<SmartToy />}
-          onClick={() => setChatOpen(true)}
-          sx={{ borderRadius: '28px', padding: '12px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
-        >
-          Chat with Table
-        </Button>
-      </Box>
+        <Box sx={{ position: 'fixed', bottom: 30, right: 30, zIndex: 1000 }}>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<SmartToy />}
+            onClick={() => setChatOpen(true)}
+            sx={{ borderRadius: '28px', padding: '12px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
+          >
+            Chat with Table
+          </Button>
+        </Box>
 
-      <ChatInterface
-        open={chatOpen}
-        onClose={() => setChatOpen(false)}
-        context={{
-          type: 'table',
-          name: entryName || 'Table',
-          description: 'Data table analysis'
-        }}
-      />
-    </div>
-  );
+        <ChatInterface
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          context={{
+            type: 'table',
+            name: entryName || 'Table',
+            description: 'Data table analysis'
+          }}
+        />
+      </div>
+      );
 };
 
-export default ViewDetails;
+      export default ViewDetails;
