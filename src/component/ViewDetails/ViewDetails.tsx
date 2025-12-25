@@ -325,46 +325,32 @@ const ViewDetails = () => {
             {/* Overview Tab */}
             <CustomTabPanel value={tabValue} index={0}>
               {overviewTab}
-            </CustomTabPanel>
+              {getEntryType(entry.name, '/') === 'Tables' && (
+                <CustomTabPanel value={tabValue} index={2}>
+                  {lineageTab}
+                </CustomTabPanel>
+              )}
 
-            {/* Aspects Tab (Index 1 for Tables/Others, Index 2 for Datasets) */}
-            <CustomTabPanel value={tabValue} index={getEntryType(entry.name, '/') === 'Datasets' ? 2 : 1}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <AnnotationFilter
-                  entry={entry}
-                // setFilteredEntry={setFilteredEntry}
-                />
-                {annotationTab}
-              </Box>
-            </CustomTabPanel>
+              {/* Data Profile Tab (Index 3 for Tables) */}
+              {getEntryType(entry.name, '/') === 'Tables' && (
+                <CustomTabPanel value={tabValue} index={3}>
+                  <DataProfile scanName={dpScanName} />
+                </CustomTabPanel>
+              )}
 
-            {/* Lineage Tab (Index 2 for Tables) */}
-            {getEntryType(entry.name, '/') === 'Tables' && (
-              <CustomTabPanel value={tabValue} index={2}>
-                {lineageTab}
-              </CustomTabPanel>
-            )}
+              {/* Data Quality Tab (Index 4 for Tables) */}
+              {getEntryType(entry.name, '/') === 'Tables' && (
+                <CustomTabPanel value={tabValue} index={4}>
+                  <DataQuality scanName={dqScanName} />
+                </CustomTabPanel>
+              )}
 
-            {/* Data Profile Tab (Index 3 for Tables) */}
-            {getEntryType(entry.name, '/') === 'Tables' && (
-              <CustomTabPanel value={tabValue} index={3}>
-                <DataProfile scanName={dpScanName} />
-              </CustomTabPanel>
-            )}
-
-            {/* Data Quality Tab (Index 4 for Tables) */}
-            {getEntryType(entry.name, '/') === 'Tables' && (
-              <CustomTabPanel value={tabValue} index={4}>
-                <DataQuality scanName={dqScanName} />
-              </CustomTabPanel>
-            )}
-
-            {/* Entry List Tab (Index 1 for Datasets) */}
-            {getEntryType(entry.name, '/') === 'Datasets' && (
-              <CustomTabPanel value={tabValue} index={1}>
-                <EntryList entry={entry} />
-              </CustomTabPanel>
-            )}
+              {/* Entry List Tab (Index 1 for Datasets) */}
+              {getEntryType(entry.name, '/') === 'Datasets' && (
+                <CustomTabPanel value={tabValue} index={1}>
+                  <EntryList entry={entry} />
+                </CustomTabPanel>
+              )}
           </Box>
         </div>)}
       </div>
