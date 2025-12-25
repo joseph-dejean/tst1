@@ -128,7 +128,15 @@ export const searchResourcesByTerm = createAsyncThunk('resources/searchResources
 
   } catch (error) {
     if (error instanceof AxiosError) {
-      return rejectWithValue(error.response?.data || error.message);
+      // Preserve status code and error details for better error handling
+      const errorData = error.response?.data || {};
+      return rejectWithValue({
+        ...errorData,
+        status: error.response?.status,
+        code: error.response?.status,
+        message: errorData.message || error.message || 'An error occurred',
+        details: errorData.error?.message || errorData.message || error.message
+      });
     }
     return rejectWithValue('An unknown error occurred');
   }
@@ -236,7 +244,8 @@ export const resourcesSlice = createSlice({
   initialState,
   reducers: {
     setItems: (state, action) => {
-      state.items = action.payload;
+      // Ensure items is always an array
+      state.items = Array.isArray(action.payload) ? action.payload : [];
       state.status = 'succeeded';
     },
     setItemsStatus: (state, action) => {
@@ -252,7 +261,8 @@ export const resourcesSlice = createSlice({
       state.itemsRequestData = action.payload;
     },
     setItemsStoreData: (state, action) => {
-      state.itemsStore = action.payload;
+      // Ensure itemsStore is always an array
+      state.itemsStore = Array.isArray(action.payload) ? action.payload : [];
     },
   }, // No synchronous reducers needed for this slice
   // The `extraReducers` field lets the slice handle actions defined elsewhere,
@@ -260,22 +270,31 @@ export const resourcesSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(searchResourcesByTerm.pending, (state) => {
-        state.items = [];
+        // Don't clear items on pending to avoid flickering, but ensure it's an array
+        if (!Array.isArray(state.items)) {
+          state.items = [];
+        }
         state.status = 'loading';
       })
       .addCase(searchResourcesByTerm.fulfilled, (state, action) => {
         const payload = Array.isArray(action.payload) ? { data: [], requestData:{}, results:{} } : action.payload;
         state.totalItems = payload?.results?.totalSize ?? 0;
         state.itemsRequestData = payload?.requestData ?? {};
-        state.itemsStore = [...state.itemsStore, ...(payload?.data ?? [])]; // Append new results to the store
+        // Ensure payload.data is an array before spreading
+        const newData = Array.isArray(payload?.data) ? payload.data : [];
+        state.itemsStore = [...(Array.isArray(state.itemsStore) ? state.itemsStore : []), ...newData]; // Append new results to the store
         state.items = state.itemsNextPageSize != null 
-        ? state.itemsStore.slice(state.itemsStore.length - state.itemsNextPageSize)
-        : payload?.data ?? []; // Replace the list with search results
+        ? (Array.isArray(state.itemsStore) ? state.itemsStore.slice(state.itemsStore.length - state.itemsNextPageSize) : [])
+        : newData; // Replace the list with search results
         state.status = 'succeeded';
       })
       .addCase(searchResourcesByTerm.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.payload; // Use payload from rejectWithValue
+        // Ensure items is always an array even on error
+        if (!Array.isArray(state.items)) {
+          state.items = [];
+        }
       })
       .addCase(browseResourcesByAspects.pending, (state) => {
         state.items = [];

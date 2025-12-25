@@ -205,38 +205,31 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
   
   // Note: Preview panel is managed by parent components through previewData
 
-  // Handle failed resource status - navigate to login
+  // Handle failed resource status - navigate to login (but not for 403 errors)
   useEffect(() => {
     if (resourcesStatus === 'failed') {
-      let subString = "INVALID_ARGUMENT:";
-      if(error?.details && typeof error?.details === 'string'){
-        if(error.details.includes(subString)){
-          content = (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '200px',
-              width: '100%'
-            }}>
-              <p style={{
-                margin: 0,
-                textAlign: 'center',
-                color: '#666',
-                fontSize: '16px'
-              }}>{(error?.message || error) + ' invalid arguments passed in search params'}</p>
-          </div>);
-        }else{
-          setPageSize(20);
-          logout();
-          navigate('/login');
+      // Check for 403/Forbidden errors - don't redirect to login for these
+      const is403Error = error?.code === 403 || 
+                         error?.status === 403 || 
+                         (typeof error === 'string' && error.toLowerCase().includes('forbidden')) ||
+                         (error?.message && typeof error.message === 'string' && error.message.toLowerCase().includes('forbidden'));
+      
+      // Only redirect to login if it's NOT a 403 error
+      if (!is403Error) {
+        let subString = "INVALID_ARGUMENT:";
+        if(error?.details && typeof error?.details === 'string'){
+          if(error.details.includes(subString)){
+            // Invalid argument errors are handled in the render section, don't redirect
+            return;
+          }
         }
-      }else{
+        // For other errors (like 401), redirect to login
+        setPageSize(20);
         logout();
         navigate('/login');
       }
     }
-  }, [resourcesStatus, logout, navigate]);
+  }, [resourcesStatus, error, logout, navigate, setPageSize]);
 
   const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop } = event.currentTarget;
@@ -245,6 +238,10 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
 
   // Filter and sort resources
   const filteredAndSortedResources = useMemo(() => {
+    // Ensure resources is always an array to prevent errors
+    if (!Array.isArray(resources)) {
+      return [];
+    }
     // let filtered = selectedTypeFilter 
     //   ? resources.filter((resource: any) => 
     //       resource.dataplexEntry.entryType.includes('-' + selectedTypeFilter.toLowerCase())
@@ -883,29 +880,62 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
       </div>
     );
   } else if (resourcesStatus === 'failed') {
+    // Check for 403/Forbidden errors (permission issues)
+    const is403Error = error?.code === 403 || 
+                       error?.status === 403 || 
+                       (typeof error === 'string' && error.toLowerCase().includes('forbidden')) ||
+                       (error?.message && typeof error.message === 'string' && error.message.toLowerCase().includes('forbidden'));
+    
+    // Check for INVALID_ARGUMENT errors
     let subString = "INVALID_ARGUMENT:";
-    if(error?.details && typeof error?.details === 'string'){
-      if(error.details.includes(subString)){
-        content = (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '200px',
-            width: '100%'
+    const isInvalidArgument = error?.details && typeof error?.details === 'string' && error.details.includes(subString);
+    
+    if (is403Error) {
+      // Show permission error message instead of redirecting to login
+      content = (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '200px',
+          width: '100%',
+          padding: '20px'
+        }}>
+          <p style={{
+            margin: '0 0 10px 0',
+            textAlign: 'center',
+            color: '#d32f2f',
+            fontSize: '16px',
+            fontWeight: '500'
+          }}>Permission Denied (403)</p>
+          <p style={{
+            margin: 0,
+            textAlign: 'center',
+            color: '#666',
+            fontSize: '14px'
           }}>
-            <p style={{
-              margin: 0,
-              textAlign: 'center',
-              color: '#666',
-              fontSize: '16px'
-            }}>{(error?.message || error) + ' invalid arguments passed in search params'}</p>
+            You don't have permission to access Dataplex resources. Please contact your administrator to grant you the 'dataplex.viewer' role or appropriate permissions.
+          </p>
         </div>);
-      }else{
-        logout();
-        navigate('/login');
-      }
-    }else{
+    } else if (isInvalidArgument) {
+      content = (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '200px',
+          width: '100%'
+        }}>
+          <p style={{
+            margin: 0,
+            textAlign: 'center',
+            color: '#666',
+            fontSize: '16px'
+          }}>{(error?.message || error) + ' invalid arguments passed in search params'}</p>
+        </div>);
+    } else {
+      // For other errors (like 401), redirect to login
       logout();
       navigate('/login');
     }

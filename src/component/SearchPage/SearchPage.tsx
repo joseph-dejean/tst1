@@ -67,6 +67,11 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
   const [pageSize, setPageSize] = useState<number>(20);
   const [pageNumber, setPageNumber] = useState<number>(1);
   
+  // Select data from the Redux store - moved before useEffects that use it
+  // Ensure resources is always an array to prevent .map() errors
+  const resources = useSelector((state: any) => Array.isArray(state.resources.items) ? state.resources.items : []);
+  const resourcesStatus = useSelector((state: any) => state.resources.status);
+  const error = useSelector((state: any) => state.resources.error);
 
   const handleFilterChange = (selectedFilters: any[]) => {
     setFilters(selectedFilters);
@@ -91,6 +96,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
       
       dispatch(searchResourcesByTerm({term : searchTerm, id_token: id_token, filters: filters, semanticSearch: semanticSearch}) );   
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -156,11 +162,6 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
       }
     }
   }, [selectedTypeFilter]);
-
-  // Select data from the Redux store
-  const resources = useSelector((state: any) => state.resources.items);
-  const resourcesStatus = useSelector((state: any) => state.resources.status);
-  const error = useSelector((state: any) => state.resources.error);
 
   useEffect(() => {
     if(resourcesStatus === 'succeeded' || resourcesStatus === 'failed'){

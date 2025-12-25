@@ -1597,6 +1597,29 @@ app.get('/', (req, res) => {
   res.redirect('/home'); // Redirects to the /home route
 });
 
+// --- New Endpoints ---
+
+app.get('/api/v1/app-configs', (req, res) => {
+  try {
+    const configData = require('./configData.json');
+    res.json(configData);
+  } catch (error) {
+    console.error('Error serving app configs:', error);
+    res.status(500).json({ error: 'Failed to load app configurations' });
+  }
+});
+
+app.get('/api/v1/get-projects', async (req, res) => {
+  try {
+    // Return the current project as a default
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    res.json([{ projectId: projectId, displayName: projectId }]);
+  } catch (error) {
+    console.error('Error fetching projects:', error);
+    res.status(500).json({ message: 'Failed to fetch projects' });
+  }
+});
+
 // For any other routes, serve the React index.html
 
 app.listen(PORT, '0.0.0.0', () => {
