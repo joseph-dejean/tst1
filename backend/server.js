@@ -1587,7 +1587,6 @@ app.get('/', (req, res) => {
 
 // For any other routes, serve the React index.html
 
-const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
