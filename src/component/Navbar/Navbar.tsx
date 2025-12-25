@@ -13,7 +13,14 @@ import Tooltip from '@mui/material/Tooltip';
 import MenuItem from '@mui/material/MenuItem';
 import './Navbar.css'
 import { HelpOutline, MenuBook, Home, Person, AccountCircle, Logout, Menu as MenuIcon, Category } from '@mui/icons-material';
-// ... (imports)
+import { useAuth } from '../../auth/AuthProvider';
+import { useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import type { AppDispatch } from '../../app/store';
+import { searchResourcesByTerm } from '../../features/resources/resourcesSlice';
+import SearchBar from '../SearchBar/SearchBar';
+import SendFeedback from './SendFeedback';
+import NotificationBar from '../SearchPage/NotificationBar';
 
 //const pages = ['Guide', 'Notification', 'Help'];
 const settings = ['Home', 'Data Products'];

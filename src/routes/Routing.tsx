@@ -21,7 +21,6 @@ import { ProtectedRoute } from '../auth/ProtectedRoute';
 import BrowseByAnnotation from '../component/BrowseByAnnotation/BrowseByAnnotation';
 import SessionExpirationWrapper from '../component/Auth/SessionExpirationWrapper';
 import UserGuide from '../component/Guide/UserGuide';
-import DataProducts from '../component/DataProducts/DataProducts';
 import DataProductDetails from '../component/DataProducts/DataProductDetails';
 
 const Routing = () => {

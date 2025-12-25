@@ -318,33 +318,6 @@ const ViewDetails = () => {
                 {getEntryType(entry.name, '/') !== 'Tables' && getEntryType(entry.name, '/') !== 'Datasets' && <Tab label="Aspects" {...tabProps(1)} />}
               </Tabs>
             </Box>
-          </div>
-
-          {/* Tab Content */}
-          <Box sx={{ padding: '24px 0' }}>
-            {/* Overview Tab */}
-            <CustomTabPanel value={tabValue} index={0}>
-              {overviewTab}
-            </CustomTabPanel>
-
-            {/* Aspects Tab (Index 1 for Tables/Others, Index 2 for Datasets) */}
-            <CustomTabPanel value={tabValue} index={getEntryType(entry.name, '/') === 'Datasets' ? 2 : 1}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <AnnotationFilter
-                  entry={entry}
-                  setFilteredEntry={setFilteredEntry}
-                />
-                {annotationTab}
-              </Box>
-            </CustomTabPanel>
-
-            {/* Lineage Tab (Index 2 for Tables) */}
-            {getEntryType(entry.name, '/') === 'Tables' && (
-              <CustomTabPanel value={tabValue} index={2}>
-                {lineageTab}
-              </CustomTabPanel>
-            )}
-
             {/* Data Profile Tab (Index 3 for Tables) */}
             {getEntryType(entry.name, '/') === 'Tables' && (
               <CustomTabPanel value={tabValue} index={3}>
