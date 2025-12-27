@@ -1,15 +1,4 @@
 // server.js
-console.log("Starting server.js...");
-
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-  // process.exit(1); // Keep running to see logs? Cloud Run will restart anyway.
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
 require('dotenv').config();
 const { VertexAI } = require('@google-cloud/vertexai');
 
@@ -1631,24 +1620,12 @@ app.get('/api/v1/get-projects', async (req, res) => {
 });
 
 // For any other routes, serve the React index.html
-const indexPath = path.join(__dirname, 'dist', 'index.html');
-console.log(`Checking index.html path: ${indexPath}`);
-fs.access(indexPath)
-  .then(() => console.log("index.html found successfully."))
-  .catch((e) => console.error("ERROR: index.html NOT found at expected path!", e));
-
 // For any other routes, serve the React index.html
 // app.get('*', (req, res) => {
-//   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'API endpoint not found' });
-//   res.sendFile(indexPath, (err) => {
-//     if (err) console.error("Error sending index.html:", err);
-//   });
+//   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 // });
 
-console.log("Attempting to start server on port " + PORT);
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
-});
-console.log(`Server is running on port ${PORT}`);
 });
 
