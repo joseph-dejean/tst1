@@ -1631,9 +1631,9 @@ app.get('/api/v1/get-projects', async (req, res) => {
 });
 
 // For any other routes, serve the React index.html
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
+// app.get('*', (req, res) => {
+//   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+// });
 
 console.log("Attempting to start server on port " + PORT);
 app.listen(PORT, '0.0.0.0', () => {
