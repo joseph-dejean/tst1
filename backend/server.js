@@ -1631,9 +1631,20 @@ app.get('/api/v1/get-projects', async (req, res) => {
 });
 
 // For any other routes, serve the React index.html
-// app.get('*', (req, res) => {
-//   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-// });
+app.get('*', (req, res) => {
+  // Don't serve index.html for missing API routes
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+
+  console.log(`Catch-all serving index.html for path: ${req.path}`);
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'), (err) => {
+    if (err) {
+      console.error("Error sending index.html:", err);
+      res.status(500).send("Error loading application");
+    }
+  });
+});
 
 console.log("Attempting to start server on port " + PORT);
 app.listen(PORT, '0.0.0.0', () => {
