@@ -1,14 +1,14 @@
-import React from 'react';
-import { Box, Typography, Grid, Card, CardContent, CardActionArea, Chip, Divider } from '@mui/material';
+import { useState } from 'react';
+import { Box, Typography, Card, CardContent, CardActionArea, Chip, Divider } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthProvider';
 
 const DataProducts = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
-    const [filterRegion, setFilterRegion] = React.useState<string>('All');
-    const [filterDomain, setFilterDomain] = React.useState<string>('All');
-    const [filterAspect, setFilterAspect] = React.useState<string>('All');
+    const [filterRegion, setFilterRegion] = useState<string>('All');
+    const [filterDomain, setFilterDomain] = useState<string>('All');
+    const [filterAspect, setFilterAspect] = useState<string>('All');
 
     // Combine real data products with "Coming Soon" mock products
     const realProducts = user?.appConfig?.dataProducts || [];
@@ -95,53 +95,55 @@ const DataProducts = () => {
                     No data products found matching your filters.
                 </Typography>
             ) : (
-                <Grid container spacing={3}>
+                <Box sx={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+                    gap: 3 
+                }}>
                     {filteredProducts.map((product: any) => (
-                        <Grid size={{ xs: 12, sm: 6, md: 4 }} key={product.id}>
-                            <Card sx={{
-                                height: '100%',
-                                borderRadius: '12px',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                                opacity: product.status === 'Coming Soon' ? 0.7 : 1,
-                                position: 'relative'
-                            }}>
-                                <CardActionArea
-                                    onClick={() => product.status !== 'Coming Soon' && navigate(`/data-products/${product.id}`)}
-                                    sx={{ height: '100%' }}
-                                    disabled={product.status === 'Coming Soon'}
-                                >
-                                    <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                            <Typography variant="h6" component="div" sx={{ marginBottom: '0.5rem', color: '#0B57D0', fontWeight: 600 }}>
-                                                {product.displayName}
-                                            </Typography>
-                                            {product.status === 'Coming Soon' && (
-                                                <Chip label="Coming Soon" size="small" color="warning" variant="filled" />
-                                            )}
-                                        </Box>
-
-                                        <Typography variant="body2" color="text.secondary" sx={{ marginBottom: '1rem', flexGrow: 1 }}>
-                                            {product.description}
+                        <Card key={product.id} sx={{
+                            height: '100%',
+                            borderRadius: '12px',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                            opacity: product.status === 'Coming Soon' ? 0.7 : 1,
+                            position: 'relative'
+                        }}>
+                            <CardActionArea
+                                onClick={() => product.status !== 'Coming Soon' && navigate(`/data-products/${product.id}`)}
+                                sx={{ height: '100%' }}
+                                disabled={product.status === 'Coming Soon'}
+                            >
+                                <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                        <Typography variant="h6" component="div" sx={{ marginBottom: '0.5rem', color: '#0B57D0', fontWeight: 600 }}>
+                                            {product.displayName}
                                         </Typography>
+                                        {product.status === 'Coming Soon' && (
+                                            <Chip label="Coming Soon" size="small" color="warning" variant="filled" />
+                                        )}
+                                    </Box>
 
-                                        <Divider sx={{ my: 1 }} />
+                                    <Typography variant="body2" color="text.secondary" sx={{ marginBottom: '1rem', flexGrow: 1 }}>
+                                        {product.description}
+                                    </Typography>
 
-                                        <Box sx={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: 'auto' }}>
-                                            {product.region && <Chip label={product.region} size="small" variant="outlined" />}
-                                            <Chip label={product.domain || 'General'} size="small" variant="outlined" />
-                                            {product.status !== 'Coming Soon' && (
-                                                <Chip label={`${product.assets?.length || 0} Assets`} size="small" color="primary" variant="outlined" />
-                                            )}
-                                        </Box>
-                                        <Typography variant="caption" sx={{ marginTop: '0.5rem', display: 'block', color: '#757575' }}>
-                                            Owner: {product.owner || 'Unknown'}
-                                        </Typography>
-                                    </CardContent>
-                                </CardActionArea>
-                            </Card>
-                        </Grid>
+                                    <Divider sx={{ my: 1 }} />
+
+                                    <Box sx={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: 'auto' }}>
+                                        {product.region && <Chip label={product.region} size="small" variant="outlined" />}
+                                        <Chip label={product.domain || 'General'} size="small" variant="outlined" />
+                                        {product.status !== 'Coming Soon' && (
+                                            <Chip label={`${product.assets?.length || 0} Assets`} size="small" color="primary" variant="outlined" />
+                                        )}
+                                    </Box>
+                                    <Typography variant="caption" sx={{ marginTop: '0.5rem', display: 'block', color: '#757575' }}>
+                                        Owner: {product.owner || 'Unknown'}
+                                    </Typography>
+                                </CardContent>
+                            </CardActionArea>
+                        </Card>
                     ))}
-                </Grid>
+                </Box>
             )}
         </Box>
     );
