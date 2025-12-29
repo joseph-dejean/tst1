@@ -1620,7 +1620,7 @@ app.get('/api/v1/get-projects', async (req, res) => {
 });
 
 // For any other routes, serve the React index.html
-app.get('*', (req, res) => {
+app.get('(.*)', (req, res) => {
   // Don't serve index.html for missing API routes or static files
   if (req.path.startsWith('/api') || req.path.includes('.')) {
     // If it has a dot (likely a file extension) or starts with /api, let it 404 naturally or send explicit 404
