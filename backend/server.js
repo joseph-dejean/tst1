@@ -1620,12 +1620,27 @@ app.get('/api/v1/get-projects', async (req, res) => {
 });
 
 // For any other routes, serve the React index.html
-// For any other routes, serve the React index.html
-// app.get('*', (req, res) => {
-//   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-// });
+app.get('*', (req, res) => {
+  // Don't serve index.html for missing API routes or static files
+  if (req.path.startsWith('/api') || req.path.includes('.')) {
+    // If it has a dot (likely a file extension) or starts with /api, let it 404 naturally or send explicit 404
+    // Actually, for SPA, we often want valid non-file paths to go to index.html.
+    // But strictly missing API calls should not return HTML.
+    if (req.path.startsWith('/api')) {
+      return res.status(404).json({ message: 'API endpoint not found' });
+    }
+  }
 
+  const indexPath = path.join(__dirname, 'dist', 'index.html');
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      console.error(`Error attempting to serve index.html from ${indexPath}:`, err);
+      res.status(500).send("Error loading application.");
+    }
+  });
+});
+
+console.log("Attempting to start server on port " + PORT);
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
 });
-
