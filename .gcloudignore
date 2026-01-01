@@ -45,3 +45,15 @@ Dockerfile*
 .gitlab-ci.yml
 .travis.yml
 
+.env
+.env.local
+.env.development.local
+stats.html
+.git
+.vscode
+.cache
+.npm
+.gemini
+.codeoss
+node_modulesvenv
+EOF
