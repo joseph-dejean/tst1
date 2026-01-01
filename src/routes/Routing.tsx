@@ -21,6 +21,7 @@ import { ProtectedRoute } from '../auth/ProtectedRoute';
 import BrowseByAnnotation from '../component/BrowseByAnnotation/BrowseByAnnotation';
 import SessionExpirationWrapper from '../component/Auth/SessionExpirationWrapper';
 import UserGuide from '../component/Guide/UserGuide';
+import DataProductPage from '../component/DataProduct/DataProductPage';
 
 const Routing = () => {
   // state to hold the user object
@@ -173,7 +174,7 @@ const Routing = () => {
           </ProtectedRoute>
         }
       />
-     <Route
+      <Route
         path="/guide"
         element={
           <ProtectedRoute>
@@ -196,6 +197,19 @@ const Routing = () => {
         }
       />
       <Route
+        path="/data-product/:id"
+        element={
+          <ProtectedRoute>
+            <SessionExpirationWrapper>
+              <>
+                <Navbar searchBar={true}/>
+                <DataProductPage />
+              </>
+            </SessionExpirationWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/help-support"
         element={
           <ProtectedRoute>
@@ -205,9 +219,9 @@ const Routing = () => {
                 <div style={{ padding: '20px', width:"1000px", margin:"100px auto 0",  }}>
                     <div className="logo-container">
                       <img src="/assets/svg/catalog-studio-logo-figma-585de1.svg" alt="CS Studio Logo" className="navbar-logo-img" />
-                      <label style={{fontSize:"24px", fontWeight:800, color:"#0E4DCA"}}>Dataplex</label>
+                      <label style={{fontSize:"24px", fontWeight:800, color:"#0E4DCA"}}>France Practice</label>
                       <label style={{fontSize:"24px", fontWeight:600, color:"#0E4DCA", margin:"0px 3px 0px"}}>|</label>
-                      <label style={{fontSize:"22px", fontWeight:600, color:"#0E4DCA", margin:"0px 3px 0px"}}>Buisness Interface</label>
+                      <label style={{fontSize:"22px", fontWeight:600, color:"#0E4DCA", margin:"0px 3px 0px"}}>Data Catalog</label>
                     </div>
                     <h1>For help contact over these email</h1>
                     <div style={{ borderBottom: "1px solid #DADCE0", padding: '0.875rem 0', gap: '0.25rem'}}>

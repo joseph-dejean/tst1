@@ -9,6 +9,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import ResourceViewer from '../Common/ResourceViewer'
 import ResourcePreview from '../Common/ResourcePreview'
 import { typeAliases } from '../../utils/resourceUtils'
+import { mergeDataProductsIntoResults } from '../../utils/dataProductUtils'
 
 /**
  * @file SearchPage.tsx
@@ -158,9 +159,21 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
   }, [selectedTypeFilter]);
 
   // Select data from the Redux store
-  const resources = useSelector((state: any) => state.resources.items);
+  const rawResources = useSelector((state: any) => state.resources.items);
   const resourcesStatus = useSelector((state: any) => state.resources.status);
   const error = useSelector((state: any) => state.resources.error);
+  
+  // Merge Data Products into search results if there's a search term
+  const resources = React.useMemo(() => {
+    if (!searchTerm || searchTerm.trim() === '') {
+      return rawResources;
+    }
+    // Only merge Data Products if we have regular results or if search is complete
+    if (resourcesStatus === 'succeeded' && rawResources) {
+      return mergeDataProductsIntoResults(rawResources, searchTerm);
+    }
+    return rawResources;
+  }, [rawResources, searchTerm, resourcesStatus]);
 
   useEffect(() => {
     if(resourcesStatus === 'succeeded' || resourcesStatus === 'failed'){

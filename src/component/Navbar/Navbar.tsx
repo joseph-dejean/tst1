@@ -243,8 +243,8 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
             <div className="logo-container" style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
               <img src="/assets/svg/catalog-studio-logo-figma-585de1.svg" alt="CS Studio Logo" className="navbar-logo-img" />
               <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-start', cursor: "pointer",}}>
-                <label style={{fontSize:"19px", fontWeight:700, color:"#0B57D0", lineHeight: 1, cursor: "pointer",}}>Dataplex</label>
-                <label style={{fontSize:"12px", fontWeight:700, color:"#0B57D0", lineHeight: 1, cursor: "pointer",}}>Universal Catalog</label>
+                <label style={{fontSize:"19px", fontWeight:700, color:"#0B57D0", lineHeight: 1, cursor: "pointer",}}>France Practice</label>
+                <label style={{fontSize:"12px", fontWeight:700, color:"#0B57D0", lineHeight: 1, cursor: "pointer",}}>Data Catalog</label>
               </div>
             </div>
           </Box>
@@ -353,8 +353,8 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
             <div className="logo-container" style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
               <img src="/assets/svg/catalog-studio-logo-figma-585de1.svg" alt="CS Studio Logo" className="navbar-logo-img" />
               <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-start', cursor: "pointer",}}>
-                <label style={{fontSize:"19px", fontWeight:700, color:"#0B57D0", lineHeight: 1, cursor: "pointer",}}>Dataplex</label>
-                <label style={{fontSize:"12px", fontWeight:700, color:"#0B57D0", lineHeight: 1, cursor: "pointer",}}>Universal Catalog</label>
+                <label style={{fontSize:"19px", fontWeight:700, color:"#0B57D0", lineHeight: 1, cursor: "pointer",}}>France Practice</label>
+                <label style={{fontSize:"12px", fontWeight:700, color:"#0B57D0", lineHeight: 1, cursor: "pointer",}}>Data Catalog</label>
               </div>
             </div>
           </Box>

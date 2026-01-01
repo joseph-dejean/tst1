@@ -953,6 +953,65 @@ app.post('/api/v1/get-aspect-detail', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/v1/get-aspect
+ * A protected endpoint to fetch a specific aspect for an entity entry.
+ * The user must be authenticated.
+ *
+ * Query Parameters:
+ * - entryName: The full resource name of the Dataplex entry
+ * - aspectType: The aspect type name to retrieve (optional, if not provided returns all aspects)
+ */
+app.get('/api/v1/get-aspect', async (req, res) => {
+  const { entryName, aspectType } = req.query;
+  const accessToken = req.headers.authorization?.split(' ')[1];
+
+  // Validate that an entryName was provided
+  if (!entryName) {
+    return res.status(400).json({ message: 'Bad Request: An "entryName" query parameter is required.' });
+  }
+
+  try {
+    const oauth2Client = new CustomGoogleAuth(accessToken);
+
+    const dataplexClientv1 = new CatalogServiceClient({
+        auth: oauth2Client,
+    });
+
+    // Construct the request to get a specific entry with all aspects
+    const request = {
+      name: entryName,
+      view: 'FULL',
+    };
+
+    console.log(`Fetching aspect${aspectType ? ` of type ${aspectType}` : 's'} for entry: ${entryName}`);
+
+    // Call the getEntry method of the Dataplex client
+    const [entry] = await dataplexClientv1.getEntry(request);
+
+    // If a specific aspect type is requested, return only that aspect
+    if (aspectType && entry.aspects) {
+      // Find the aspect by type name
+      const aspectKey = Object.keys(entry.aspects).find(key => 
+        key.includes(aspectType) || key.endsWith(`_${aspectType}`)
+      );
+      
+      if (aspectKey) {
+        return res.json({ [aspectKey]: entry.aspects[aspectKey] });
+      } else {
+        return res.status(404).json({ message: `Aspect type "${aspectType}" not found for this entry.` });
+      }
+    }
+
+    // Return all aspects if no specific type was requested
+    res.json(entry.aspects || {});
+
+  } catch (error) {
+    console.error(`Error fetching aspect for entry ${entryName}:`, error);
+    res.status(500).json({ message: 'An error occurred while fetching aspect from Dataplex.', details: error.message });
+  }
+});
+
 app.get('/api/v1/app-configs', async (req, res) => {
     try {
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;

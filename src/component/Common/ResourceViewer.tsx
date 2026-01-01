@@ -7,6 +7,7 @@ import SearchEntriesCard from '../SearchEntriesCard/SearchEntriesCard';
 import FilterTag from '../Tags/FilterTag';
 import SearchTableView from '../SearchPage/SearchTableView';
 import ShimmerLoader from '../Shimmer/ShimmerLoader';
+import DataProductCard from '../DataProduct/DataProductCard';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch } from '../../app/store';
 // import { fetchEntry } from '../../features/entry/entrySlice';
@@ -256,9 +257,27 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
 
     // Sort the filtered resources
     return filteredCopy.sort((a: any, b: any) => {
+      // Handle Data Products
+      const isAProduct = a._isDataProduct || a.dataplexEntry?._isDataProduct;
+      const isBProduct = b._isDataProduct || b.dataplexEntry?._isDataProduct;
+      const productA = a._dataProduct || a.dataplexEntry?._dataProduct;
+      const productB = b._dataProduct || b.dataplexEntry?._dataProduct;
+      
       if (sortBy === 'name') {
-        const nameA = a.dataplexEntry.entrySource?.displayName?.toLowerCase() || '';
-        const nameB = b.dataplexEntry.entrySource?.displayName?.toLowerCase() || '';
+        let nameA = '';
+        let nameB = '';
+        
+        if (isAProduct && productA) {
+          nameA = productA.displayName?.toLowerCase() || '';
+        } else {
+          nameA = a.dataplexEntry?.entrySource?.displayName?.toLowerCase() || a.dataplexEntry?.displayName?.toLowerCase() || '';
+        }
+        
+        if (isBProduct && productB) {
+          nameB = productB.displayName?.toLowerCase() || '';
+        } else {
+          nameB = b.dataplexEntry?.entrySource?.displayName?.toLowerCase() || b.dataplexEntry?.displayName?.toLowerCase() || '';
+        }
         
         // Handle entries with no display name - put them at the bottom
         if (!nameA && !nameB) return 0;
@@ -267,8 +286,21 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
         
         return nameA.localeCompare(nameB);
       } else if (sortBy === 'lastModified') {
-        const dateA = a.dataplexEntry.updateTime?.seconds || 0;
-        const dateB = b.dataplexEntry.updateTime?.seconds || 0;
+        let dateA = 0;
+        let dateB = 0;
+        
+        if (isAProduct && productA?.updatedAt) {
+          dateA = parseInt(productA.updatedAt) || 0;
+        } else {
+          dateA = a.dataplexEntry?.updateTime?.seconds || 0;
+        }
+        
+        if (isBProduct && productB?.updatedAt) {
+          dateB = parseInt(productB.updatedAt) || 0;
+        } else {
+          dateB = b.dataplexEntry?.updateTime?.seconds || 0;
+        }
+        
         return dateB - dateA; // Descending order (newest first)
       }
       return 0;
@@ -826,6 +858,44 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
         {filteredResources.length > 0 ? (
           viewMode === 'list' ? (
             filteredResources.map((resource: any, index: number) => {
+              // Check if this is a Data Product
+              const isDataProduct = resource._isDataProduct || resource.dataplexEntry?._isDataProduct;
+              const dataProduct = resource._dataProduct || resource.dataplexEntry?._dataProduct;
+              
+              if (isDataProduct && dataProduct) {
+                const isSelected = previewData && previewData._dataProductId === dataProduct.id;
+                return (
+                  <Box
+                    key={dataProduct.id}
+                    onClick={() => onPreviewDataChange?.(resource)}
+                    onDoubleClick={() => {
+                      if (onViewDetails) {
+                        onViewDetails(resource);
+                      }
+                    }}
+                    sx={{
+                      backgroundColor: '#ffffff',
+                      cursor: 'pointer',
+                      borderRadius: '8px',
+                      padding: '0px',
+                      marginLeft: '-0.5rem',
+                      mb: 1
+                    }}
+                  >
+                    <DataProductCard
+                      dataProduct={dataProduct}
+                      isSelected={isSelected}
+                      onDoubleClick={() => {
+                        if (onViewDetails) {
+                          onViewDetails(resource);
+                        }
+                      }}
+                    />
+                  </Box>
+                );
+              }
+              
+              // Regular entry rendering
               const isSelected = previewData && previewData.name === resource.dataplexEntry.name;
               const disableHoverEffect = selectedIndex !== -1 && selectedIndex === index - 1;
               const hideTopBorder = hoveredIndex === index - 1;
