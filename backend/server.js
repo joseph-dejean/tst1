@@ -259,6 +259,31 @@ app.post('/api/v1/chat', async (req, res) => {
   }
 });
 // --- END CONVERSATIONAL ANALYTICS CODE ---
+
+// --- START ACCESS REQUEST MANAGEMENT ---
+// In-memory store for access requests (in production, use a database)
+const accessRequestsStore = [];
+
+/**
+ * Auto-checker function for access requests
+ * Returns true if access should be automatically granted
+ */
+const shouldAutoApprove = (request) => {
+  // Auto-approve if:
+  // 1. Requester is already a project admin
+  // 2. Request is for a public dataset
+  // 3. Requester has viewer role on the project
+  
+  // For now, we'll implement a simple rule: auto-approve if the asset name contains "public"
+  if (request.assetName && request.assetName.toLowerCase().includes('public')) {
+    return true;
+  }
+  
+  return false;
+};
+
+// --- END ACCESS REQUEST MANAGEMENT ---
+
 const PORT = process.env.PORT || 8080;
 
 app.use(cors());
@@ -675,6 +700,35 @@ app.get('/api/v1/get-entry', async (req, res) => {
   } catch (error) {
     console.error('Error fetching entry', error);
     res.status(500).json({ message: 'An error occurred while fetching entry from Dataplex.', details: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/aspect/:urn
+ * A protected endpoint to fetch a specific aspect by its URN.
+ * The user must be authenticated.
+ */
+app.get('/api/v1/aspect/:urn', async (req, res) => {
+  try {
+    const { urn } = req.params;
+    const accessToken = req.headers.authorization?.split(' ')[1];
+
+    if (!urn) {
+      return res.status(400).json({ message: 'Bad Request: An "urn" parameter is required.' });
+    }
+
+    const oauth2Client = new CustomGoogleAuth(accessToken);
+    const dataplexClientv1 = new CatalogServiceClient({
+        auth: oauth2Client,
+    });
+
+    // Get the aspect type by URN
+    const [aspectType] = await dataplexClientv1.getAspectType({ name: urn });
+    res.json(aspectType);
+
+  } catch (error) {
+    console.error(`Error fetching aspect for URN ${urn}:`, error);
+    res.status(500).json({ message: 'An error occurred while fetching the aspect.', details: error.message });
   }
 });
 
@@ -1742,52 +1796,63 @@ app.post('/api/v1/access-request', async (req, res) => {
 
     const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
 
-    // Send access request email
-    console.log('About to send access request email...');
-    const emailResult = await sendAccessRequestEmail(
-      accessToken,
+    // Create access request object
+    const accessRequest = {
+      id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       assetName,
-      message || '',
+      message: message || '',
       requesterEmail,
       projectId,
-      projectAdmin || [] // Pass projectAdmin emails
-    );
-    
-    console.log('Email result:', emailResult);
-    
-    if (emailResult.success) {
-      // Log successful access request
-      console.log('Access request processed successfully:', {
+      projectAdmin: projectAdmin || [],
+      status: 'pending', // pending, approved, rejected
+      submittedAt: new Date().toISOString(),
+      reviewedBy: null,
+      reviewedAt: null,
+      autoApproved: false
+    };
+
+    // Check if should auto-approve
+    const autoApprove = shouldAutoApprove(accessRequest);
+    if (autoApprove) {
+      accessRequest.status = 'approved';
+      accessRequest.autoApproved = true;
+      accessRequest.reviewedAt = new Date().toISOString();
+      accessRequest.reviewedBy = 'system';
+    }
+
+    // Store the request
+    accessRequestsStore.push(accessRequest);
+
+    // Send access request email (only if not auto-approved)
+    if (!autoApprove) {
+      console.log('About to send access request email...');
+      const emailResult = await sendAccessRequestEmail(
+        accessToken,
         assetName,
+        message || '',
         requesterEmail,
         projectId,
-        projectAdmin: projectAdmin || [],
-        messageId: emailResult.messageId,
-        timestamp: new Date().toISOString()
-      });
+        projectAdmin || [] // Pass projectAdmin emails
+      );
       
-      return res.status(200).json({
-        success: true,
-        message: 'Access request submitted successfully',
-        data: {
-          assetName,
-          requesterEmail,
-          projectId,
-          projectAdmin: projectAdmin || [],
-          messageId: emailResult.messageId,
-          submittedAt: new Date().toISOString()
-        }
-      });
+      console.log('Email result:', emailResult);
+      
+      if (!emailResult.success) {
+        console.error('Failed to send access request email:', emailResult.error);
+      }
     } else {
-      console.error('Failed to send access request email:', emailResult.error);
-      const errorResponse = {
-        success: false,
-        error: 'Failed to send access request email',
-        details: emailResult.error
-      };
-      console.log('Error response:', errorResponse);
-      return res.status(500).json(errorResponse);
+      console.log('Access request auto-approved:', accessRequest.id);
     }
+    
+    // Return success response
+    return res.status(200).json({
+      success: true,
+      message: autoApprove ? 'Access request approved automatically' : 'Access request submitted successfully',
+      data: {
+        ...accessRequest,
+        messageId: autoApprove ? null : 'email_sent'
+      }
+    });
     
   } catch (error) {
     console.error('Error processing access request:', error);
@@ -1800,6 +1865,123 @@ app.post('/api/v1/access-request', async (req, res) => {
     };
     console.log('Catch block error response:', errorResponse);
     return res.status(500).json(errorResponse);
+  }
+});
+
+/**
+ * GET /api/v1/access-requests
+ * Get all access requests with filtering based on user role
+ * - Admin: sees all requests
+ * - Manager: sees only requests in their perimeter
+ */
+app.get('/api/v1/access-requests', async (req, res) => {
+  try {
+    const userEmail = req.query.userEmail || req.headers['x-user-email'];
+    const userRole = req.query.userRole || req.headers['x-user-role'] || 'user'; // admin, manager, user
+    const status = req.query.status; // optional filter: pending, approved, rejected
+    const projectId = req.query.projectId; // optional filter by project
+
+    if (!userEmail) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'User email is required' 
+      });
+    }
+
+    let filteredRequests = [...accessRequestsStore];
+
+    // Filter by status if provided
+    if (status) {
+      filteredRequests = filteredRequests.filter(req => req.status === status);
+    }
+
+    // Filter by project if provided
+    if (projectId) {
+      filteredRequests = filteredRequests.filter(req => req.projectId === projectId);
+    }
+
+    // Apply role-based filtering
+    if (userRole === 'admin') {
+      // Admin sees all requests
+      // No additional filtering needed
+    } else if (userRole === 'manager') {
+      // Manager sees only requests in their perimeter (same project)
+      filteredRequests = filteredRequests.filter(req => req.projectId === projectId);
+    } else {
+      // Regular user sees only their own requests
+      filteredRequests = filteredRequests.filter(req => req.requesterEmail === userEmail);
+    }
+
+    // Sort by submitted date (newest first)
+    filteredRequests.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+
+    return res.status(200).json({
+      success: true,
+      data: filteredRequests,
+      count: filteredRequests.length
+    });
+
+  } catch (error) {
+    console.error('Error fetching access requests:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      message: 'Failed to fetch access requests',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/v1/access-request/update
+ * Update an access request status (approve/reject)
+ */
+app.post('/api/v1/access-request/update', async (req, res) => {
+  try {
+    const { requestId, status, reviewerEmail } = req.body;
+
+    if (!requestId || !status) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Request ID and status are required' 
+      });
+    }
+
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Status must be either "approved" or "rejected"' 
+      });
+    }
+
+    const requestIndex = accessRequestsStore.findIndex(req => req.id === requestId);
+    
+    if (requestIndex === -1) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Access request not found' 
+      });
+    }
+
+    // Update the request
+    accessRequestsStore[requestIndex].status = status;
+    accessRequestsStore[requestIndex].reviewedBy = reviewerEmail || 'unknown';
+    accessRequestsStore[requestIndex].reviewedAt = new Date().toISOString();
+
+    return res.status(200).json({
+      success: true,
+      message: `Access request ${status} successfully`,
+      data: accessRequestsStore[requestIndex]
+    });
+
+  } catch (error) {
+    console.error('Error updating access request:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      message: 'Failed to update access request',
+      details: error.message
+    });
   }
 });
 
