@@ -168,16 +168,38 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
   const error = useSelector((state: any) => state.resources.error);
   
   // Merge Data Products into search results if there's a search term
+  // Apply Data Product filtering if selected
   const resources = React.useMemo(() => {
+    let mergedResources = rawResources;
+    
     if (!searchTerm || searchTerm.trim() === '') {
-      return rawResources;
+      mergedResources = rawResources;
+    } else {
+      // Only merge Data Products if we have regular results or if search is complete
+      if (resourcesStatus === 'succeeded' && rawResources) {
+        mergedResources = mergeDataProductsIntoResults(rawResources, searchTerm);
+      }
     }
-    // Only merge Data Products if we have regular results or if search is complete
-    if (resourcesStatus === 'succeeded' && rawResources) {
-      return mergeDataProductsIntoResults(rawResources, searchTerm);
+    
+    // Apply Data Product filtering if a Data Product is selected
+    if (selectedDataProducts.length > 0) {
+      // If filtering by Data Product, show only tables belonging to that product
+      // For multiple selections, show union of all selected products
+      let filteredResults: any[] = [];
+      selectedDataProducts.forEach(dpId => {
+        const productResults = filterByDataProduct(mergedResources, dpId);
+        // Merge results (avoid duplicates)
+        productResults.forEach(result => {
+          if (!filteredResults.find(r => r.name === result.name)) {
+            filteredResults.push(result);
+          }
+        });
+      });
+      mergedResources = filteredResults.length > 0 ? filteredResults : mergedResources;
     }
-    return rawResources;
-  }, [rawResources, searchTerm, resourcesStatus]);
+    
+    return mergedResources;
+  }, [rawResources, searchTerm, resourcesStatus, selectedDataProducts]);
 
   useEffect(() => {
     if(resourcesStatus === 'succeeded' || resourcesStatus === 'failed'){

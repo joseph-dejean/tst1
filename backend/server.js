@@ -90,6 +90,9 @@ app.post('/api/v1/chat', async (req, res) => {
       }
     }
 
+    // Check if this is a Data Product
+    const isDataProduct = context.isDataProduct === true;
+    
     // If we can't extract BigQuery reference, fall back to metadata-only mode
     if (!projectId || !datasetId || !tableId) {
       // Fallback: Use Vertex AI for non-BigQuery tables or when FQN is not available
@@ -99,18 +102,42 @@ app.post('/api/v1/chat', async (req, res) => {
       });
       const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
       
-      const prompt = `
-        You are a helpful Data Steward assistant for Dataplex.
-        
-        Here is the metadata for the dataset the user is looking at:
-        Name: ${context.name}
-        Description: ${context.description}
-        Schema/Columns: ${JSON.stringify(context.schema || [])}
-        
-        User Question: ${message}
-        
-        Answer the user's question based strictly on the metadata provided above. Keep it concise.
-      `;
+      let prompt = '';
+      
+      if (isDataProduct && context.tables && context.tables.length > 0) {
+        // For Data Products, include information about all tables
+        prompt = `
+          You are a helpful Data Steward assistant for Dataplex.
+          
+          The user is asking about a Data Product: ${context.name}
+          Description: ${context.description}
+          
+          This Data Product contains the following tables:
+          ${context.tables.map((table, idx) => `
+            ${idx + 1}. ${table.name} (${table.type})
+               - Fully Qualified Name: ${table.fullyQualifiedName}
+               - Description: ${table.description || 'No description'}
+          `).join('\n')}
+          
+          User Question: ${message}
+          
+          Answer the user's question about this Data Product and its tables. Keep it concise.
+        `;
+      } else {
+        // For regular tables
+        prompt = `
+          You are a helpful Data Steward assistant for Dataplex.
+          
+          Here is the metadata for the dataset the user is looking at:
+          Name: ${context.name}
+          Description: ${context.description}
+          Schema/Columns: ${JSON.stringify(context.schema || [])}
+          
+          User Question: ${message}
+          
+          Answer the user's question based strictly on the metadata provided above. Keep it concise.
+        `;
+      }
 
       const result = await generativeModel.generateContent(prompt);
       const response = result.response;
@@ -125,20 +152,83 @@ app.post('/api/v1/chat', async (req, res) => {
     const chatUrl = `https://geminidataanalytics.googleapis.com/v1beta/projects/${projectId_env}/locations/${location}:chat`;
 
     // Build BigQuery data source reference
+    // For Data Products, include all tables; for single tables, include just that table
+    let tableReferences = [];
+    
+    if (isDataProduct && context.tables && context.tables.length > 0) {
+      // For Data Products, extract BigQuery references from all tables
+      context.tables.forEach((table) => {
+        if (table.fullyQualifiedName) {
+          const fqn = table.fullyQualifiedName;
+          let tProjectId, tDatasetId, tTableId;
+          
+          if (fqn.startsWith('bigquery://')) {
+            const parts = fqn.replace('bigquery://', '').split('.');
+            if (parts.length >= 3) {
+              tProjectId = parts[0];
+              tDatasetId = parts[1];
+              tTableId = parts[2];
+            }
+          } else if (fqn.includes(':')) {
+            const [project, rest] = fqn.split(':');
+            tProjectId = project;
+            const parts = rest.split('.');
+            if (parts.length >= 2) {
+              tDatasetId = parts[0];
+              tTableId = parts[1];
+            }
+          }
+          
+          if (tProjectId && tDatasetId && tTableId) {
+            tableReferences.push({
+              projectId: tProjectId,
+              datasetId: tDatasetId,
+              tableId: tTableId,
+              schema: {
+                description: table.description || '',
+                fields: []
+              }
+            });
+          }
+        }
+      });
+    } else {
+      // Single table
+      tableReferences = [{
+        projectId: projectId,
+        datasetId: datasetId,
+        tableId: tableId,
+        schema: {
+          description: context.description || '',
+          fields: (context.schema || []).map((field) => ({
+            name: field.name || field,
+            description: field.description || ''
+          }))
+        }
+      }];
+    }
+    
+    // If no valid table references found, fall back to Vertex AI
+    if (tableReferences.length === 0) {
+      const vertex_ai = new VertexAI({
+        project: process.env.GOOGLE_CLOUD_PROJECT_ID,
+        location: process.env.GCP_LOCATION || 'us-central1'
+      });
+      const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
+      
+      const prompt = isDataProduct
+        ? `You are a helpful Data Steward assistant for Dataplex. The user is asking about Data Product: ${context.name}. ${context.description}. User Question: ${message}`
+        : `You are a helpful Data Steward assistant for Dataplex. Name: ${context.name}. Description: ${context.description}. Schema: ${JSON.stringify(context.schema || [])}. User Question: ${message}`;
+      
+      const result = await generativeModel.generateContent(prompt);
+      const response = result.response;
+      const text = response.candidates[0].content.parts[0].text;
+      return res.json({ reply: text });
+    }
+    
     const bigqueryDataSource = {
       bq: {
-        tableReferences: [{
-          projectId: projectId,
-          datasetId: datasetId,
-          tableId: tableId,
-          schema: {
-            description: context.description || '',
-            fields: (context.schema || []).map((field) => ({
-              name: field.name || field,
-              description: field.description || ''
-            }))
-          }
-        }]
+        tableReferences: tableReferences
       }
     };
 
