@@ -442,21 +442,6 @@ useEffect(() => {
                       fontWeight: "700"
                     }}>
                     Request Access
-                  </button> 
-                    onClick={() => setShowAccessRequest(true)}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      color: "#0B57D0",
-                      fontFamily: '"Google Sans Text", sans-serif',
-                      fontSize: "0.75rem",
-                      fontWeight: "700"
-                    }}>
-                    Request Access
                   </button>
                 </div>
               </div>

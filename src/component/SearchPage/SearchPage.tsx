@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Grid } from '@mui/material'
+import { Grid, Box } from '@mui/material'
 import { Tune, FilterList } from '@mui/icons-material'
 import { useDispatch, useSelector } from 'react-redux'
 import FilterDropdown from '../Filter/FilterDropDown'
@@ -71,7 +71,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
   const [isGlobalFilterOpen, setIsGlobalFilterOpen] = useState<boolean>(false);
   const [selectedAspects, setSelectedAspects] = useState<string[]>([]);
   const [selectedDataProducts, setSelectedDataProducts] = useState<string[]>([]);
-  const [availableAspects, setAvailableAspects] = useState<string[]>([]);
+  const [availableAspects, _setAvailableAspects] = useState<string[]>([]);
 
   const handleFilterChange = (selectedFilters: any[]) => {
     setFilters(selectedFilters);

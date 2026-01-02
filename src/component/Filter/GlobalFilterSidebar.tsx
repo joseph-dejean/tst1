@@ -5,10 +5,6 @@ import {
   Typography,
   IconButton,
   Divider,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Chip,
   Button,
   TextField,
@@ -43,7 +39,6 @@ const GlobalFilterSidebar: React.FC<GlobalFilterSidebarProps> = ({
   const [aspectSearch, setAspectSearch] = useState('');
   const [dataProductSearch, setDataProductSearch] = useState('');
   const [availableAspects, setAvailableAspects] = useState<string[]>(propAvailableAspects);
-  const [loadingAspects, setLoadingAspects] = useState<boolean>(false);
 
   // Fetch available aspects from the system
   useEffect(() => {
@@ -53,7 +48,6 @@ const GlobalFilterSidebar: React.FC<GlobalFilterSidebarProps> = ({
   }, [isOpen]);
 
   const fetchAvailableAspects = async () => {
-    setLoadingAspects(true);
     try {
       // Fetch aspect types from the backend
       const response = await axios.get(`${URLS.API_URL}/aspect-types`, {
@@ -74,8 +68,6 @@ const GlobalFilterSidebar: React.FC<GlobalFilterSidebarProps> = ({
       if (propAvailableAspects.length > 0) {
         setAvailableAspects(propAvailableAspects);
       }
-    } finally {
-      setLoadingAspects(false);
     }
   };
 

@@ -94,9 +94,10 @@ export const filterByDataProduct = (results: any[], dataProductId: string): any[
       
       return tableIdentifiers.has(resultFQN) || 
              tableIdentifiers.has(resultName) ||
-             dataProduct.tables.some((tableId: string) => 
-               resultFQN.includes(tableId) || resultName.includes(tableId)
-             );
+             dataProduct.tables.some((table: any) => {
+               const tableId = typeof table === 'string' ? table : (table.fullyQualifiedName || table.entryName || table);
+               return resultFQN.includes(tableId) || resultName.includes(tableId);
+             });
     });
   } else {
     // If no tables defined (Coming Soon), show only the Data Product itself
