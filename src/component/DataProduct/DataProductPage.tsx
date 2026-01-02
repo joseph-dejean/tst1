@@ -4,7 +4,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { getDataProductById } from '../../mocks/mockDataProducts';
 import type { DataProduct } from '../../types/DataProduct';
 import SearchEntriesCard from '../SearchEntriesCard/SearchEntriesCard';
-import { useAuth } from '../../auth/AuthProvider';
 import Api from '../../api/api';
 
 /**
@@ -14,7 +13,7 @@ import Api from '../../api/api';
 const DataProductPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  // const { user } = useAuth(); // Not currently used
   const [dataProduct, setDataProduct] = useState<DataProduct | null>(null);
   const [tables, setTables] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);

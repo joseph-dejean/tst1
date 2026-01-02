@@ -143,7 +143,7 @@ interface ResourceViewerProps {
   contentStyle?: React.CSSProperties;
   
   // Event handlers
-  onViewDetails?: (entry: any) => void;
+  onViewDetails?: (entry: any) => void; // Optional, may be used in future
   onRequestAccess?: (entry: any) => void;
   onFavoriteClick?: (entry: any) => void;
   
@@ -178,7 +178,7 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
   containerStyle,
   contentStyle,
   onFavoriteClick,
-  onViewDetails,
+  onViewDetails: _onViewDetails, // Prefixed with _ to indicate intentionally unused
   selectedFilters = [],
   onFiltersChange,
   startIndex = 0,

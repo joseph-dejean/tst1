@@ -10,6 +10,7 @@ const { ProjectsClient } = require('@google-cloud/resource-manager');
 const { DataCatalogClient } = require('@google-cloud/datacatalog');
 const path = require('path');
 const cors = require('cors');
+const axios = require('axios');
 const authMiddleware = require('./middlewares/authMiddleware');
 const { querySampleFromBigQuery } = require('./utility');
 const { sendAccessRequestEmail, sendFeedbackEmail } = require('./services/emailService');
@@ -163,8 +164,6 @@ app.post('/api/v1/chat', async (req, res) => {
     };
 
     // Make request to Conversational Analytics API
-    const axios = require('axios');
-    
     const chatResponse = await axios.post(chatUrl, chatPayload, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,

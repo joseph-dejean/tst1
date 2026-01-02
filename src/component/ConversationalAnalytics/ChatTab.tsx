@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, TextField, Button, Paper, Typography, CircularProgress, Alert, Divider } from '@mui/material';
+import { Box, TextField, Button, Paper, Typography, CircularProgress, Alert } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import axios from 'axios';
 import { URLS } from '../../constants/urls';
