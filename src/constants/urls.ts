@@ -24,4 +24,5 @@ export const URLS = {
     GET_ASPECT: '/aspect',
     GET_ACCESS_REQUESTS: '/access-requests',
     UPDATE_ACCESS_REQUEST: '/access-request/update',
+    GET_ASPECT_TYPES: '/aspect-types',
 }

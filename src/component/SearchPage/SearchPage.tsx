@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Grid } from '@mui/material'
-import { Tune } from '@mui/icons-material'
+import { Tune, FilterList } from '@mui/icons-material'
 import { useDispatch, useSelector } from 'react-redux'
 import FilterDropdown from '../Filter/FilterDropDown'
 import type { AppDispatch } from '../../app/store'
@@ -9,7 +9,8 @@ import { useAuth } from '../../auth/AuthProvider'
 import ResourceViewer from '../Common/ResourceViewer'
 import ResourcePreview from '../Common/ResourcePreview'
 import { typeAliases } from '../../utils/resourceUtils'
-import { mergeDataProductsIntoResults } from '../../utils/dataProductUtils'
+import { mergeDataProductsIntoResults, filterByDataProduct } from '../../utils/dataProductUtils'
+import GlobalFilterSidebar from '../Filter/GlobalFilterSidebar'
 
 /**
  * @file SearchPage.tsx
@@ -67,7 +68,10 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
   const [startIndex, setStartIndex] = useState<number>(0);
   const [pageSize, setPageSize] = useState<number>(20);
   const [pageNumber, setPageNumber] = useState<number>(1);
-  
+  const [isGlobalFilterOpen, setIsGlobalFilterOpen] = useState<boolean>(false);
+  const [selectedAspects, setSelectedAspects] = useState<string[]>([]);
+  const [selectedDataProducts, setSelectedDataProducts] = useState<string[]>([]);
+  const [availableAspects, setAvailableAspects] = useState<string[]>([]);
 
   const handleFilterChange = (selectedFilters: any[]) => {
     setFilters(selectedFilters);
@@ -244,25 +248,47 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
   
   // Custom filter component for SearchPage
   const customFilters = (
-    <span 
-        style={{
-            background: isFiltersOpen ? "#E7F0FE" : "none", 
-            color: "#0E4DCA" , 
-            padding:"8px 13px", 
-            borderRadius:"59px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "40px",
-            height: "32px",
-            cursor: "pointer",
-            transition: "all 0.2s ease",
-            border: isFiltersOpen ? "none" : "1px solid #DADCE0"
-        }}
-        onClick={handleTuneIconClick}
-    >
-        <Tune style={{ fontSize: "20px" }} />
-    </span>
+    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+      <span 
+          style={{
+              background: isFiltersOpen ? "#E7F0FE" : "none", 
+              color: "#0E4DCA" , 
+              padding:"8px 13px", 
+              borderRadius:"59px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "40px",
+              height: "32px",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              border: isFiltersOpen ? "none" : "1px solid #DADCE0"
+          }}
+          onClick={handleTuneIconClick}
+      >
+          <Tune style={{ fontSize: "20px" }} />
+      </span>
+      <span 
+          style={{
+              background: isGlobalFilterOpen ? "#E7F0FE" : "none", 
+              color: "#0E4DCA" , 
+              padding:"8px 13px", 
+              borderRadius:"59px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "40px",
+              height: "32px",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              border: isGlobalFilterOpen ? "none" : "1px solid #DADCE0"
+          }}
+          onClick={() => setIsGlobalFilterOpen(!isGlobalFilterOpen)}
+          title="Global Filters (Aspect & Data Product)"
+      >
+          <FilterList style={{ fontSize: "20px" }} />
+      </span>
+    </Box>
   );
 
   return (
@@ -333,6 +359,15 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
                 )}
             </Grid>
         </div>
+        <GlobalFilterSidebar
+          isOpen={isGlobalFilterOpen}
+          onClose={() => setIsGlobalFilterOpen(false)}
+          selectedAspects={selectedAspects}
+          selectedDataProducts={selectedDataProducts}
+          onAspectChange={setSelectedAspects}
+          onDataProductChange={setSelectedDataProducts}
+          availableAspects={availableAspects}
+        />
     </>
   )
 }

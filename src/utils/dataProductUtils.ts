@@ -59,6 +59,10 @@ export const mergeDataProductsIntoResults = (searchResults: any[], searchTerm: s
 
 /**
  * Filter results by Data Product
+ * When a Data Product is selected, show only:
+ * 1. The Data Product itself
+ * 2. Tables/assets that belong to that Data Product (if tables are defined)
+ * If no tables are defined (Coming Soon), show only the Data Product
  */
 export const filterByDataProduct = (results: any[], dataProductId: string): any[] => {
   if (!dataProductId || dataProductId === 'all') {
@@ -66,15 +70,40 @@ export const filterByDataProduct = (results: any[], dataProductId: string): any[
   }
 
   const dataProduct = mockDataProducts.find(dp => dp.id === dataProductId);
-  if (!dataProduct || !dataProduct.tables || dataProduct.tables.length === 0) {
+  if (!dataProduct) {
     return results;
   }
 
-  // Filter results to only show tables/assets that belong to this Data Product
-  const tableFQNs = new Set(dataProduct.tables.map(t => t.fullyQualifiedName));
-  
-  return results.filter(result => {
-    return tableFQNs.has(result.fullyQualifiedName);
-  });
+  // If Data Product has tables defined, filter to show only those tables + the Data Product itself
+  if (dataProduct.tables && dataProduct.tables.length > 0) {
+    // Create a set of table identifiers (could be FQN, name, or other identifier)
+    const tableIdentifiers = new Set(dataProduct.tables);
+    
+    // Filter results to show:
+    // 1. The Data Product itself
+    // 2. Tables that match the identifiers
+    return results.filter(result => {
+      // Include the Data Product itself
+      if (result._isDataProduct && result._dataProductId === dataProductId) {
+        return true;
+      }
+      
+      // Include tables that match any identifier in the Data Product's tables array
+      const resultFQN = result.fullyQualifiedName || result.name || '';
+      const resultName = result.entrySource?.displayName || result.name || '';
+      
+      return tableIdentifiers.has(resultFQN) || 
+             tableIdentifiers.has(resultName) ||
+             dataProduct.tables.some((tableId: string) => 
+               resultFQN.includes(tableId) || resultName.includes(tableId)
+             );
+    });
+  } else {
+    // If no tables defined (Coming Soon), show only the Data Product itself
+    return results.filter(result => {
+      return (result._isDataProduct && result._dataProductId === dataProductId) ||
+             result.name === `data-products/${dataProductId}`;
+    });
+  }
 };
 
