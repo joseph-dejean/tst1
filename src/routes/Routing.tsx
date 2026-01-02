@@ -22,6 +22,7 @@ import BrowseByAnnotation from '../component/BrowseByAnnotation/BrowseByAnnotati
 import SessionExpirationWrapper from '../component/Auth/SessionExpirationWrapper';
 import UserGuide from '../component/Guide/UserGuide';
 import DataProductPage from '../component/DataProduct/DataProductPage';
+import AccessRequestsDashboard from '../component/AccessRequests/AccessRequestsDashboard';
 
 const Routing = () => {
   // state to hold the user object
@@ -149,6 +150,19 @@ const Routing = () => {
                 <Navbar searchBar={true}/>
                 <AdminPanel />
               {/* </ProtectedRoute><CircularProgress style={{position:"absolute", top:"50%", left:"50%", transform:"translate(-50%, -50%)"}} /> */}
+              </>
+            </SessionExpirationWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/access-requests"
+        element={
+          <ProtectedRoute>
+            <SessionExpirationWrapper>
+              <>
+                <Navbar searchBar={true}/>
+                <AccessRequestsDashboard />
               </>
             </SessionExpirationWrapper>
           </ProtectedRoute>

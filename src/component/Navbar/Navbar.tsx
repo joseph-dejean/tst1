@@ -12,7 +12,7 @@ import Avatar from '@mui/material/Avatar';
 import Tooltip from '@mui/material/Tooltip';
 import MenuItem from '@mui/material/MenuItem';
 import './Navbar.css'
-import { HelpOutline, MenuBook, Home, Person, AccountCircle, Logout, Menu as MenuIcon } from '@mui/icons-material';
+import { HelpOutline, MenuBook, Home, Person, AccountCircle, Logout, Menu as MenuIcon, Security } from '@mui/icons-material';
 import SearchBar from '../SearchBar/SearchBar';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch } from '../../app/store';
@@ -482,6 +482,31 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
                   </Box>
                 </MenuItem>
               ))}
+              {(user?.hasRole || user?.roles?.includes('admin') || user?.roles?.includes('manager')) && (
+                <MenuItem key="AccessRequests" onClick={() => {
+                  handleCloseUserMenu();
+                  navigate('/access-requests');
+                }}>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: "0.25rem" 
+                  }}>
+                    <Security sx={{ 
+                      fontSize: "1.25rem", // 20px
+                      color: "#5F6367"
+                    }} />
+                    <Typography sx={{ 
+                      textAlign: 'center',
+                      fontSize: "0.875rem", // 14px
+                      fontWeight: 500,
+                      lineHeight: 1.43
+                    }}>
+                      Access Requests
+                    </Typography>
+                  </Box>
+                </MenuItem>
+              )}
               <MenuItem key="SignOut" onClick={() => {
                   sessionStorage.removeItem('welcomeShown');
                   logout();

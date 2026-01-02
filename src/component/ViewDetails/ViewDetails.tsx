@@ -14,6 +14,7 @@ import DataQuality from '../DataQuality/DataQuality'
 import DataProfile from '../DataProfile/DataProfile'
 import EntryList from '../EntryList/EntryList'
 import ShimmerLoader from '../Shimmer/ShimmerLoader'
+import SubmitAccess from '../SearchPage/SubmitAccess'
 import type { AppDispatch } from '../../app/store'
 import { getSampleData } from '../../features/sample-data/sampleDataSlice'
 import { popFromHistory } from '../../features/entry/entrySlice'
@@ -81,6 +82,7 @@ const ViewDetails = () => {
   const [expandedAnnotations, setExpandedAnnotations] = useState<Set<string>>(new Set());
   const [dqScanName, setDqScanName] = useState<string | null>(null);
   const [dpScanName, setDpScanName] = useState<string | null>(null);
+  const [showAccessRequest, setShowAccessRequest] = useState<boolean>(false);
 
   //const [showSidePanel, setShowSidePanel] = React.useState(true);
 
@@ -425,6 +427,37 @@ useEffect(() => {
                       </>
                     ):(<></>)
                   }
+                  <button 
+                    onClick={() => setShowAccessRequest(true)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      color: "#0B57D0",
+                      fontFamily: '"Google Sans Text", sans-serif',
+                      fontSize: "0.75rem",
+                      fontWeight: "700"
+                    }}>
+                    Request Access
+                  </button> 
+                    onClick={() => setShowAccessRequest(true)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      color: "#0B57D0",
+                      fontFamily: '"Google Sans Text", sans-serif',
+                      fontSize: "0.75rem",
+                      fontWeight: "700"
+                    }}>
+                    Request Access
+                  </button>
                 </div>
               </div>
               {/* Navigation Tab Bar */}
@@ -596,6 +629,17 @@ useEffect(() => {
         </div>)
         }
       </div>
+      <SubmitAccess
+        isOpen={showAccessRequest}
+        onClose={() => setShowAccessRequest(false)}
+        assetName={entry?.entrySource?.displayName || entry?.name || ''}
+        entry={entry}
+        previewData={entry}
+        onSubmitSuccess={(assetName) => {
+          console.log('Access request submitted for:', assetName);
+          setShowAccessRequest(false);
+        }}
+      />
     </div>
   )
 }
