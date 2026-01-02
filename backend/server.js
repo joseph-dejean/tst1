@@ -147,7 +147,7 @@ app.post('/api/v1/chat', async (req, res) => {
     }
 
     // Use Conversational Analytics API with inline context for BigQuery tables
-    const projectId_env = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const projectId_env = 'dataplex-ui'; // Hardcoded project ID
     const location = process.env.GCP_LOCATION || 'global';
     const chatUrl = `https://geminidataanalytics.googleapis.com/v1beta/projects/${projectId_env}/locations/${location}:chat`;
 
