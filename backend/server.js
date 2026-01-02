@@ -37,44 +37,226 @@ class CustomGoogleAuth extends GoogleAuth {
 
 const app = express();
 // --- START CONVERSATIONAL ANALYTICS CODE ---
+// Using Google Cloud Conversational Analytics API (geminidataanalytics.googleapis.com)
 
-// Initialize Vertex AI
-// Note: Ensure GCP_LOCATION env var is set in Cloud Run (e.g., us-central1)
-const vertex_ai = new VertexAI({
-  project: process.env.GOOGLE_CLOUD_PROJECT_ID,
-  location: process.env.GCP_LOCATION || 'us-central1'
-});
-const gemini_model = 'gemini-1.5-flash-001';
-
+/**
+ * POST /api/v1/chat
+ * Chat with a table using Google Cloud Conversational Analytics API
+ * 
+ * Request Body:
+ * {
+ *   "message": "User's question in natural language",
+ *   "context": {
+ *     "fullyQualifiedName": "bigquery://project.dataset.table",
+ *     "name": "Table name",
+ *     "description": "Table description",
+ *     "schema": [...],
+ *     "entryType": "TABLE",
+ *     "conversationHistory": [] // Optional: for multi-turn conversations
+ *   }
+ * }
+ */
 app.post('/api/v1/chat', async (req, res) => {
   try {
     const { message, context } = req.body;
-    
-    // Initialize the model
-    const generativeModel = vertex_ai.getGenerativeModel({ model: gemini_model });
-    
-    // Create a prompt that gives the AI context about the data
-    const prompt = `
-      You are a helpful Data Steward assistant for Dataplex.
-      
-      Here is the metadata for the dataset the user is looking at:
-      Name: ${context.name}
-      Description: ${context.description}
-      Schema/Columns: ${JSON.stringify(context.schema)}
-      
-      User Question: ${message}
-      
-      Answer the user's question based strictly on the metadata provided above. Keep it concise.
-    `;
+    const accessToken = req.headers.authorization?.split(' ')[1];
 
-    const result = await generativeModel.generateContent(prompt);
-    const response = result.response;
-    const text = response.candidates[0].content.parts[0].text;
+    if (!message || !context) {
+      return res.status(400).json({ error: 'Message and context are required.' });
+    }
 
-    res.json({ reply: text });
+    // Extract BigQuery table reference from fullyQualifiedName
+    // Format: bigquery://project.dataset.table or project:dataset.table
+    let projectId, datasetId, tableId;
+    
+    if (context.fullyQualifiedName) {
+      const fqn = context.fullyQualifiedName;
+      if (fqn.startsWith('bigquery://')) {
+        const parts = fqn.replace('bigquery://', '').split('.');
+        if (parts.length >= 3) {
+          projectId = parts[0];
+          datasetId = parts[1];
+          tableId = parts[2];
+        }
+      } else if (fqn.includes(':')) {
+        const [project, rest] = fqn.split(':');
+        projectId = project;
+        const parts = rest.split('.');
+        if (parts.length >= 2) {
+          datasetId = parts[0];
+          tableId = parts[1];
+        }
+      }
+    }
+
+    // If we can't extract BigQuery reference, fall back to metadata-only mode
+    if (!projectId || !datasetId || !tableId) {
+      // Fallback: Use Vertex AI for non-BigQuery tables or when FQN is not available
+      const vertex_ai = new VertexAI({
+        project: process.env.GOOGLE_CLOUD_PROJECT_ID,
+        location: process.env.GCP_LOCATION || 'us-central1'
+      });
+      const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
+      
+      const prompt = `
+        You are a helpful Data Steward assistant for Dataplex.
+        
+        Here is the metadata for the dataset the user is looking at:
+        Name: ${context.name}
+        Description: ${context.description}
+        Schema/Columns: ${JSON.stringify(context.schema || [])}
+        
+        User Question: ${message}
+        
+        Answer the user's question based strictly on the metadata provided above. Keep it concise.
+      `;
+
+      const result = await generativeModel.generateContent(prompt);
+      const response = result.response;
+      const text = response.candidates[0].content.parts[0].text;
+
+      return res.json({ reply: text });
+    }
+
+    // Use Conversational Analytics API with inline context for BigQuery tables
+    const projectId_env = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const location = process.env.GCP_LOCATION || 'global';
+    const chatUrl = `https://geminidataanalytics.googleapis.com/v1beta/projects/${projectId_env}/locations/${location}:chat`;
+
+    // Build BigQuery data source reference
+    const bigqueryDataSource = {
+      bq: {
+        tableReferences: [{
+          projectId: projectId,
+          datasetId: datasetId,
+          tableId: tableId,
+          schema: {
+            description: context.description || '',
+            fields: (context.schema || []).map((field) => ({
+              name: field.name || field,
+              description: field.description || ''
+            }))
+          }
+        }]
+      }
+    };
+
+    // Prepare messages array (include conversation history if provided)
+    const messages = [];
+    if (context.conversationHistory && Array.isArray(context.conversationHistory)) {
+      messages.push(...context.conversationHistory);
+    }
+    messages.push({
+      userMessage: {
+        text: message
+      }
+    });
+
+    // Construct the chat payload with inline context
+    const chatPayload = {
+      parent: `projects/${projectId_env}/locations/${location}`,
+      messages: messages,
+      inline_context: {
+        datasource_references: bigqueryDataSource,
+        system_instruction: 'You are a helpful Data Steward assistant for Dataplex. Answer questions about the data tables based on their schema and metadata. Be concise and accurate.'
+      }
+    };
+
+    // Make request to Conversational Analytics API
+    const axios = require('axios');
+    
+    const chatResponse = await axios.post(chatUrl, chatPayload, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'x-server-timeout': '300'
+      },
+      responseType: 'stream'
+    });
+
+    // Stream the response
+    let finalText = '';
+    let buffer = '';
+
+    await new Promise((resolve, reject) => {
+      chatResponse.data.on('data', (chunk) => {
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (line.trim() && line !== '[' && line !== ']' && line !== ',') {
+            try {
+              let jsonStr = line.trim();
+              // Clean up JSON string
+              if (jsonStr.startsWith('[')) jsonStr = jsonStr.substring(1);
+              if (jsonStr.endsWith(']')) jsonStr = jsonStr.substring(0, jsonStr.length - 1);
+              if (jsonStr.endsWith(',')) jsonStr = jsonStr.substring(0, jsonStr.length - 1);
+              
+              if (jsonStr && jsonStr.trim()) {
+                const message = JSON.parse(jsonStr);
+                if (message.systemMessage) {
+                  if (message.systemMessage.text) {
+                    const textType = message.systemMessage.text.textType;
+                    const textContent = message.systemMessage.text.text || '';
+                    
+                    if (textType === 'FINAL_RESPONSE') {
+                      finalText += textContent;
+                    } else if (textType === 'THOUGHT' && message.systemMessage.text.parts) {
+                      // Include thought summary if available
+                      if (message.systemMessage.text.parts[0]?.text) {
+                        finalText += message.systemMessage.text.parts[0].text;
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              // Continue processing other lines
+              console.log('Error parsing line:', e.message);
+            }
+          }
+        }
+      });
+
+      chatResponse.data.on('end', () => {
+        // Process any remaining buffer
+        if (buffer.trim()) {
+          try {
+            let jsonStr = buffer.trim();
+            if (jsonStr.startsWith('[')) jsonStr = jsonStr.substring(1);
+            if (jsonStr.endsWith(']')) jsonStr = jsonStr.substring(0, jsonStr.length - 1);
+            if (jsonStr && jsonStr.trim()) {
+              const message = JSON.parse(jsonStr);
+              if (message.systemMessage?.text?.text) {
+                finalText += message.systemMessage.text.text;
+              }
+            }
+          } catch (e) {
+            // Ignore parse errors for buffer
+          }
+        }
+
+        resolve();
+      });
+
+      chatResponse.data.on('error', (err) => {
+        console.error('Conversational Analytics API stream error:', err);
+        reject(err);
+      });
+    });
+
+    res.json({ 
+      reply: finalText || 'I received your question but could not generate a response. Please try again.',
+      conversationHistory: messages // Return updated conversation history
+    });
+
   } catch (err) {
-    console.error("Vertex AI Error:", err);
-    res.status(500).json({ error: "Failed to generate response from AI." });
+    console.error("Conversational Analytics API Error:", err);
+    res.status(500).json({ 
+      error: "Failed to generate response from Conversational Analytics API.",
+      details: err.message 
+    });
   }
 });
 // --- END CONVERSATIONAL ANALYTICS CODE ---

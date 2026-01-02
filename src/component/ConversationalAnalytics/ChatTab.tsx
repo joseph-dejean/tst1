@@ -23,18 +23,50 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
     
     try {
       // 1. Prepare Context (Extract useful info from the entry object)
-      const number = entry.entryType.split('/')[1];
-      // Try to get schema if available
-      const schema = entry.aspects?.[`${number}.global.schema`]?.data?.fields?.fields?.listValue?.values || [];
+      let schema: any[] = [];
+      
+      // Try to extract schema from aspects
+      if (entry.aspects) {
+        const aspectKeys = Object.keys(entry.aspects);
+        const schemaKey = aspectKeys.find(key => key.includes('schema') || key.includes('Schema'));
+        
+        if (schemaKey) {
+          const schemaAspect = entry.aspects[schemaKey];
+          // Handle different schema formats
+          if (schemaAspect?.data?.fields) {
+            if (schemaAspect.data.fields.fields?.listValue?.values) {
+              schema = schemaAspect.data.fields.fields.listValue.values;
+            } else if (Array.isArray(schemaAspect.data.fields)) {
+              schema = schemaAspect.data.fields;
+            } else if (schemaAspect.data.fields.fields) {
+              schema = Array.isArray(schemaAspect.data.fields.fields) 
+                ? schemaAspect.data.fields.fields 
+                : Object.values(schemaAspect.data.fields.fields);
+            }
+          }
+        }
+      }
+
+      // Format schema for better AI understanding
+      const formattedSchema = schema.map((field: any) => {
+        if (typeof field === 'string') return field;
+        return {
+          name: field.name || field.stringValue || field.displayName || 'unknown',
+          type: field.type || field.dataType || 'unknown',
+          description: field.description || ''
+        };
+      });
 
       const contextData = {
-        name: entry.entrySource.displayName || entry.name,
-        description: entry.entrySource.description || "No description available.",
-        schema: schema // Sending the columns helps the AI understand the data structure
+        name: entry.entrySource?.displayName || entry.displayName || entry.name || 'Unknown',
+        description: entry.entrySource?.description || entry.description || "No description available.",
+        schema: formattedSchema, // Sending the columns helps the AI understand the data structure
+        fullyQualifiedName: entry.fullyQualifiedName || entry.name || '',
+        entryType: entry.entryType || entry.entrySource?.system || 'Unknown'
       };
 
       // 2. Call the Backend
-      const res = await axios.post(`${URLS.API_URL}/chat`, {
+      const res = await axios.post(`${URLS.API_URL}${URLS.CHAT}`, {
         message: input,
         context: contextData
       }, {
@@ -42,9 +74,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
       });
 
       setResponse(res.data.reply);
-    } catch (e) {
-      console.error(e);
-      setError("Error communicating with AI. Please check if Vertex AI API is enabled and permissions are granted.");
+    } catch (e: any) {
+      console.error('Chat error:', e);
+      const errorMessage = e?.response?.data?.error || e?.message || "Error communicating with AI. Please check if Vertex AI API is enabled and permissions are granted.";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

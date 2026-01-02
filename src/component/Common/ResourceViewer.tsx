@@ -7,7 +7,6 @@ import SearchEntriesCard from '../SearchEntriesCard/SearchEntriesCard';
 import FilterTag from '../Tags/FilterTag';
 import SearchTableView from '../SearchPage/SearchTableView';
 import ShimmerLoader from '../Shimmer/ShimmerLoader';
-import DataProductCard from '../DataProduct/DataProductCard';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch } from '../../app/store';
 // import { fetchEntry } from '../../features/entry/entrySlice';
@@ -859,44 +858,6 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
         {filteredResources.length > 0 ? (
           viewMode === 'list' ? (
             filteredResources.map((resource: any, index: number) => {
-              // Check if this is a Data Product
-              const isDataProduct = resource._isDataProduct || resource.dataplexEntry?._isDataProduct;
-              const dataProduct = resource._dataProduct || resource.dataplexEntry?._dataProduct;
-              
-              if (isDataProduct && dataProduct) {
-                const isSelected = previewData && previewData._dataProductId === dataProduct.id;
-                return (
-                  <Box
-                    key={dataProduct.id}
-                    onClick={() => onPreviewDataChange?.(resource)}
-                    onDoubleClick={() => {
-                      if (onViewDetails) {
-                        onViewDetails(resource);
-                      }
-                    }}
-                    sx={{
-                      backgroundColor: '#ffffff',
-                      cursor: 'pointer',
-                      borderRadius: '8px',
-                      padding: '0px',
-                      marginLeft: '-0.5rem',
-                      mb: 1
-                    }}
-                  >
-                    <DataProductCard
-                      dataProduct={dataProduct}
-                      isSelected={isSelected}
-                      onDoubleClick={() => {
-                        if (onViewDetails) {
-                          onViewDetails(resource);
-                        }
-                      }}
-                    />
-                  </Box>
-                );
-              }
-              
-              // Regular entry rendering
               const isSelected = previewData && previewData.name === resource.dataplexEntry.name;
               const disableHoverEffect = selectedIndex !== -1 && selectedIndex === index - 1;
               const hideTopBorder = hoveredIndex === index - 1;

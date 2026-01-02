@@ -134,11 +134,11 @@ const DataProductPage: React.FC = () => {
               </Box>
             ) : (
               <Box>
-                {tables.map((table, index) => (
-                  <Box key={table.name || index} sx={{ mb: 2 }}>
+                {tables.map((table: any, index: number) => (
+                  <Box key={table?.name || index} sx={{ mb: 2 }}>
                     <SearchEntriesCard
                       entry={table}
-                      onDoubleClick={(entry) => {
+                      onDoubleClick={(entry: any) => {
                         navigate('/view-details', { state: { entry } });
                       }}
                     />

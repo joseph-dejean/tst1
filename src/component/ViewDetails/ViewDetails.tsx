@@ -483,7 +483,8 @@ useEffect(() => {
                               <Tab key="annotations" label="Aspects" {...tabProps(1)} />,
                               <Tab key="lineage" label="Lineage" {...tabProps(2)} />,
                               <Tab key="dataProfile" label="Data Profile" {...tabProps(3)} />,
-                              <Tab key="dataQuality" label="Data Quality" {...tabProps(4)} />
+                              <Tab key="dataQuality" label="Data Quality" {...tabProps(4)} />,
+                              <Tab key="chat" label="Chat with Table" {...tabProps(5)} />
                               
                             ] : getEntryType(entry.name, '/') === 'Datasets' ? [
                               <Tab key="overview" label="Overview" {...tabProps(0)} />,
@@ -493,6 +494,7 @@ useEffect(() => {
                             ] : [
                               <Tab key="overview" label="Overview" {...tabProps(0)} />,
                               <Tab key="annotations" label="Aspects" {...tabProps(1)} />,
+                              <Tab key="chat" label="Chat with Table" {...tabProps(2)} />
                               // <Tab key="lineage" label="Lineage" {...tabProps(2)} />,
                               // <Tab key="dataProfile" label="Data Profile" {...tabProps(3)} />,
                               // <Tab key="dataQuality" label="Data Quality" {...tabProps(4)} />
@@ -555,6 +557,16 @@ useEffect(() => {
                               onExpandAll={handleAnnotationExpandAll}
                             />
                             {annotationTab}
+                        </CustomTabPanel>
+                        <CustomTabPanel value={tabValue} index={5}>
+                            <Box sx={{ 
+                              borderRadius: '8px', 
+                              border: '1px solid #DADCE0', 
+                              background: '#ffffff',
+                              minHeight: '500px'
+                            }}>
+                              <ChatTab entry={entry} />
+                            </Box>
                         </CustomTabPanel>
                       </>
                     ) : (
