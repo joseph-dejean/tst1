@@ -97,7 +97,7 @@ app.post('/api/v1/chat', async (req, res) => {
     if (!projectId || !datasetId || !tableId) {
       // Fallback: Use Vertex AI for non-BigQuery tables or when FQN is not available
       const vertex_ai = new VertexAI({
-        project: process.env.GOOGLE_CLOUD_PROJECT_ID,
+        project: 'dataplex-ui', // Hardcoded project ID
         location: process.env.GCP_LOCATION || 'us-central1'
       });
       const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
@@ -211,7 +211,7 @@ app.post('/api/v1/chat', async (req, res) => {
     // If no valid table references found, fall back to Vertex AI
     if (tableReferences.length === 0) {
       const vertex_ai = new VertexAI({
-        project: process.env.GOOGLE_CLOUD_PROJECT_ID,
+        project: 'dataplex-ui', // Hardcoded project ID
         location: process.env.GCP_LOCATION || 'us-central1'
       });
       const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
