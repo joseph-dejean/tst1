@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Box, TextField, Button, Paper, Typography, CircularProgress, Alert } from '@mui/material';
+import React, { useState, useRef, useEffect } from 'react';
+import { Box, TextField, Button, Paper, Typography, CircularProgress, Alert, Divider } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import axios from 'axios';
 import { URLS } from '../../constants/urls';
@@ -9,17 +9,42 @@ interface ChatTabProps {
   entry: any;
 }
 
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+}
+
 const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
   const { user } = useAuth();
   const [input, setInput] = useState('');
-  const [response, setResponse] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [conversationHistory, setConversationHistory] = useState<any[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const handleAsk = async () => {
     if (!input.trim()) return;
+    
+    const userMessage = input.trim();
+    setInput('');
     setLoading(true);
     setError(null);
+    
+    // Add user message to UI immediately
+    const userMsg: Message = {
+      role: 'user',
+      content: userMessage,
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, userMsg]);
     
     try {
       // 1. Prepare Context (Extract useful info from the entry object)
@@ -60,72 +85,194 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
       const contextData = {
         name: entry.entrySource?.displayName || entry.displayName || entry.name || 'Unknown',
         description: entry.entrySource?.description || entry.description || "No description available.",
-        schema: formattedSchema, // Sending the columns helps the AI understand the data structure
+        schema: formattedSchema,
         fullyQualifiedName: entry.fullyQualifiedName || entry.name || '',
-        entryType: entry.entryType || entry.entrySource?.system || 'Unknown'
+        entryType: entry.entryType || entry.entrySource?.system || 'Unknown',
+        conversationHistory: conversationHistory // Include previous conversation history
       };
 
       // 2. Call the Backend
       const res = await axios.post(`${URLS.API_URL}${URLS.CHAT}`, {
-        message: input,
+        message: userMessage,
         context: contextData
       }, {
         headers: { Authorization: `Bearer ${user?.token}` }
       });
 
-      setResponse(res.data.reply);
+      // Update conversation history for next turn
+      if (res.data.conversationHistory) {
+        setConversationHistory(res.data.conversationHistory);
+      }
+
+      // Add assistant response to UI
+      const assistantMsg: Message = {
+        role: 'assistant',
+        content: res.data.reply || 'No response received.',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, assistantMsg]);
+      
     } catch (e: any) {
       console.error('Chat error:', e);
-      const errorMessage = e?.response?.data?.error || e?.message || "Error communicating with AI. Please check if Vertex AI API is enabled and permissions are granted.";
+      const errorMessage = e?.response?.data?.error || e?.message || "Error communicating with Conversational Analytics API. Please check if the API is enabled and permissions are granted.";
       setError(errorMessage);
+      
+      // Add error message to chat
+      const errorMsg: Message = {
+        role: 'assistant',
+        content: `Error: ${errorMessage}`,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMsg]);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleClearChat = () => {
+    setMessages([]);
+    setConversationHistory([]);
+    setError(null);
+  };
+
   return (
-    <Box sx={{ padding: '24px', maxWidth: '900px' }}>
-      <Typography variant="h6" gutterBottom sx={{color: '#1F1F1F'}}>
-        Conversational Analytics
-      </Typography>
-      <Typography variant="body2" sx={{ mb: 3, color: '#575757' }}>
-        Ask natural language questions about this asset's schema, description, or usage to get instant insights powered by Gemini.
-      </Typography>
-      
-      <Box sx={{ display: 'flex', gap: 2, mb: 4 }}>
-        <TextField 
-          fullWidth 
-          variant="outlined"
-          label="Ask a question..."
-          placeholder="e.g., Does this table contain PII? What is the primary key?" 
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleAsk()}
-          disabled={loading}
-        />
-        <Button 
-          variant="contained" 
-          onClick={handleAsk} 
-          disabled={loading}
-          startIcon={!loading && <SendIcon />}
-          sx={{ backgroundColor: '#0E4DCA', minWidth: '120px' }}
-        >
-          {loading ? <CircularProgress size={24} color="inherit" /> : 'Ask AI'}
-        </Button>
+    <Box sx={{ padding: '24px', maxWidth: '1200px', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="h6" gutterBottom sx={{color: '#1F1F1F'}}>
+          Conversational Analytics
+        </Typography>
+        <Typography variant="body2" sx={{ color: '#575757' }}>
+          Ask natural language questions about this table's data. Powered by Google Cloud Conversational Analytics API.
+        </Typography>
       </Box>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {/* Chat Messages Area */}
+      <Box 
+        ref={chatContainerRef}
+        sx={{ 
+          flex: 1, 
+          overflowY: 'auto', 
+          mb: 2, 
+          p: 2, 
+          backgroundColor: '#F8FAFD', 
+          borderRadius: '8px',
+          border: '1px solid #DADCE0',
+          minHeight: '400px',
+          maxHeight: '600px'
+        }}
+      >
+        {messages.length === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 8, color: '#575757' }}>
+            <Typography variant="body1" sx={{ mb: 1 }}>
+              Start a conversation by asking a question about this table.
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#9AA0A6' }}>
+              Example: "What columns does this table have?" or "Show me the top 10 rows"
+            </Typography>
+          </Box>
+        ) : (
+          messages.map((msg, index) => (
+            <Box key={index} sx={{ mb: 2 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                  mb: 1
+                }}
+              >
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    maxWidth: '80%',
+                    backgroundColor: msg.role === 'user' ? '#0E4DCA' : '#ffffff',
+                    color: msg.role === 'user' ? '#ffffff' : '#1F1F1F',
+                    borderRadius: '8px',
+                    border: msg.role === 'assistant' ? '1px solid #DADCE0' : 'none'
+                  }}
+                >
+                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                    {msg.content}
+                  </Typography>
+                  <Typography 
+                    variant="caption" 
+                    sx={{ 
+                      display: 'block', 
+                      mt: 1, 
+                      opacity: 0.7,
+                      fontSize: '0.7rem'
+                    }}
+                  >
+                    {msg.timestamp.toLocaleTimeString()}
+                  </Typography>
+                </Paper>
+              </Box>
+            </Box>
+          ))
+        )}
+        {loading && (
+          <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 2 }}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                backgroundColor: '#ffffff',
+                borderRadius: '8px',
+                border: '1px solid #DADCE0'
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularProgress size={16} />
+                <Typography variant="body2" sx={{ color: '#575757' }}>
+                  Thinking...
+                </Typography>
+              </Box>
+            </Paper>
+          </Box>
+        )}
+        <div ref={messagesEndRef} />
+      </Box>
 
-      {response && (
-        <Paper elevation={0} sx={{ p: 3, backgroundColor: '#F8FAFD', border: '1px solid #DADCE0', borderRadius: '8px' }}>
-          <Typography variant="subtitle2" sx={{ mb: 1, color: '#0E4DCA', fontWeight: 'bold' }}>
-            Gemini Response:
-          </Typography>
-          <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-            {response}
-          </Typography>
-        </Paper>
-      )}
+      {/* Input Area */}
+      <Box>
+        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+          <TextField 
+            fullWidth 
+            variant="outlined"
+            label="Ask a question..."
+            placeholder="e.g., What columns does this table have? Show me sample data." 
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && !loading && handleAsk()}
+            disabled={loading}
+            multiline
+            maxRows={3}
+          />
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Button 
+              variant="contained" 
+              onClick={handleAsk} 
+              disabled={loading || !input.trim()}
+              startIcon={!loading && <SendIcon />}
+              sx={{ backgroundColor: '#0E4DCA', minWidth: '120px' }}
+            >
+              {loading ? <CircularProgress size={24} color="inherit" /> : 'Send'}
+            </Button>
+            {messages.length > 0 && (
+              <Button 
+                variant="outlined" 
+                onClick={handleClearChat}
+                disabled={loading}
+                size="small"
+                sx={{ minWidth: '120px' }}
+              >
+                Clear
+              </Button>
+            )}
+          </Box>
+        </Box>
+      </Box>
     </Box>
   );
 };
