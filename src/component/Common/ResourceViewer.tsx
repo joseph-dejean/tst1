@@ -179,6 +179,7 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
   containerStyle,
   contentStyle,
   onFavoriteClick,
+  onViewDetails,
   selectedFilters = [],
   onFiltersChange,
   startIndex = 0,

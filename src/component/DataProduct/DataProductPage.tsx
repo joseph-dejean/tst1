@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Typography, Card, CardContent, Chip, Badge, Grid, CircularProgress } from '@mui/material';
+import { Box, Typography, Card, CardContent, Chip, Badge, CircularProgress } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
-import { mockDataProducts, getDataProductById } from '../../mocks/mockDataProducts';
+import { getDataProductById } from '../../mocks/mockDataProducts';
 import type { DataProduct } from '../../types/DataProduct';
 import SearchEntriesCard from '../SearchEntriesCard/SearchEntriesCard';
 import { useAuth } from '../../auth/AuthProvider';
@@ -44,7 +44,6 @@ const DataProductPage: React.FC = () => {
 
   const fetchTableDetails = async (tableRefs: DataProduct['tables']) => {
     try {
-      const id_token = user?.token || '';
       const promises = tableRefs.map(async (tableRef) => {
         try {
           const response = await Api.get('/get-entry', { entryName: tableRef.entryName });
@@ -134,18 +133,18 @@ const DataProductPage: React.FC = () => {
                 </Typography>
               </Box>
             ) : (
-              <Grid container spacing={2}>
+              <Box>
                 {tables.map((table, index) => (
-                  <Grid item xs={12} key={table.name || index}>
+                  <Box key={table.name || index} sx={{ mb: 2 }}>
                     <SearchEntriesCard
                       entry={table}
                       onDoubleClick={(entry) => {
                         navigate('/view-details', { state: { entry } });
                       }}
                     />
-                  </Grid>
+                  </Box>
                 ))}
-              </Grid>
+              </Box>
             )}
           </CardContent>
         </Card>
