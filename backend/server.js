@@ -391,17 +391,17 @@ app.post('/api/v1/chat', async (req, res) => {
         'Content-Type': 'application/json',
         'x-server-timeout': '300'
       },
-      responseType: 'stream'
+      responseType: 'arraybuffer' // Fetch raw bytes to avoid stream encoding issues
     });
 
     let fullResponseText = '';
     let finalChart = null;
     let finalSql = null;
-    let accumulatedJson = '';
+    let accumulatedJson = chatResponse.data.toString('utf-8'); // Convert buffer to string properly
 
-    // Modern stream consumption
-    for await (const chunk of chatResponse.data) {
-      accumulatedJson += chunk.toString();
+    console.log('DEBUG_RAW_RESPONSE_LENGTH:', accumulatedJson.length);
+    if (accumulatedJson.length < 500) {
+      console.log('DEBUG_RAW_RESPONSE_PREVIEW:', accumulatedJson);
     }
 
     // Parse the full accumulated JSON
