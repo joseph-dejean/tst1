@@ -295,6 +295,8 @@ app.post('/api/v1/chat', async (req, res) => {
       });
     } else {
       // Single table
+      console.log(`DEBUG_EXTRACTED_REF: Project=${projectId}, Dataset=${datasetId}, Table=${tableId}, FQN=${context.fullyQualifiedName}`);
+
       tableReferences = [{
         projectId: projectId,
         datasetId: datasetId,
@@ -308,6 +310,8 @@ app.post('/api/v1/chat', async (req, res) => {
         }
       }];
     }
+
+    console.log('DEBUG_TABLE_REFS_PAYLOAD:', JSON.stringify(tableReferences, null, 2));
 
     // If no valid table references found, fall back to Vertex AI
     if (tableReferences.length === 0) {
