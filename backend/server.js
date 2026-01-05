@@ -167,6 +167,13 @@ app.post('/api/v1/chat', async (req, res) => {
       return res.status(400).json({ error: 'Message and context are required.' });
     }
 
+    // Debug Frontend Schema
+    if (context.schema) {
+      console.log('DEBUG_SCHEMA_PAYLOAD:', JSON.stringify(context.schema.slice(0, 3), null, 2)); // Log first 3 fields
+    } else {
+      console.log('DEBUG_SCHEMA_PAYLOAD: MISSING');
+    }
+
     // Extract BigQuery table reference from fullyQualifiedName
     // Format: bigquery://project.dataset.table or project:dataset.table
     let projectId, datasetId, tableId;
