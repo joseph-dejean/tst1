@@ -387,64 +387,62 @@ app.post('/api/v1/chat', async (req, res) => {
 
     await new Promise((resolve, reject) => {
       chatResponse.data.on('data', (chunk) => {
-        console.log('DEBUG_CHUNK:', chunk.toString()); // Added debug log
+        console.log('DEBUG_CHUNK:', chunk.toString());
         buffer += chunk.toString();
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // Keep incomplete line in buffer
 
-        for (const line of lines) {
-          if (line.trim() && line !== '[' && line !== ']' && line !== ',') {
+        let boundary = buffer.indexOf('\n');
+        while (boundary !== -1) {
+          const line = buffer.substring(0, boundary).trim();
+          buffer = buffer.substring(boundary + 1);
+
+          if (line.length > 0 && line !== '[' && line !== ']' && line !== ',') {
             try {
-              let jsonStr = line.trim();
-              // Clean up JSON string
-              if (jsonStr.startsWith('[')) jsonStr = jsonStr.substring(1);
-              if (jsonStr.endsWith(']')) jsonStr = jsonStr.substring(0, jsonStr.length - 1);
+              let jsonStr = line;
+              if (jsonStr.startsWith(',')) jsonStr = jsonStr.substring(1);
               if (jsonStr.endsWith(',')) jsonStr = jsonStr.substring(0, jsonStr.length - 1);
 
-              if (jsonStr && jsonStr.trim()) {
-                const message = JSON.parse(jsonStr);
-                if (message.systemMessage) {
-                  if (message.systemMessage.text) {
-                    const textType = message.systemMessage.text.textType;
-                    const textContent = message.systemMessage.text.text || '';
+              const message = JSON.parse(jsonStr);
+              if (message.systemMessage?.text) {
+                const textType = message.systemMessage.text.textType;
+                const textContent = message.systemMessage.text.text || '';
 
-                    if (textType === 'FINAL_RESPONSE') {
-                      finalText += textContent;
-                    } else if (textType === 'THOUGHT' && message.systemMessage.text.parts) {
-                      // Include thought summary if available
-                      if (message.systemMessage.text.parts[0]?.text) {
-                        finalText += message.systemMessage.text.parts[0].text;
-                      }
-                    }
+                if (textType === 'FINAL_RESPONSE') {
+                  finalText += textContent;
+                } else if (textType === 'THOUGHT' && message.systemMessage.text.parts) {
+                  if (message.systemMessage.text.parts[0]?.text) {
+                    finalText += message.systemMessage.text.parts[0].text;
                   }
                 }
+              } else if (message.error) {
+                console.error('API Error in stream:', message.error);
+                finalText = `Error: ${message.error.message || 'Unknown error'}`;
               }
             } catch (e) {
-              // Continue processing other lines
-              console.log('Error parsing line:', e.message);
+              console.log('Partial JSON line, waiting for more data:', e.message);
+              // If we fail to parse, it might be a multi-line JSON or just broken. 
+              // For robustness in this simple splitting, we'll just log it.
+              // A real fix would require a streaming JSON parser or a more complex buffer handler.
             }
           }
+          boundary = buffer.indexOf('\n');
         }
       });
 
       chatResponse.data.on('end', () => {
-        // Process any remaining buffer
         if (buffer.trim()) {
           try {
             let jsonStr = buffer.trim();
-            if (jsonStr.startsWith('[')) jsonStr = jsonStr.substring(1);
-            if (jsonStr.endsWith(']')) jsonStr = jsonStr.substring(0, jsonStr.length - 1);
-            if (jsonStr && jsonStr.trim()) {
-              const message = JSON.parse(jsonStr);
-              if (message.systemMessage?.text?.text) {
-                finalText += message.systemMessage.text.text;
-              }
+            if (jsonStr.startsWith(',')) jsonStr = jsonStr.substring(1);
+            if (jsonStr.endsWith(',')) jsonStr = jsonStr.substring(0, jsonStr.length - 1);
+            // Try to parse just in case
+            const message = JSON.parse(jsonStr);
+            if (message.systemMessage?.text?.text) {
+              finalText += message.systemMessage.text.text;
             }
           } catch (e) {
-            // Ignore parse errors for buffer
+            console.log('Final buffer parse failed');
           }
         }
-
         resolve();
       });
 
