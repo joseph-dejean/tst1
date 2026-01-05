@@ -38,6 +38,10 @@ class CustomGoogleAuth extends GoogleAuth {
 
 const app = express();
 
+app.use(cors());
+// Middleware to parse JSON request bodies
+app.use(express.json());
+
 // --- START DATA AGENT MANAGEMENT ---
 // Simple in-memory cache for data agents (key: table identifier, value: agent resource name)
 const dataAgentCache = new Map();
@@ -60,7 +64,7 @@ const generateTableIdentifier = (tableReferences) => {
 const getOrCreateDataAgent = async (tableReferences, accessToken, systemInstruction) => {
   try {
     const tableId = generateTableIdentifier(tableReferences);
-    
+
     // Check cache first
     if (dataAgentCache.has(tableId)) {
       return dataAgentCache.get(tableId);
@@ -69,7 +73,7 @@ const getOrCreateDataAgent = async (tableReferences, accessToken, systemInstruct
     const projectId_env = 'dataplex-ui'; // Hardcoded project ID
     const location = process.env.GCP_LOCATION || 'global';
     const agentId = `agent_${tableId.substring(0, 40)}`;
-    
+
     const bigqueryDataSource = {
       bq: {
         tableReferences: tableReferences
@@ -88,7 +92,7 @@ const getOrCreateDataAgent = async (tableReferences, accessToken, systemInstruct
     };
 
     const agentUrl = `https://geminidataanalytics.googleapis.com/v1beta/projects/${projectId_env}/locations/${location}/dataAgents`;
-    
+
     try {
       const response = await axios.post(agentUrl, agentPayload, {
         params: { data_agent_id: agentId },
@@ -114,7 +118,7 @@ const getOrCreateDataAgent = async (tableReferences, accessToken, systemInstruct
               'Content-Type': 'application/json'
             }
           });
-          
+
           if (getResponse.status === 200) {
             const agentName = getResponse.data.name;
             dataAgentCache.set(tableId, agentName);
@@ -129,7 +133,7 @@ const getOrCreateDataAgent = async (tableReferences, accessToken, systemInstruct
     // Any error - fall back to inline context
     console.log('Data agent creation failed, using inline context:', error.message);
   }
-  
+
   return null;
 };
 // --- END DATA AGENT MANAGEMENT ---
@@ -166,7 +170,7 @@ app.post('/api/v1/chat', async (req, res) => {
     // Extract BigQuery table reference from fullyQualifiedName
     // Format: bigquery://project.dataset.table or project:dataset.table
     let projectId, datasetId, tableId;
-    
+
     if (context.fullyQualifiedName) {
       const fqn = context.fullyQualifiedName;
       if (fqn.startsWith('bigquery://')) {
@@ -189,18 +193,18 @@ app.post('/api/v1/chat', async (req, res) => {
 
     // Check if this is a Data Product
     const isDataProduct = context.isDataProduct === true;
-    
+
     // If we can't extract BigQuery reference, fall back to metadata-only mode
     if (!projectId || !datasetId || !tableId) {
       // Fallback: Use Vertex AI for non-BigQuery tables or when FQN is not available
       const vertex_ai = new VertexAI({
-        project: process.env.GOOGLE_CLOUD_PROJECT_ID,
+        project: 'dataplex-ui', // Hardcoded project ID
         location: process.env.GCP_LOCATION || 'us-central1'
       });
       const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
-      
+
       let prompt = '';
-      
+
       if (isDataProduct && context.tables && context.tables.length > 0) {
         // For Data Products, include information about all tables
         prompt = `
@@ -251,14 +255,14 @@ app.post('/api/v1/chat', async (req, res) => {
     // Build BigQuery data source reference
     // For Data Products, include all tables; for single tables, include just that table
     let tableReferences = [];
-    
+
     if (isDataProduct && context.tables && context.tables.length > 0) {
       // For Data Products, extract BigQuery references from all tables
       context.tables.forEach((table) => {
         if (table.fullyQualifiedName) {
           const fqn = table.fullyQualifiedName;
           let tProjectId, tDatasetId, tTableId;
-          
+
           if (fqn.startsWith('bigquery://')) {
             const parts = fqn.replace('bigquery://', '').split('.');
             if (parts.length >= 3) {
@@ -275,7 +279,7 @@ app.post('/api/v1/chat', async (req, res) => {
               tTableId = parts[1];
             }
           }
-          
+
           if (tProjectId && tDatasetId && tTableId) {
             tableReferences.push({
               projectId: tProjectId,
@@ -304,25 +308,25 @@ app.post('/api/v1/chat', async (req, res) => {
         }
       }];
     }
-    
+
     // If no valid table references found, fall back to Vertex AI
     if (tableReferences.length === 0) {
       const vertex_ai = new VertexAI({
-        project: process.env.GOOGLE_CLOUD_PROJECT_ID,
+        project: 'dataplex-ui', // Hardcoded project ID
         location: process.env.GCP_LOCATION || 'us-central1'
       });
       const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
-      
+
       const prompt = isDataProduct
         ? `You are a helpful Data Steward assistant for Dataplex. The user is asking about Data Product: ${context.name}. ${context.description}. User Question: ${message}`
         : `You are a helpful Data Steward assistant for Dataplex. Name: ${context.name}. Description: ${context.description}. Schema: ${JSON.stringify(context.schema || [])}. User Question: ${message}`;
-      
+
       const result = await generativeModel.generateContent(prompt);
       const response = result.response;
       const text = response.candidates[0].content.parts[0].text;
       return res.json({ reply: text });
     }
-    
+
     const bigqueryDataSource = {
       bq: {
         tableReferences: tableReferences
@@ -345,7 +349,7 @@ app.post('/api/v1/chat', async (req, res) => {
     // Try to use Data Agent first (preferred), fall back to inline context if it fails
     let chatPayload;
     const agentName = await getOrCreateDataAgent(tableReferences, accessToken, systemInstruction);
-    
+
     if (agentName) {
       // Use data agent approach
       chatPayload = {
@@ -395,14 +399,14 @@ app.post('/api/v1/chat', async (req, res) => {
               if (jsonStr.startsWith('[')) jsonStr = jsonStr.substring(1);
               if (jsonStr.endsWith(']')) jsonStr = jsonStr.substring(0, jsonStr.length - 1);
               if (jsonStr.endsWith(',')) jsonStr = jsonStr.substring(0, jsonStr.length - 1);
-              
+
               if (jsonStr && jsonStr.trim()) {
                 const message = JSON.parse(jsonStr);
                 if (message.systemMessage) {
                   if (message.systemMessage.text) {
                     const textType = message.systemMessage.text.textType;
                     const textContent = message.systemMessage.text.text || '';
-                    
+
                     if (textType === 'FINAL_RESPONSE') {
                       finalText += textContent;
                     } else if (textType === 'THOUGHT' && message.systemMessage.text.parts) {
@@ -449,16 +453,16 @@ app.post('/api/v1/chat', async (req, res) => {
       });
     });
 
-    res.json({ 
+    res.json({
       reply: finalText || 'I received your question but could not generate a response. Please try again.',
       conversationHistory: messages // Return updated conversation history
     });
 
   } catch (err) {
     console.error("Conversational Analytics API Error:", err);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to generate response from Conversational Analytics API.",
-      details: err.message 
+      details: err.message
     });
   }
 });
@@ -477,12 +481,12 @@ const shouldAutoApprove = (request) => {
   // 1. Requester is already a project admin
   // 2. Request is for a public dataset
   // 3. Requester has viewer role on the project
-  
+
   // For now, we'll implement a simple rule: auto-approve if the asset name contains "public"
   if (request.assetName && request.assetName.toLowerCase().includes('public')) {
     return true;
   }
-  
+
   return false;
 };
 
@@ -490,10 +494,7 @@ const shouldAutoApprove = (request) => {
 
 const PORT = process.env.PORT || 8080;
 
-app.use(cors());
 
-// Middleware to parse JSON request bodies
-app.use(express.json());
 
 // Serve static files from the React build folder
 app.use(express.static(path.join(__dirname, 'dist')));
@@ -521,100 +522,100 @@ const dataFilePath = path.join(__dirname, 'configData.json');
  */
 
 app.post('/api/v1/check-iam-role', async (req, res) => {
-    
-    const {email, role } = req.body;
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID; // Use environment variable if not provided
 
-    // --- Input Validation ---
-    if (!projectId || typeof projectId !== 'string' || projectId.trim() === '') {
-        return res.status(400).json({ error: 'projectId is required and must be a non-empty string.' });
-    }
-    if (!email || typeof email !== 'string' || email.trim() === '') {
-        return res.status(400).json({ error: 'email is required and must be a non-empty string.' });
-    }
-    if (!role || typeof role !== 'string' || role.trim() === '') {
-        return res.status(400).json({ error: 'role is required and must be a non-empty string.' });
+  const { email, role } = req.body;
+  const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
+  const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID; // Use environment variable if not provided
+
+  // --- Input Validation ---
+  if (!projectId || typeof projectId !== 'string' || projectId.trim() === '') {
+    return res.status(400).json({ error: 'projectId is required and must be a non-empty string.' });
+  }
+  if (!email || typeof email !== 'string' || email.trim() === '') {
+    return res.status(400).json({ error: 'email is required and must be a non-empty string.' });
+  }
+  if (!role || typeof role !== 'string' || role.trim() === '') {
+    return res.status(400).json({ error: 'role is required and must be a non-empty string.' });
+  }
+
+  // Ensure the email is in the correct format for IAM members (e.g., "user:email@example.com", "serviceAccount:id@project.iam.gserviceaccount.com")
+  const member = email.includes(':') ? email : `user:${email}`;
+
+  try {
+    const oauth2Client = new CustomGoogleAuth(accessToken);
+
+    // Get the Cloud Resource Manager API client
+    const cloudResourceManager = google.cloudresourcemanager({
+      version: 'v1',
+      auth: oauth2Client,
+    });
+
+    // Fetch the IAM policy for the specified project
+    console.log(`Fetching IAM policy for project: ${projectId}`);
+    const response = await cloudResourceManager.projects.getIamPolicy({
+      resource: projectId
+    });
+
+    const policy = response.data;
+    console.log(`IAM Policy fetched for project ${projectId}.`);
+
+    let hasRole = false;
+
+    const userRoles = [];
+
+    // Iterate through the policy bindings to find the role and member
+    if (policy && policy.bindings) {
+      for (const binding of policy.bindings || []) {
+        if ((binding.members || []).includes(member)) {
+          userRoles.push(binding.role);
+        }
+      }
+      console.log(`Roles found for user ${email} in project ${projectId}:`, userRoles);
+      // Check if the requested role is in the user's roles
+      if (userRoles.includes(role) || userRoles.includes(`roles/owner`)) {
+        hasRole = true;
+      }
     }
 
-    // Ensure the email is in the correct format for IAM members (e.g., "user:email@example.com", "serviceAccount:id@project.iam.gserviceaccount.com")
-    const member = email.includes(':') ? email : `user:${email}`;
+    let permissions = [];
 
-    try {
-        const oauth2Client = new CustomGoogleAuth(accessToken);
-        
-        // Get the Cloud Resource Manager API client
-        const cloudResourceManager = google.cloudresourcemanager({
-             version: 'v1',
-            auth: oauth2Client,
+    // Expand each role into permissions (to simulate sub-roles)
+    for (const role of userRoles) {
+      console.log(`\n🔹 Role: ${role}`);
+      try {
+        const roleName = role.startsWith('roles/') ? `projects/${projectId}/roles/${role.split('/')[1]}` : role;
+
+        const res = await iam.roles.get({
+          name: role.startsWith('roles/') ? role : roleName,
         });
 
-        // Fetch the IAM policy for the specified project
-        console.log(`Fetching IAM policy for project: ${projectId}`);
-        const response = await cloudResourceManager.projects.getIamPolicy({
-            resource: projectId
-        });
-
-        const policy = response.data;
-        console.log(`IAM Policy fetched for project ${projectId}.`);
-
-        let hasRole = false;
-
-        const userRoles = [];
-
-        // Iterate through the policy bindings to find the role and member
-        if (policy && policy.bindings) {
-            for (const binding of policy.bindings || []) {
-                if ((binding.members || []).includes(member)) {
-                    userRoles.push(binding.role);
-                }
-            }
-            console.log(`Roles found for user ${email} in project ${projectId}:`, userRoles);
-            // Check if the requested role is in the user's roles
-            if (userRoles.includes(role) || userRoles.includes(`roles/owner`)) {
-                hasRole = true;
-            }
-        }
-
-        let permissions = [];
-
-        // Expand each role into permissions (to simulate sub-roles)
-        for (const role of userRoles) {
-            console.log(`\n🔹 Role: ${role}`);
-            try {
-                const roleName = role.startsWith('roles/') ? `projects/${projectId}/roles/${role.split('/')[1]}` : role;
-
-                const res = await iam.roles.get({
-                    name: role.startsWith('roles/') ? role : roleName,
-                });
-
-                permissions = res.data.includedPermissions || [];
-                //console.log(`   Includes ${permissions.length} permissions`);
-                //console.log(`   Sample permissions: ${permissions.slice(0, 5).join(', ')}${permissions.length > 5 ? '...' : ''}`);
-            } catch (err) {
-                console.warn(`   Could not retrieve details for role ${role}:`, err.message);
-            }
-        }
-
-        if (hasRole) {
-            console.log(`User ${email} HAS role ${role} on project ${projectId}.`);
-            return res.json({ hasRole: true, roles:userRoles, permissions:permissions, message: `User ${email} has role ${role} on project ${projectId}.` });
-        } else {
-            console.log(`User ${email} DOES NOT HAVE role ${role} on project ${projectId}.`);
-            return res.json({ hasRole: false, roles:userRoles, permissions:permissions, message: `User ${email} does not have role ${role} on project ${projectId}.` });
-        }
-
-    } catch (error) {
-        console.error('Error checking IAM role:', error.message);
-        // Provide a more specific error message if it's a permission denied error
-        if (error.code === 403 || (error.errors && error.errors[0] && error.errors[0].reason === 'FORBIDDEN')) {
-            return res.status(403).json({
-                error: 'Permission Denied: The service account does not have the necessary permissions to get IAM policy for this project.',
-                details: error.message
-            });
-        }
-        return res.status(500).json({ error: 'An internal server error occurred.', details: error.message });
+        permissions = res.data.includedPermissions || [];
+        //console.log(`   Includes ${permissions.length} permissions`);
+        //console.log(`   Sample permissions: ${permissions.slice(0, 5).join(', ')}${permissions.length > 5 ? '...' : ''}`);
+      } catch (err) {
+        console.warn(`   Could not retrieve details for role ${role}:`, err.message);
+      }
     }
+
+    if (hasRole) {
+      console.log(`User ${email} HAS role ${role} on project ${projectId}.`);
+      return res.json({ hasRole: true, roles: userRoles, permissions: permissions, message: `User ${email} has role ${role} on project ${projectId}.` });
+    } else {
+      console.log(`User ${email} DOES NOT HAVE role ${role} on project ${projectId}.`);
+      return res.json({ hasRole: false, roles: userRoles, permissions: permissions, message: `User ${email} does not have role ${role} on project ${projectId}.` });
+    }
+
+  } catch (error) {
+    console.error('Error checking IAM role:', error.message);
+    // Provide a more specific error message if it's a permission denied error
+    if (error.code === 403 || (error.errors && error.errors[0] && error.errors[0].reason === 'FORBIDDEN')) {
+      return res.status(403).json({
+        error: 'Permission Denied: The service account does not have the necessary permissions to get IAM policy for this project.',
+        details: error.message
+      });
+    }
+    return res.status(500).json({ error: 'An internal server error occurred.', details: error.message });
+  }
 });
 
 /**
@@ -643,12 +644,12 @@ app.post('/api/v1/search', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataplexClientv1 = new CatalogServiceClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
 
     if (!projectId || !location) {
-        return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
+      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
     }
 
     // Construct the request for the Dataplex API
@@ -666,7 +667,7 @@ app.post('/api/v1/search', async (req, res) => {
     const [data, requestData, response] = await dataplexClientv1.searchEntries(request, { autoPaginate: false });
 
     // Send the search results back to the client
-    res.json({data : data, requestData : requestData, results : response});
+    res.json({ data: data, requestData: requestData, results: response });
 
   } catch (error) {
     console.error('Error during Dataplex search:', error);
@@ -699,7 +700,7 @@ app.post('/api/v1/aspects', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataplexClientv1 = new CatalogServiceClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
     // Construct the request to get a specific entry.
     // The `view` is set to 'FULL' to ensure all aspects are returned.
@@ -725,48 +726,48 @@ app.post('/api/v1/aspects', async (req, res) => {
 });
 
 app.post('/api/v1/batch-aspects', async (req, res) => {
-    const { entryNames } = req.body;
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
+  const { entryNames } = req.body;
+  const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
 
-    // Validate that entryNames is provided and is an array
-    if (!entryNames || !Array.isArray(entryNames)) {
-        return res.status(400).json({ message: 'Bad Request: An "entryNames" field (array of strings) is required.' });
-    }
+  // Validate that entryNames is provided and is an array
+  if (!entryNames || !Array.isArray(entryNames)) {
+    return res.status(400).json({ message: 'Bad Request: An "entryNames" field (array of strings) is required.' });
+  }
 
-    // if (entryNames.length === 0) {
-    //     return res.json([]);
-    // }
+  // if (entryNames.length === 0) {
+  //     return res.json([]);
+  // }
 
-    try {
+  try {
 
-        const oauth2Client = new CustomGoogleAuth(accessToken);
+    const oauth2Client = new CustomGoogleAuth(accessToken);
 
-        const dataplexClientv1 = new CatalogServiceClient({
-            auth: oauth2Client,
-        });
-        console.log(`Fetching aspects for a batch of ${entryNames.length} entries.`);
+    const dataplexClientv1 = new CatalogServiceClient({
+      auth: oauth2Client,
+    });
+    console.log(`Fetching aspects for a batch of ${entryNames.length} entries.`);
 
-        // Create an array of promises, where each promise fetches one entry
-        const promises = entryNames.map(n => {
-            //const request = { name, view: protos.google.cloud.dataplex.v1.EntryView.ALL };
-            return dataplexClientv1.getAspectType({ name:n });
-        });
+    // Create an array of promises, where each promise fetches one entry
+    const promises = entryNames.map(n => {
+      //const request = { name, view: protos.google.cloud.dataplex.v1.EntryView.ALL };
+      return dataplexClientv1.getAspectType({ name: n });
+    });
 
-        // Execute all promises concurrently
-        const results = await Promise.all(promises);
+    // Execute all promises concurrently
+    const results = await Promise.all(promises);
 
-        // Map the results to a more user-friendly format
-        let aspectsResponse = {};
-        results.forEach(([aspectType], index) => {
-            aspectsResponse[aspectType.displayName ?? entryNames[index]] = aspectType.metadataTemplate?.recordFields?.map(f =>f.name);
-        });
+    // Map the results to a more user-friendly format
+    let aspectsResponse = {};
+    results.forEach(([aspectType], index) => {
+      aspectsResponse[aspectType.displayName ?? entryNames[index]] = aspectType.metadataTemplate?.recordFields?.map(f => f.name);
+    });
 
-        res.json(aspectsResponse);
+    res.json(aspectsResponse);
 
-    } catch (error) {
-        console.error('Error fetching aspects for batch:', error);
-        res.status(500).json({ message: 'An error occurred while fetching aspects for the batch.', details: error.message });
-    }
+  } catch (error) {
+    console.error('Error fetching aspects for batch:', error);
+    res.status(500).json({ message: 'An error occurred while fetching aspects for the batch.', details: error.message });
+  }
 });
 
 /**
@@ -783,11 +784,11 @@ app.get('/api/v1/aspect-types', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataplexClientv1 = new CatalogServiceClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
     if (!projectId || !location) {
-        return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
+      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
     }
 
     const parent = `projects/${projectId}/locations/${location}`;
@@ -818,11 +819,11 @@ app.get('/api/v1/entry-list', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataplexClientv1 = new CatalogServiceClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
     if (!projectId || !location) {
-        return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
+      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
     }
 
     const parent = `projects/${projectId}/locations/${location}`;
@@ -853,11 +854,11 @@ app.get('/api/v1/entry-types', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataplexClientv1 = new CatalogServiceClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
     if (!projectId || !location) {
-        return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
+      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
     }
 
     const parent = `projects/${projectId}/locations/${location}`;
@@ -889,11 +890,11 @@ app.get('/api/v1/get-entry', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataplexClientv1 = new CatalogServiceClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
     if (!entryName) {
-        return res.status(500).json({ message: 'Entry name is required' });
+      return res.status(500).json({ message: 'Entry name is required' });
     }
 
     // The getEntry method returns an entry.
@@ -923,7 +924,7 @@ app.get('/api/v1/aspect/:urn', async (req, res) => {
 
     const oauth2Client = new CustomGoogleAuth(accessToken);
     const dataplexClientv1 = new CatalogServiceClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
     // Get the aspect type by URN
@@ -944,7 +945,7 @@ app.get('/api/v1/aspect/:urn', async (req, res) => {
 app.get('/api/v1/get-entry-by-fqn', async (req, res) => {
   try {
 
-    let query  = `fully_qualified_name=${req.query.fqn}`;
+    let query = `fully_qualified_name=${req.query.fqn}`;
 
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
     const location = process.env.GCP_LOCATION;
@@ -953,12 +954,12 @@ app.get('/api/v1/get-entry-by-fqn', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataplexClientv1 = new CatalogServiceClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
 
     if (!projectId || !location) {
-        return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
+      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
     }
 
     // Construct the request for the Dataplex API
@@ -966,7 +967,7 @@ app.get('/api/v1/get-entry-by-fqn', async (req, res) => {
       // The name of the project and location to search within
       name: `projects/${projectId}/locations/${location}`,
       query: query,
-      pageSize:10, // Limit the number of results returned
+      pageSize: 10, // Limit the number of results returned
     };
 
     console.log('Performing Dataplex search with query:', query);
@@ -975,10 +976,10 @@ app.get('/api/v1/get-entry-by-fqn', async (req, res) => {
     const [response] = await dataplexClientv1.searchEntries(request);
 
 
-    const entryName = response.length > 0 ? response[0].dataplexEntry.name : null ; // Get entryName from query parameters
+    const entryName = response.length > 0 ? response[0].dataplexEntry.name : null; // Get entryName from query parameters
 
     if (!entryName) {
-        return res.status(500).json({ message: 'FQN is not provided or incorrect' });
+      return res.status(500).json({ message: 'FQN is not provided or incorrect' });
     }
 
     // The getEntry method returns an entry.
@@ -1001,11 +1002,11 @@ app.get('/api/v1/lookup-entry', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataplexClientv1 = new CatalogServiceClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
     if (!entryName) {
-        return res.status(500).json({ message: 'Entry name is required' });
+      return res.status(500).json({ message: 'Entry name is required' });
     }
 
     // The getEntry method returns an entry.
@@ -1026,15 +1027,15 @@ app.get('/api/v1/get-sample-data', async (req, res) => {
     const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
 
     if (!fqn) {
-        return res.status(500).json({ message: 'fqn is required' });
+      return res.status(500).json({ message: 'fqn is required' });
     }
 
     // const oauth2Client = new CustomGoogleAuth(accessToken);
     const oauth2Client = new OAuth2Client();
     oauth2Client.setCredentials({ access_token: accessToken });
     const bigquery = new BigQuery({
-        authClient: oauth2Client,
-        projectId: fqn.split(':')[1].split('.')[0],
+      authClient: oauth2Client,
+      projectId: fqn.split(':')[1].split('.')[0],
     });
 
     const rows = await querySampleFromBigQuery(bigquery, fqn.split(':')[1], 10);
@@ -1069,7 +1070,7 @@ app.post('/api/v1/lineage', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataplexLineageClientv1 = new LineageClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
     //const parent = `projects/${projectId}/locations/us`;
@@ -1090,47 +1091,47 @@ app.post('/api/v1/lineage', async (req, res) => {
     });
 
     const [sourceLinks, targetLinks] = await Promise.all([
-        source, target
+      source, target
     ]);
 
     const links = [...sourceLinks[0].map(s => s.name), ...targetLinks[0].map(t => t.name)];
     //let batchData = [];
     let sourceData = sourceLinks[0];
     let targetData = targetLinks[0];
-    if(links.length > 0){
-        const batchProcess = dataplexLineageClientv1.batchSearchLinkProcesses({
-            parent:parent,
-            links:links,
-            pageSize:20
+    if (links.length > 0) {
+      const batchProcess = dataplexLineageClientv1.batchSearchLinkProcesses({
+        parent: parent,
+        links: links,
+        pageSize: 20
+      });
+
+      const [batchProcessLinks] = await Promise.all([
+        batchProcess
+      ]);
+
+      if (batchProcessLinks[0].length > 0) {
+        batchData = batchProcessLinks[0];
+        const linkToProcessMap = {};
+
+        batchProcessLinks[0].forEach(f => {
+          f.links.forEach(l => {
+            linkToProcessMap[l.link] = f.process;
+          });
         });
+        sourceData = sourceLinks[0].map(s => ({
+          ...s,
+          process: linkToProcessMap[s.name] || ""
+        }));
 
-        const [batchProcessLinks] = await Promise.all([
-            batchProcess
-        ]);
-
-        if(batchProcessLinks[0].length > 0){
-            batchData = batchProcessLinks[0];
-            const linkToProcessMap = {};
-
-            batchProcessLinks[0].forEach(f => {
-                f.links.forEach(l => {
-                    linkToProcessMap[l.link] = f.process;
-                });
-            });
-            sourceData = sourceLinks[0].map(s => ({
-                ...s,
-                process: linkToProcessMap[s.name] || ""
-            }));
-            
-            targetData = targetLinks[0].map(s => ({
-                ...s,
-                process: linkToProcessMap[s.name] || ""
-            }));
-        }
+        targetData = targetLinks[0].map(s => ({
+          ...s,
+          process: linkToProcessMap[s.name] || ""
+        }));
+      }
     }
 
 
-    res.json({sourceLinks:sourceData, targetLinks:targetData});//, batchSearchLinkProcesses : batchData});
+    res.json({ sourceLinks: sourceData, targetLinks: targetData });//, batchSearchLinkProcesses : batchData});
 
   } catch (error) {
     console.error('Error searching for lineage links:', error);
@@ -1151,7 +1152,7 @@ app.post('/api/v1/lineage-downstream', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataplexLineageClientv1 = new LineageClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
     //const parent = `projects/${projectId}/locations/us`;
@@ -1165,7 +1166,7 @@ app.post('/api/v1/lineage-downstream', async (req, res) => {
       }
     });
 
-    res.json({sourceLinks : sourceLinks[0]});
+    res.json({ sourceLinks: sourceLinks[0] });
 
   } catch (error) {
     console.error('Error searching for lineage links:', error);
@@ -1186,7 +1187,7 @@ app.post('/api/v1/lineage-upstream', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataplexLineageClientv1 = new LineageClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
     //const parent = `projects/${projectId}/locations/us`;
@@ -1200,7 +1201,7 @@ app.post('/api/v1/lineage-upstream', async (req, res) => {
       }
     });
 
-    res.json({targetLinks : targetLinks[0]});//, batchSearchLinkProcesses : batchProcessLinks});
+    res.json({ targetLinks: targetLinks[0] });//, batchSearchLinkProcesses : batchProcessLinks});
 
   } catch (error) {
     console.error('Error searching for lineage links:', error);
@@ -1221,7 +1222,7 @@ app.post('/api/v1/lineage-processes', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataplexLineageClientv1 = new LineageClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
     //const parent = `projects/${projectId}/locations/us`;
@@ -1232,7 +1233,7 @@ app.post('/api/v1/lineage-processes', async (req, res) => {
       parent: parent
     });
 
-    res.json({processes:processes});
+    res.json({ processes: processes });
 
   } catch (error) {
     console.error('Error searching for lineage links:', error);
@@ -1253,7 +1254,7 @@ app.post('/api/v1/get-process-and-job-details', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataplexLineageClientv1 = new LineageClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
     // The searchLinks method returns an iterable. We'll collect all results.
@@ -1262,24 +1263,24 @@ app.post('/api/v1/get-process-and-job-details', async (req, res) => {
       name: process
     });
     const listProcessRuns = dataplexLineageClientv1.listRuns({
-        parent:process,
-        pageSize:50
+      parent: process,
+      pageSize: 50
     });
 
     const [processDetails, processRuns] = await Promise.all([
-        getProcess, listProcessRuns
+      getProcess, listProcessRuns
     ]);
     const projectId = processDetails[0].origin.name.split(':')[0];
-    
+
     const bigquery = new BigQuery({
-        authClient: oauth2Client,
-        projectId: projectId,
+      authClient: oauth2Client,
+      projectId: projectId,
     });
     const jobId = processDetails[0].attributes.bigquery_job_id.stringValue;
 
     const jobDetails = await bigquery.job(jobId).get();
 
-    res.json({processDetails:processDetails[0], processRuns: processRuns[0], jobDetails:jobDetails});//, batchSearchLinkProcesses : batchProcessLinks});
+    res.json({ processDetails: processDetails[0], processRuns: processRuns[0], jobDetails: jobDetails });//, batchSearchLinkProcesses : batchProcessLinks});
 
   } catch (error) {
     console.error('Error searching for lineage links:', error);
@@ -1295,7 +1296,7 @@ app.get('/api/v1/projects', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const resourceManagerClient = new ProjectsClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
     // The searchProjects method returns an iterable. We'll collect all results into an array.
@@ -1319,7 +1320,7 @@ app.get('/api/v1/tag-templates', async (req, res) => {
     const location = process.env.GCP_LOCATION;
 
     if (!projectId || !location) {
-        return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
+      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
     }
 
     // The parent for Data Catalog resources includes the project and location.
@@ -1330,7 +1331,7 @@ app.get('/api/v1/tag-templates', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataCatalogClientv1 = new DataCatalogClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
 
@@ -1366,22 +1367,22 @@ app.post('/api/v1/admin/configure', async (req, res) => {
 });
 
 app.post('/api/v1/get-aspect-detail', async (req, res) => {
-    const { name } = req.body;
+  const { name } = req.body;
 
-    if (!name) {
-        return res.status(400).json({ message: 'Bad Request: A "name" field is required.' });
-    }
+  if (!name) {
+    return res.status(400).json({ message: 'Bad Request: A "name" field is required.' });
+  }
 
-    try {
+  try {
     const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
 
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataplexClientv1 = new CatalogServiceClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
-    const [aspectType] = await dataplexClientv1.getAspectType({ name:name });
+    const [aspectType] = await dataplexClientv1.getAspectType({ name: name });
 
 
     res.json(aspectType);
@@ -1414,7 +1415,7 @@ app.get('/api/v1/get-aspect', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataplexClientv1 = new CatalogServiceClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
     // Construct the request to get a specific entry with all aspects
@@ -1431,10 +1432,10 @@ app.get('/api/v1/get-aspect', async (req, res) => {
     // If a specific aspect type is requested, return only that aspect
     if (aspectType && entry.aspects) {
       // Find the aspect by type name
-      const aspectKey = Object.keys(entry.aspects).find(key => 
+      const aspectKey = Object.keys(entry.aspects).find(key =>
         key.includes(aspectType) || key.endsWith(`_${aspectType}`)
       );
-      
+
       if (aspectKey) {
         return res.json({ [aspectKey]: entry.aspects[aspectKey] });
       } else {
@@ -1452,7 +1453,7 @@ app.get('/api/v1/get-aspect', async (req, res) => {
 });
 
 app.get('/api/v1/app-configs', async (req, res) => {
-    try {
+  try {
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
     const location = process.env.GCP_LOCATION;
     const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
@@ -1460,15 +1461,15 @@ app.get('/api/v1/app-configs', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const dataplexClientv1 = new CatalogServiceClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
     const resourceManagerClientv1 = new ProjectsClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
     if (!projectId || !location) {
-        return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
+      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
     }
 
     const parent = `projects/${projectId}/locations/${location}`;
@@ -1479,36 +1480,36 @@ app.get('/api/v1/app-configs', async (req, res) => {
       // The name of the project and location to search within
       name: parent,
       query: aspectQuery,
-      pageSize:999, // Limit the number of results returned
-      pageToken:'',
+      pageSize: 999, // Limit the number of results returned
+      pageToken: '',
     };
 
-    
+
     let projects = aspects = [];
     let configData = {};
-    try{
+    try {
       const [aspectsList, projectList, currentProject, defaultConfigData] = await Promise.all([
-          dataplexClientv1.searchEntries(request, { autoPaginate: false}),
-          resourceManagerClientv1.searchProjects({pageSize:2000}, { autoPaginate: false}),
-          resourceManagerClientv1.getProject({ name: `projects/${projectId}` }),
-          fs.readFile(dataFilePath, 'utf8') || {}
+        dataplexClientv1.searchEntries(request, { autoPaginate: false }),
+        resourceManagerClientv1.searchProjects({ pageSize: 2000 }, { autoPaginate: false }),
+        resourceManagerClientv1.getProject({ name: `projects/${projectId}` }),
+        fs.readFile(dataFilePath, 'utf8') || {}
       ]);
       aspects = aspectsList[0] || [];
       let p = projectList[0] ? projectList[0].filter(pr => pr.projectId !== projectId) : [];
-      projects = [ currentProject[0], ...p];
+      projects = [currentProject[0], ...p];
       configData = defaultConfigData ? JSON.parse(defaultConfigData) : {};
-    } catch(err){
+    } catch (err) {
       console.error('Error listing projects for app config:', err);
     }
 
     const reduceAspect = ({ name, fullyQualifiedName, entrySource, entryType }) => ({ name, fullyQualifiedName, entrySource, entryType });
 
     const configs = {
-        aspects: aspects.map(({ dataplexEntry }) => ({ dataplexEntry:reduceAspect(dataplexEntry) })),
-        projects: projects.map(({ projectId, name, displayName }) => ({ projectId, name, displayName })),
-        defaultSearchProduct: configData.products || 'All',
-        defaultSearchAssets: configData.assets || '',
-        browseByAspectTypes: configData.aspectType || []
+      aspects: aspects.map(({ dataplexEntry }) => ({ dataplexEntry: reduceAspect(dataplexEntry) })),
+      projects: projects.map(({ projectId, name, displayName }) => ({ projectId, name, displayName })),
+      defaultSearchProduct: configData.products || 'All',
+      defaultSearchAssets: configData.assets || '',
+      browseByAspectTypes: configData.aspectType || []
     };
 
     res.json(configs);
@@ -1521,47 +1522,47 @@ app.get('/api/v1/app-configs', async (req, res) => {
 
 
 app.post('/api/v1/send-feedback', async (req, res) => {
-  
+
   try {
     const { message, requesterEmail, projectId, projectAdmin } = req.body;
-    
+
     if (!requesterEmail || typeof requesterEmail !== 'string' || requesterEmail.trim() === '') {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Requester email is required and must be a non-empty string' 
+      return res.status(400).json({
+        success: false,
+        error: 'Requester email is required and must be a non-empty string'
       });
     }
-    
+
     if (!projectId || typeof projectId !== 'string' || projectId.trim() === '') {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Project ID is required and must be a non-empty string' 
+      return res.status(400).json({
+        success: false,
+        error: 'Project ID is required and must be a non-empty string'
       });
     }
 
     if (projectAdmin && (!Array.isArray(projectAdmin) || !projectAdmin.every(email => typeof email === 'string'))) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Emails should array of email strings' 
+      return res.status(400).json({
+        success: false,
+        error: 'Emails should array of email strings'
       });
     }
-    
+
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(requesterEmail)) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Invalid email format' 
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email format'
       });
     }
-    
+
     console.log('Send feedback received:', {
       message: message ? 'Message provided' : 'No message',
       requesterEmail,
       projectId,
       projectAdmin: projectAdmin || [],
       timestamp: new Date().toISOString()
-    }); 
+    });
 
     const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
 
@@ -1574,9 +1575,9 @@ app.post('/api/v1/send-feedback', async (req, res) => {
       projectId,
       projectAdmin || [] // Pass projectAdmin emails
     );
-    
+
     console.log('Email result:', emailResult);
-    
+
     if (emailResult.success) {
       // Log successful access request
       console.log('Access request processed successfully:', {
@@ -1586,7 +1587,7 @@ app.post('/api/v1/send-feedback', async (req, res) => {
         messageId: emailResult.messageId,
         timestamp: new Date().toISOString()
       });
-      
+
       return res.status(200).json({
         success: true,
         message: 'Feedback submitted successfully',
@@ -1608,7 +1609,7 @@ app.post('/api/v1/send-feedback', async (req, res) => {
       console.log('Error response:', errorResponse);
       return res.status(500).json(errorResponse);
     }
-    
+
   } catch (error) {
     console.error('Error processing access request:', error);
     console.log('Sending 500 error response from catch block...');
@@ -1624,7 +1625,7 @@ app.post('/api/v1/send-feedback', async (req, res) => {
 });
 
 app.get('/api/v1/get-projects', async (req, res) => {
-    try {
+  try {
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
     const location = process.env.GCP_LOCATION;
     const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
@@ -1632,18 +1633,18 @@ app.get('/api/v1/get-projects', async (req, res) => {
     const oauth2Client = new CustomGoogleAuth(accessToken);
 
     const resourceManagerClientv1 = new ProjectsClient({
-        auth: oauth2Client,
+      auth: oauth2Client,
     });
 
     if (!projectId || !location) {
-        return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
+      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
     }
-    
+
     let projects = [];
-    try{
-      const [ projectList ] = await resourceManagerClientv1.searchProjects();
+    try {
+      const [projectList] = await resourceManagerClientv1.searchProjects();
       projects = projectList || [];
-    } catch(err){
+    } catch (err) {
       console.error('Error listing projects for app config:', err);
     }
     res.json(projects.map(({ projectId, name, displayName }) => ({ projectId, name, displayName })));
@@ -1659,33 +1660,33 @@ app.get('/api/v1/get-projects', async (req, res) => {
  * A protected endpoint to list all data quality scans in the configured location.
  */
 app.get('/api/v1/data-scans', async (req, res) => {
-    const { project } = req.query;
-    try {
-        const projectId = (project != '' && project != null && project != "undefined") ? project : process.env.GOOGLE_CLOUD_PROJECT_ID;
-        const location = process.env.GCP_LOCATION;
+  const { project } = req.query;
+  try {
+    const projectId = (project != '' && project != null && project != "undefined") ? project : process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const location = process.env.GCP_LOCATION;
 
-        if (!projectId || !location) {
-            return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
-        }
-
-        const parent = `projects/${projectId}/locations/-`;
-        console.log(`Listing data scans for parent: ${parent}`);
-
-        const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-        const oauth2Client = new CustomGoogleAuth(accessToken);
-
-        const dataplexDataScanClientv1 = new DataScanServiceClient({
-            auth: oauth2Client,
-        });
-
-        const [scans] = await dataplexDataScanClientv1.listDataScans({ parent });
-        res.json(scans);
-
-    } catch (error) {
-        console.error('Error listing data quality scans:', error);
-        res.status(500).json({ message: 'An error occurred while listing data quality scans.', details: error.message });
+    if (!projectId || !location) {
+      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
     }
+
+    const parent = `projects/${projectId}/locations/-`;
+    console.log(`Listing data scans for parent: ${parent}`);
+
+    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
+
+    const oauth2Client = new CustomGoogleAuth(accessToken);
+
+    const dataplexDataScanClientv1 = new DataScanServiceClient({
+      auth: oauth2Client,
+    });
+
+    const [scans] = await dataplexDataScanClientv1.listDataScans({ parent });
+    res.json(scans);
+
+  } catch (error) {
+    console.error('Error listing data quality scans:', error);
+    res.status(500).json({ message: 'An error occurred while listing data quality scans.', details: error.message });
+  }
 });
 
 /**
@@ -1693,39 +1694,39 @@ app.get('/api/v1/data-scans', async (req, res) => {
  * A protected endpoint to list the jobs (runs and results) for a specific data quality scan.
  */
 app.get('/api/v1/data-quality-scan-jobs/:scanId', async (req, res) => {
-    const { scanId } = req.params;
+  const { scanId } = req.params;
 
-    if (!scanId) {
-        return res.status(400).json({ message: 'Bad Request: A "scanId" URL parameter is required.' });
+  if (!scanId) {
+    return res.status(400).json({ message: 'Bad Request: A "scanId" URL parameter is required.' });
+  }
+
+  try {
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const location = process.env.GCP_LOCATION;
+
+    if (!projectId || !location) {
+      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
     }
 
-    try {
-        const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-        const location = process.env.GCP_LOCATION;
+    const parent = `projects/${projectId}/locations/${location}/dataScans/${scanId}`;
+    console.log(`Listing data quality scan jobs for parent: ${parent}`);
 
-        if (!projectId || !location) {
-            return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
-        }
+    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
 
-        const parent = `projects/${projectId}/locations/${location}/dataScans/${scanId}`;
-        console.log(`Listing data quality scan jobs for parent: ${parent}`);
+    const oauth2Client = new CustomGoogleAuth(accessToken);
 
-        const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
+    const dataplexDataScanClientv1 = new DataScanServiceClient({
+      auth: oauth2Client,
+    });
 
-        const oauth2Client = new CustomGoogleAuth(accessToken);
+    // The listDataScanJobs method returns recent jobs. The result of each job contains the quality metrics.
+    const [jobs] = await dataplexDataScanClientv1.listDataScanJobs({ parent });
+    res.json(jobs);
 
-        const dataplexDataScanClientv1 = new DataScanServiceClient({
-            auth: oauth2Client,
-        });
-
-        // The listDataScanJobs method returns recent jobs. The result of each job contains the quality metrics.
-        const [jobs] = await dataplexDataScanClientv1.listDataScanJobs({ parent });
-        res.json(jobs);
-
-    } catch (error) {
-        console.error(`Error listing data quality scan jobs for scan ${scanId}:`, error);
-        res.status(500).json({ message: 'An error occurred while listing data quality scan jobs.', details: error.message });
-    }
+  } catch (error) {
+    console.error(`Error listing data quality scan jobs for scan ${scanId}:`, error);
+    res.status(500).json({ message: 'An error occurred while listing data quality scan jobs.', details: error.message });
+  }
 });
 
 /**
@@ -1733,59 +1734,59 @@ app.get('/api/v1/data-quality-scan-jobs/:scanId', async (req, res) => {
  * A protected endpoint to fetch data quality scan results for a specific Dataplex entry.
  */
 app.post('/api/v1/entry-data-quality', async (req, res) => {
-    const { name, resourceName, parent } = req.body;
+  const { name, resourceName, parent } = req.body;
 
-    if (!name) {
-        return res.status(400).json({ message: 'Bad Request: An "resourceName" field is required.' });
-    }
+  if (!name) {
+    return res.status(400).json({ message: 'Bad Request: An "resourceName" field is required.' });
+  }
 
-    try {
-        // const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-        // const location = process.env.GCP_LOCATION;
+  try {
+    // const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    // const location = process.env.GCP_LOCATION;
 
-        // if (!projectId || !location) {
-        //     return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set.' });
-        // }
+    // if (!projectId || !location) {
+    //     return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set.' });
+    // }
 
-        const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
+    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
 
-        const oauth2Client = new CustomGoogleAuth(accessToken);
+    const oauth2Client = new CustomGoogleAuth(accessToken);
 
-        const dataplexDataScanClientv1 = new DataScanServiceClient({
-            auth: oauth2Client,
-        });
+    const dataplexDataScanClientv1 = new DataScanServiceClient({
+      auth: oauth2Client,
+    });
 
-        //const parent = `projects/${projectId}/locations/${location}`;
-        console.log(`Listing all data quality scans in ${parent} to find a match.`);
-        const [scans] = await dataplexDataScanClientv1.listDataScans({ parent });
-        //console.log(`Data quality scans`, scans);
+    //const parent = `projects/${projectId}/locations/${location}`;
+    console.log(`Listing all data quality scans in ${parent} to find a match.`);
+    const [scans] = await dataplexDataScanClientv1.listDataScans({ parent });
+    //console.log(`Data quality scans`, scans);
 
-        const matchingScan = scans.filter(scan => (scan.data.resource === name && scan.type === 'DATA_QUALITY') );
-        //console.log(`Data quality scan matching resource: ${resourceName}`, matchingScan);
+    const matchingScan = scans.filter(scan => (scan.data.resource === name && scan.type === 'DATA_QUALITY'));
+    //console.log(`Data quality scan matching resource: ${resourceName}`, matchingScan);
 
-        // if (!matchingScan) {
-        //     return res.status(200).json({ message: `No data quality scan found for resource: ${resourceName}` });
-        // }
-        const scanIds = matchingScan.map(scan => scan.name);
-        //console.log(`Fetching jobs for ${scanIds.length} matching data quality scans.`, scanIds);
-        const promises = scanIds.map(scanId => {
-            const parent = scanId;
-            return dataplexDataScanClientv1.listDataScanJobs({ parent });
-        });
+    // if (!matchingScan) {
+    //     return res.status(200).json({ message: `No data quality scan found for resource: ${resourceName}` });
+    // }
+    const scanIds = matchingScan.map(scan => scan.name);
+    //console.log(`Fetching jobs for ${scanIds.length} matching data quality scans.`, scanIds);
+    const promises = scanIds.map(scanId => {
+      const parent = scanId;
+      return dataplexDataScanClientv1.listDataScanJobs({ parent });
+    });
 
-        const results = await Promise.all(promises);
+    const results = await Promise.all(promises);
 
-        const jobsResponse = results.map(([jobs], index) => ({
-            scanId: scanIds[index],
-            jobs: jobs,
-        }));
-        // const jobIds = results.map(job => job.scanId);
-        res.json({"scans":scans, "matchingScan":matchingScan, "jobs": jobsResponse});
+    const jobsResponse = results.map(([jobs], index) => ({
+      scanId: scanIds[index],
+      jobs: jobs,
+    }));
+    // const jobIds = results.map(job => job.scanId);
+    res.json({ "scans": scans, "matchingScan": matchingScan, "jobs": jobsResponse });
 
-    } catch (error) {
-        console.error(`Error fetching data quality for entry ${resourceName}:`, error);
-        res.status(500).json({ message: 'An error occurred while fetching data quality for the entry.', details: error.message });
-    }
+  } catch (error) {
+    console.error(`Error fetching data quality for entry ${resourceName}:`, error);
+    res.status(500).json({ message: 'An error occurred while fetching data quality for the entry.', details: error.message });
+  }
 });
 
 /**
@@ -1793,41 +1794,41 @@ app.post('/api/v1/entry-data-quality', async (req, res) => {
  * A protected endpoint to fetch data quality scan results for a specific Dataplex entry.
  */
 app.get('/api/v1/get-data-scan', async (req, res) => {
-    const { name } = req.query;
+  const { name } = req.query;
 
-    if (!name) {
-        return res.status(400).json({ message: 'Bad Request: An "name" field is required.' });
-    }
+  if (!name) {
+    return res.status(400).json({ message: 'Bad Request: An "name" field is required.' });
+  }
 
-    try {
+  try {
 
-        const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
+    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
 
-        const oauth2Client = new CustomGoogleAuth(accessToken);
+    const oauth2Client = new CustomGoogleAuth(accessToken);
 
-        const dataplexDataScanClientv1 = new DataScanServiceClient({
-            auth: oauth2Client,
-        });
+    const dataplexDataScanClientv1 = new DataScanServiceClient({
+      auth: oauth2Client,
+    });
 
-        const getScan = dataplexDataScanClientv1.getDataScan({name: name, view:'FULL'});
-        const listjobs = dataplexDataScanClientv1.listDataScanJobs({ parent:name});
-        const [scan, jobs] = await Promise.all([getScan, listjobs]);
-        const jobLists = jobs[0];
-        const jobNames = jobLists.map(job => job.name);
-        //console.log(`Fetching jobs for ${scanIds.length} matching data quality scans.`, scanIds);
-        const promises = jobNames.map(jobName => {
-            return dataplexDataScanClientv1.getDataScanJob({ name:jobName, view:'FULL' });
-        });
+    const getScan = dataplexDataScanClientv1.getDataScan({ name: name, view: 'FULL' });
+    const listjobs = dataplexDataScanClientv1.listDataScanJobs({ parent: name });
+    const [scan, jobs] = await Promise.all([getScan, listjobs]);
+    const jobLists = jobs[0];
+    const jobNames = jobLists.map(job => job.name);
+    //console.log(`Fetching jobs for ${scanIds.length} matching data quality scans.`, scanIds);
+    const promises = jobNames.map(jobName => {
+      return dataplexDataScanClientv1.getDataScanJob({ name: jobName, view: 'FULL' });
+    });
 
-        const results = await Promise.all(promises);
+    const results = await Promise.all(promises);
 
-        const jobsResponse = results.map(([jobs], index) => (jobs));
-        res.json({"scan":scan[0], "jobs": jobsResponse });
+    const jobsResponse = results.map(([jobs], index) => (jobs));
+    res.json({ "scan": scan[0], "jobs": jobsResponse });
 
-    } catch (error) {
-        console.error(`Error fetching data scan for scan ${name}:`, error);
-        res.status(500).json({ message: 'An error occurred while fetching data scan for scan ${name}.', details: error.message });
-    }
+  } catch (error) {
+    console.error(`Error fetching data scan for scan ${name}:`, error);
+    res.status(500).json({ message: 'An error occurred while fetching data scan for scan ${name}.', details: error.message });
+  }
 });
 
 /**
@@ -1835,31 +1836,31 @@ app.get('/api/v1/get-data-scan', async (req, res) => {
  * A protected endpoint to fetch data quality scan results for a specific Dataplex entry.
  */
 app.post('/api/v1/get-jobs-scan', async (req, res) => {
-    const { jobs } = req.body;
+  const { jobs } = req.body;
 
-    if (!jobs) {
-        return res.status(400).json({ message: 'Bad Request: An "name" field is required.' });
-    }
+  if (!jobs) {
+    return res.status(400).json({ message: 'Bad Request: An "name" field is required.' });
+  }
 
-    try {
+  try {
 
-        const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
+    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
 
-        const oauth2Client = new CustomGoogleAuth(accessToken);
+    const oauth2Client = new CustomGoogleAuth(accessToken);
 
-        const dataplexDataScanClientv1 = new DataScanServiceClient({
-            auth: oauth2Client,
-        });
+    const dataplexDataScanClientv1 = new DataScanServiceClient({
+      auth: oauth2Client,
+    });
 
-        const getScan = dataplexDataScanClientv1.getDataScan({name: name, view:'FULL'});
-        const listjobs = dataplexDataScanClientv1.listDataScanJobs({ parent:name });
-        const [scan, jobs] = await Promise.all([getScan, listjobs]);
-        res.json({"scan":scan[0], "jobs": jobs[0] });
+    const getScan = dataplexDataScanClientv1.getDataScan({ name: name, view: 'FULL' });
+    const listjobs = dataplexDataScanClientv1.listDataScanJobs({ parent: name });
+    const [scan, jobs] = await Promise.all([getScan, listjobs]);
+    res.json({ "scan": scan[0], "jobs": jobs[0] });
 
-    } catch (error) {
-        console.error(`Error fetching data scan for scan ${name}:`, error);
-        res.status(500).json({ message: 'An error occurred while fetching data scan for scan ${name}.', details: error.message });
-    }
+  } catch (error) {
+    console.error(`Error fetching data scan for scan ${name}:`, error);
+    res.status(500).json({ message: 'An error occurred while fetching data scan for scan ${name}.', details: error.message });
+  }
 });
 
 
@@ -1868,127 +1869,127 @@ app.post('/api/v1/get-jobs-scan', async (req, res) => {
  * A protected endpoint to fetch jobs for a list of data quality scan IDs.
  */
 app.post('/api/batch-data-quality-scan-jobs', async (req, res) => {
-    const { scanIds } = req.body;
+  const { scanIds } = req.body;
 
-    if (!scanIds || !Array.isArray(scanIds)) {
-        return res.status(400).json({ message: 'Bad Request: A "scanIds" field (array of strings) is required.' });
-    }
+  if (!scanIds || !Array.isArray(scanIds)) {
+    return res.status(400).json({ message: 'Bad Request: A "scanIds" field (array of strings) is required.' });
+  }
 
-    if (scanIds.length === 0) {
-        return res.json([]);
-    }
+  if (scanIds.length === 0) {
+    return res.json([]);
+  }
 
-    try {
-        const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
+  try {
+    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
 
-        const oauth2Client = new CustomGoogleAuth(accessToken);
+    const oauth2Client = new CustomGoogleAuth(accessToken);
 
-        const dataplexDataScanClientv1 = new DataScanServiceClient({
-            auth: oauth2Client,
-        });
+    const dataplexDataScanClientv1 = new DataScanServiceClient({
+      auth: oauth2Client,
+    });
 
-        console.log(`Fetching jobs for a batch of ${scanIds.length} data quality scans.`);
+    console.log(`Fetching jobs for a batch of ${scanIds.length} data quality scans.`);
 
-        const promises = scanIds.map(scanId => {
-            const parent = `projects/${projectId}/locations/${location}/dataScans/${scanId}`;
-            return dataplexDataScanClientv1.listDataScanJobs({ parent });
-        });
+    const promises = scanIds.map(scanId => {
+      const parent = `projects/${projectId}/locations/${location}/dataScans/${scanId}`;
+      return dataplexDataScanClientv1.listDataScanJobs({ parent });
+    });
 
-        const results = await Promise.all(promises);
+    const results = await Promise.all(promises);
 
-        const jobsResponse = results.map(([jobs], index) => ({
-            scanId: scanIds[index],
-            jobs: jobs,
-        }));
+    const jobsResponse = results.map(([jobs], index) => ({
+      scanId: scanIds[index],
+      jobs: jobs,
+    }));
 
-        res.json(jobsResponse);
+    res.json(jobsResponse);
 
-    } catch (error) {
-        console.error('Error fetching data quality scan jobs for batch:', error);
-        res.status(500).json({ message: 'An error occurred while fetching data quality scan jobs for the batch.', details: error.message });
-    }
+  } catch (error) {
+    console.error('Error fetching data quality scan jobs for batch:', error);
+    res.status(500).json({ message: 'An error occurred while fetching data quality scan jobs for the batch.', details: error.message });
+  }
 });
 
 app.post('/api/v1/get-dataset-entries', async (req, res) => {
-    const { parent } = req.body;
+  const { parent } = req.body;
 
-    if (!parent) {
-        return res.status(400).json({ message: 'Bad Request: An "parent" field is required.' });
+  if (!parent) {
+    return res.status(400).json({ message: 'Bad Request: An "parent" field is required.' });
+  }
+
+  try {
+    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
+
+    const oauth2Client = new CustomGoogleAuth(accessToken);
+
+    const dataplexCatalogClientv1 = new CatalogServiceClient({
+      auth: oauth2Client,
+    });
+
+    //const parent = `projects/${projectId}/locations/${location}/entryGroups/${entryGroupId}`;
+    console.log(`Listing entries for parent: ${parent}`);
+    let request = req.body.filter ? {
+      parent: parent,
+      filter: req.body.filter
+    } : {
+      parent: parent
     }
 
-    try {
-        const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
+    const [entries] = await dataplexCatalogClientv1.getEntryGroup({ name: parent });
+    res.json(entries);
 
-        const oauth2Client = new CustomGoogleAuth(accessToken);
-
-        const dataplexCatalogClientv1 = new CatalogServiceClient({
-            auth: oauth2Client,
-        });
-
-        //const parent = `projects/${projectId}/locations/${location}/entryGroups/${entryGroupId}`;
-        console.log(`Listing entries for parent: ${parent}`);
-        let request = req.body.filter ? {
-                parent:parent,
-                filter: req.body.filter
-            } : {
-            parent: parent
-        }
-
-        const [entries] = await dataplexCatalogClientv1.getEntryGroup({name:parent});
-        res.json(entries);
-
-    } catch (error) {
-        console.error(`Error listing entries for parent ${parent}:`, error);
-        res.status(500).json({ message: 'An error occurred while listing entries.', details: error.message });
-    }
+  } catch (error) {
+    console.error(`Error listing entries for parent ${parent}:`, error);
+    res.status(500).json({ message: 'An error occurred while listing entries.', details: error.message });
+  }
 });
 
 
 
 app.post('/api/v1/access-request', async (req, res) => {
-  
+
   try {
     const { assetName, message, requesterEmail, projectId, projectAdmin } = req.body;
-    
+
     // Validation
     if (!assetName || typeof assetName !== 'string' || assetName.trim() === '') {
       console.log('Validation failed: Asset name is missing or invalid');
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Asset name is required and must be a non-empty string' 
+      return res.status(400).json({
+        success: false,
+        error: 'Asset name is required and must be a non-empty string'
       });
     }
-    
+
     if (!requesterEmail || typeof requesterEmail !== 'string' || requesterEmail.trim() === '') {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Requester email is required and must be a non-empty string' 
+      return res.status(400).json({
+        success: false,
+        error: 'Requester email is required and must be a non-empty string'
       });
     }
-    
+
     if (!projectId || typeof projectId !== 'string' || projectId.trim() === '') {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Project ID is required and must be a non-empty string' 
+      return res.status(400).json({
+        success: false,
+        error: 'Project ID is required and must be a non-empty string'
       });
     }
 
     if (projectAdmin && (!Array.isArray(projectAdmin) || !projectAdmin.every(email => typeof email === 'string'))) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Project admin must be an array of email strings' 
+      return res.status(400).json({
+        success: false,
+        error: 'Project admin must be an array of email strings'
       });
     }
-    
+
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(requesterEmail)) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Invalid email format' 
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email format'
       });
     }
-    
+
     console.log('Access request received:', {
       assetName,
       message: message ? 'Message provided' : 'No message',
@@ -1996,7 +1997,7 @@ app.post('/api/v1/access-request', async (req, res) => {
       projectId,
       projectAdmin: projectAdmin || [],
       timestamp: new Date().toISOString()
-    }); 
+    });
 
     const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
 
@@ -2038,16 +2039,16 @@ app.post('/api/v1/access-request', async (req, res) => {
         projectId,
         projectAdmin || [] // Pass projectAdmin emails
       );
-      
+
       console.log('Email result:', emailResult);
-      
+
       if (!emailResult.success) {
         console.error('Failed to send access request email:', emailResult.error);
       }
     } else {
       console.log('Access request auto-approved:', accessRequest.id);
     }
-    
+
     // Return success response
     return res.status(200).json({
       success: true,
@@ -2057,7 +2058,7 @@ app.post('/api/v1/access-request', async (req, res) => {
         messageId: autoApprove ? null : 'email_sent'
       }
     });
-    
+
   } catch (error) {
     console.error('Error processing access request:', error);
     console.log('Sending 500 error response from catch block...');
@@ -2086,9 +2087,9 @@ app.get('/api/v1/access-requests', async (req, res) => {
     const projectId = req.query.projectId; // optional filter by project
 
     if (!userEmail) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'User email is required' 
+      return res.status(400).json({
+        success: false,
+        error: 'User email is required'
       });
     }
 
@@ -2145,25 +2146,25 @@ app.post('/api/v1/access-request/update', async (req, res) => {
     const { requestId, status, reviewerEmail } = req.body;
 
     if (!requestId || !status) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Request ID and status are required' 
+      return res.status(400).json({
+        success: false,
+        error: 'Request ID and status are required'
       });
     }
 
     if (!['approved', 'rejected'].includes(status)) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Status must be either "approved" or "rejected"' 
+      return res.status(400).json({
+        success: false,
+        error: 'Status must be either "approved" or "rejected"'
       });
     }
 
     const requestIndex = accessRequestsStore.findIndex(req => req.id === requestId);
-    
+
     if (requestIndex === -1) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Access request not found' 
+      return res.status(404).json({
+        success: false,
+        error: 'Access request not found'
       });
     }
 
@@ -2205,11 +2206,11 @@ app.get('/api/access-request/health', (req, res) => {
 
 // Basic health check endpoint
 app.get('/api/health', (req, res) => {
-    res.status(200).send('API is running!');
+  res.status(200).send('API is running!');
 });
 // Basic health check endpoint
 app.get('/', (req, res) => {
-    res.redirect('/home'); // Redirects to the /home route
+  res.redirect('/home'); // Redirects to the /home route
 });
 
 // For any other routes, serve the React index.html
@@ -2219,11 +2220,11 @@ app.get('/*\w', (req, res) => {
 
 // Start the server
 app.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT}`);
-    console.log('API Endpoints:');
-    console.log(`  POST /api/v1/check-iam-role`);
-    console.log(`  POST /api/v1/search`);
-    console.log(`  GET /api/health`);
-    console.log(`process.env.GOOGLE_CLOUD_PROJECT_ID: ${process.env.GOOGLE_CLOUD_PROJECT_ID || 'Not set'}`);
+  console.log(`Server listening on port ${PORT}`);
+  console.log('API Endpoints:');
+  console.log(`  POST /api/v1/check-iam-role`);
+  console.log(`  POST /api/v1/search`);
+  console.log(`  GET /api/health`);
+  console.log(`process.env.GOOGLE_CLOUD_PROJECT_ID: ${process.env.GOOGLE_CLOUD_PROJECT_ID || 'Not set'}`);
 });
 

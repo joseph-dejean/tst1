@@ -167,3 +167,4 @@ gcloud run services update-traffic [SERVICE_NAME] \
 - Cloud Run: Pay per request and compute time (generous free tier)
 - Artifact Registry: Pay per GB stored (first 0.5 GB free)
 
+
