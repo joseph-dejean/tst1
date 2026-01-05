@@ -394,105 +394,83 @@ app.post('/api/v1/chat', async (req, res) => {
       responseType: 'stream'
     });
 
-    // Stream the response
-    let finalText = '';
-    let buffer = '';
+    let fullResponseText = '';
+    let finalChart = null;
+    let finalSql = null;
+    let accumulatedJson = '';
 
-    await new Promise((resolve, reject) => {
-      chatResponse.data.on('data', (chunk) => {
-        // console.log('DEBUG_CHUNK:', chunk.toString()); 
-        buffer += chunk.toString();
-      });
+    // Modern stream consumption
+    for await (const chunk of chatResponse.data) {
+      accumulatedJson += chunk.toString();
+    }
 
-      chatResponse.data.on('end', () => {
-        // The API returns a stream of JSON objects, sometimes in an array format or comma-separated
-        // Best approach is to try parsing the accumulated buffer
+    // Parse the full accumulated JSON
+    try {
+      let cleanBuffer = accumulatedJson.trim();
+      // Ensure it's a valid list if it does not start with [
+      if (cleanBuffer && !cleanBuffer.startsWith('[')) {
+        // It might be multiple JSON objects concatenated or separated by newlines
+        // Regex to join } { into },{
+        cleanBuffer = `[${cleanBuffer.replace(/\}\s*\{/g, '},{')}]`;
+      }
 
-        // Clean up buffer to ensure it's valid JSON
-        let cleanBuffer = buffer.trim();
+      // Handle trailing commas
+      if (cleanBuffer.endsWith(',]')) cleanBuffer = cleanBuffer.slice(0, -2) + ']';
 
-        // Sometimes it's a list of objects like [obj1, obj2] or just obj1\nobj2
-        // We will try to make it a valid array if it's not
-        if (!cleanBuffer.startsWith('[')) {
-          cleanBuffer = `[${cleanBuffer.replace(/\}\s*\{/g, '},{')}]`;
-        }
+      const messages = JSON.parse(cleanBuffer);
 
-        try {
-          // Handle potential trailing commas or malformed ends
-          if (cleanBuffer.endsWith(',]')) cleanBuffer = cleanBuffer.slice(0, -2) + ']';
-
-          const messages = JSON.parse(cleanBuffer);
-
-          // Iterate through all messages in the stream
-          messages.forEach(message => {
-            if (message.systemMessage) {
-              // 1. Text Response
-              if (message.systemMessage.text) {
-                const textType = message.systemMessage.text.textType;
-                const textContent = message.systemMessage.text.text || '';
-
-                if (textType === 'FINAL_RESPONSE') {
-                  finalText += textContent;
-                } else if (textType === 'THOUGHT' && message.systemMessage.text.parts) {
-                  if (message.systemMessage.text.parts[0]?.text) {
-                    finalText += `*Thought:* ${message.systemMessage.text.parts[0].text}\n\n`;
-                  }
-                }
-              }
-
-              // 2. Chart/Data Response
-              if (message.systemMessage.chart) {
-                const chart = message.systemMessage.chart;
-                // Add a description of the chart to the text if empty
-                if (!finalText) {
-                  if (chart.query?.instructions) {
-                    finalText += `${chart.query.instructions}\n\n`;
-                  } else {
-                    finalText += "Here is the chart you requested:\n\n";
-                  }
-                }
-
-                // We could pass the raw chart config back to frontend if it supports it
-                // For now, let's append a text representation
-                if (chart.result?.vegaConfig) {
-                  finalText += `\n[Chart Generated: ${chart.query?.dataResultName || 'Data Visualization'}]\n`;
-                }
-              }
-
-              // 3. SQL Query (if available in a different field)
-              if (message.systemMessage.sql_query) {
-                finalText += `\n\`\`\`sql\n${message.systemMessage.sql_query}\n\`\`\`\n`;
+      if (Array.isArray(messages)) {
+        messages.forEach(msg => {
+          if (msg.systemMessage) {
+            // 1. Text
+            if (msg.systemMessage.text) {
+              const t = msg.systemMessage.text;
+              if (t.textType === 'FINAL_RESPONSE' && t.text) {
+                fullResponseText += t.text;
+              } else if (t.textType === 'THOUGHT' && t.parts && t.parts[0]?.text) {
+                // Optional: include thought process in debug or italic text
+                fullResponseText += `\n*Thought: ${t.parts[0].text}*\n`;
               }
             }
-
-            if (message.error) {
-              console.error('API Error in stream:', message.error);
-              finalText += `\n\n*Error:* ${message.error.message || 'Unknown error'}`;
+            // 2. Chart
+            if (msg.systemMessage.chart) {
+              finalChart = msg.systemMessage.chart;
+              // Add instruction text if not present
+              if (finalChart.query?.instructions) {
+                fullResponseText += `\n\n${finalChart.query.instructions}`;
+              }
             }
-          });
-
-        } catch (e) {
-          console.error('Failed to parse complete stream:', e);
-          console.log('Buffer content:', buffer);
-          // Fallback: try to Regex extract text if JSON parse fails
-          const textMatches = buffer.match(/"text":\s*"([^"]+)"/g);
-          if (textMatches) {
-            finalText = textMatches.map(m => m.match(/"text":\s*"([^"]+)"/)[1]).join(' ');
+            // 3. SQL
+            if (msg.systemMessage.sqlQuery) {
+              finalSql = msg.systemMessage.sqlQuery;
+            }
           }
-        }
 
-        resolve();
-      });
+          if (msg.error) {
+            console.error('API Returned Error:', msg.error);
+            fullResponseText += `\nError: ${msg.error.message}`;
+          }
+        });
+      }
+    } catch (e) {
+      console.error('JSON Parse Error of Stream:', e);
+      console.log('Raw Buffer:', accumulatedJson);
+      // Fallback: simple text extraction
+      const matches = accumulatedJson.match(/"text":\s*"([^"]+)"/g);
+      if (matches) {
+        fullResponseText = matches.map(m => m.split(':')[1].replace(/"/g, '').trim()).join(' ');
+      } else {
+        fullResponseText = "Received response but failed to parse. Check server logs.";
+      }
+    }
 
-      chatResponse.data.on('error', (err) => {
-        console.error('Conversational Analytics API stream error:', err);
-        reject(err);
-      });
-    });
-
+    // Send structured response
+    console.log('Sending response to frontend:', { replyLength: fullResponseText.length, hasChart: !!finalChart });
     res.json({
-      reply: finalText || 'I received your question but could not generate a response. Please try again.',
-      conversationHistory: messages // Return updated conversation history
+      reply: fullResponseText,
+      chart: finalChart,
+      sql: finalSql,
+      conversationHistory: [] // Future: maintain history
     });
 
   } catch (err) {
