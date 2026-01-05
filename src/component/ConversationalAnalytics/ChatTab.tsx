@@ -32,12 +32,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
 
   const handleAsk = async () => {
     if (!input.trim()) return;
-    
+
     const userMessage = input.trim();
     setInput('');
     setLoading(true);
     setError(null);
-    
+
     // Add user message to UI immediately
     const userMsg: Message = {
       role: 'user',
@@ -45,7 +45,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
       timestamp: new Date()
     };
     setMessages(prev => [...prev, userMsg]);
-    
+
     try {
       // Check if this is a Data Product
       const isDataProduct = entry._isDataProduct || entry.entryType === 'DATA_PRODUCT';
@@ -57,11 +57,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
         // For Data Products, prepare context for all tables in the product
         const tablesContext = dataProduct.tables && dataProduct.tables.length > 0
           ? dataProduct.tables.map((table: any) => ({
-              name: table.displayName || table.entryName || 'Unknown Table',
-              fullyQualifiedName: table.fullyQualifiedName || table.entryName || '',
-              type: table.type || 'Table',
-              description: table.description || ''
-            }))
+            name: table.displayName || table.entryName || 'Unknown Table',
+            fullyQualifiedName: table.fullyQualifiedName || table.entryName || '',
+            type: table.type || 'Table',
+            description: table.description || ''
+          }))
           : [];
 
         contextData = {
@@ -77,12 +77,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
       } else {
         // For regular tables/entries, extract schema as before
         let schema: any[] = [];
-        
+
         // Try to extract schema from aspects
         if (entry.aspects) {
           const aspectKeys = Object.keys(entry.aspects);
           const schemaKey = aspectKeys.find(key => key.includes('schema') || key.includes('Schema'));
-          
+
           if (schemaKey) {
             const schemaAspect = entry.aspects[schemaKey];
             // Handle different schema formats
@@ -92,8 +92,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
               } else if (Array.isArray(schemaAspect.data.fields)) {
                 schema = schemaAspect.data.fields;
               } else if (schemaAspect.data.fields.fields) {
-                schema = Array.isArray(schemaAspect.data.fields.fields) 
-                  ? schemaAspect.data.fields.fields 
+                schema = Array.isArray(schemaAspect.data.fields.fields)
+                  ? schemaAspect.data.fields.fields
                   : Object.values(schemaAspect.data.fields.fields);
               }
             }
@@ -140,12 +140,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, assistantMsg]);
-      
+
     } catch (e: any) {
       console.error('Chat error:', e);
       const errorMessage = e?.response?.data?.error || e?.message || "Error communicating with Conversational Analytics API. Please check if the API is enabled and permissions are granted.";
       setError(errorMessage);
-      
+
       // Add error message to chat
       const errorMsg: Message = {
         role: 'assistant',
@@ -167,7 +167,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
   return (
     <Box sx={{ padding: '24px', maxWidth: '1200px', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ mb: 2 }}>
-        <Typography variant="h6" gutterBottom sx={{color: '#1F1F1F'}}>
+        <Typography variant="h6" gutterBottom sx={{ color: '#1F1F1F' }}>
           Conversational Analytics
         </Typography>
         <Typography variant="body2" sx={{ color: '#575757' }}>
@@ -176,14 +176,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
       </Box>
 
       {/* Chat Messages Area */}
-      <Box 
+      <Box
         ref={chatContainerRef}
-        sx={{ 
-          flex: 1, 
-          overflowY: 'auto', 
-          mb: 2, 
-          p: 2, 
-          backgroundColor: '#F8FAFD', 
+        sx={{
+          flex: 1,
+          overflowY: 'auto',
+          mb: 2,
+          p: 2,
+          backgroundColor: '#F8FAFD',
           borderRadius: '8px',
           border: '1px solid #DADCE0',
           minHeight: '400px',
@@ -223,11 +223,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
                   <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
                     {msg.content}
                   </Typography>
-                  <Typography 
-                    variant="caption" 
-                    sx={{ 
-                      display: 'block', 
-                      mt: 1, 
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: 'block',
+                      mt: 1,
                       opacity: 0.7,
                       fontSize: '0.7rem'
                     }}
@@ -266,11 +266,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
       <Box>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-          <TextField 
-            fullWidth 
+          <TextField
+            fullWidth
             variant="outlined"
             label="Ask a question..."
-            placeholder="e.g., What columns does this table have? Show me sample data." 
+            placeholder="e.g., What columns does this table have? Show me sample data."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && !loading && handleAsk()}
@@ -279,26 +279,24 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
             maxRows={3}
           />
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <Button 
-              variant="contained" 
-              onClick={handleAsk} 
+            <Button
+              variant="contained"
+              onClick={handleAsk}
               disabled={loading || !input.trim()}
               startIcon={!loading && <SendIcon />}
               sx={{ backgroundColor: '#0E4DCA', minWidth: '120px' }}
             >
               {loading ? <CircularProgress size={24} color="inherit" /> : 'Send'}
             </Button>
-            {messages.length > 0 && (
-              <Button 
-                variant="outlined" 
-                onClick={handleClearChat}
-                disabled={loading}
-                size="small"
-                sx={{ minWidth: '120px' }}
-              >
-                Clear
-              </Button>
-            )}
+            <Button
+              variant="outlined"
+              onClick={handleClearChat}
+              disabled={loading}
+              size="small"
+              sx={{ minWidth: '120px' }}
+            >
+              Clear Chat
+            </Button>
           </Box>
         </Box>
       </Box>
