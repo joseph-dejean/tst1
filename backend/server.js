@@ -399,22 +399,34 @@ app.post('/api/v1/chat', async (req, res) => {
 
     await new Promise((resolve, reject) => {
       chatResponse.data.on('data', (chunk) => {
-        console.log('DEBUG_CHUNK:', chunk.toString());
+        // console.log('DEBUG_CHUNK:', chunk.toString()); 
         buffer += chunk.toString();
+      });
 
-        let boundary = buffer.indexOf('\n');
-        while (boundary !== -1) {
-          const line = buffer.substring(0, boundary).trim();
-          buffer = buffer.substring(boundary + 1);
+      chatResponse.data.on('end', () => {
+        // The API returns a stream of JSON objects, sometimes in an array format or comma-separated
+        // Best approach is to try parsing the accumulated buffer
 
-          if (line.length > 0 && line !== '[' && line !== ']' && line !== ',') {
-            try {
-              let jsonStr = line;
-              if (jsonStr.startsWith(',')) jsonStr = jsonStr.substring(1);
-              if (jsonStr.endsWith(',')) jsonStr = jsonStr.substring(0, jsonStr.length - 1);
+        // Clean up buffer to ensure it's valid JSON
+        let cleanBuffer = buffer.trim();
 
-              const message = JSON.parse(jsonStr);
-              if (message.systemMessage?.text) {
+        // Sometimes it's a list of objects like [obj1, obj2] or just obj1\nobj2
+        // We will try to make it a valid array if it's not
+        if (!cleanBuffer.startsWith('[')) {
+          cleanBuffer = `[${cleanBuffer.replace(/\}\s*\{/g, '},{')}]`;
+        }
+
+        try {
+          // Handle potential trailing commas or malformed ends
+          if (cleanBuffer.endsWith(',]')) cleanBuffer = cleanBuffer.slice(0, -2) + ']';
+
+          const messages = JSON.parse(cleanBuffer);
+
+          // Iterate through all messages in the stream
+          messages.forEach(message => {
+            if (message.systemMessage) {
+              // 1. Text Response
+              if (message.systemMessage.text) {
                 const textType = message.systemMessage.text.textType;
                 const textContent = message.systemMessage.text.text || '';
 
@@ -422,39 +434,52 @@ app.post('/api/v1/chat', async (req, res) => {
                   finalText += textContent;
                 } else if (textType === 'THOUGHT' && message.systemMessage.text.parts) {
                   if (message.systemMessage.text.parts[0]?.text) {
-                    finalText += message.systemMessage.text.parts[0].text;
+                    finalText += `*Thought:* ${message.systemMessage.text.parts[0].text}\n\n`;
                   }
                 }
-              } else if (message.error) {
-                console.error('API Error in stream:', message.error);
-                finalText = `Error: ${message.error.message || 'Unknown error'}`;
               }
-            } catch (e) {
-              console.log('Partial JSON line, waiting for more data:', e.message);
-              // If we fail to parse, it might be a multi-line JSON or just broken. 
-              // For robustness in this simple splitting, we'll just log it.
-              // A real fix would require a streaming JSON parser or a more complex buffer handler.
-            }
-          }
-          boundary = buffer.indexOf('\n');
-        }
-      });
 
-      chatResponse.data.on('end', () => {
-        if (buffer.trim()) {
-          try {
-            let jsonStr = buffer.trim();
-            if (jsonStr.startsWith(',')) jsonStr = jsonStr.substring(1);
-            if (jsonStr.endsWith(',')) jsonStr = jsonStr.substring(0, jsonStr.length - 1);
-            // Try to parse just in case
-            const message = JSON.parse(jsonStr);
-            if (message.systemMessage?.text?.text) {
-              finalText += message.systemMessage.text.text;
+              // 2. Chart/Data Response
+              if (message.systemMessage.chart) {
+                const chart = message.systemMessage.chart;
+                // Add a description of the chart to the text if empty
+                if (!finalText) {
+                  if (chart.query?.instructions) {
+                    finalText += `${chart.query.instructions}\n\n`;
+                  } else {
+                    finalText += "Here is the chart you requested:\n\n";
+                  }
+                }
+
+                // We could pass the raw chart config back to frontend if it supports it
+                // For now, let's append a text representation
+                if (chart.result?.vegaConfig) {
+                  finalText += `\n[Chart Generated: ${chart.query?.dataResultName || 'Data Visualization'}]\n`;
+                }
+              }
+
+              // 3. SQL Query (if available in a different field)
+              if (message.systemMessage.sql_query) {
+                finalText += `\n\`\`\`sql\n${message.systemMessage.sql_query}\n\`\`\`\n`;
+              }
             }
-          } catch (e) {
-            console.log('Final buffer parse failed');
+
+            if (message.error) {
+              console.error('API Error in stream:', message.error);
+              finalText += `\n\n*Error:* ${message.error.message || 'Unknown error'}`;
+            }
+          });
+
+        } catch (e) {
+          console.error('Failed to parse complete stream:', e);
+          console.log('Buffer content:', buffer);
+          // Fallback: try to Regex extract text if JSON parse fails
+          const textMatches = buffer.match(/"text":\s*"([^"]+)"/g);
+          if (textMatches) {
+            finalText = textMatches.map(m => m.match(/"text":\s*"([^"]+)"/)[1]).join(' ');
           }
         }
+
         resolve();
       });
 
