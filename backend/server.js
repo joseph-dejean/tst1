@@ -400,9 +400,7 @@ app.post('/api/v1/chat', async (req, res) => {
     let accumulatedJson = chatResponse.data.toString('utf-8'); // Convert buffer to string properly
 
     console.log('DEBUG_RAW_RESPONSE_LENGTH:', accumulatedJson.length);
-    if (accumulatedJson.length < 500) {
-      console.log('DEBUG_RAW_RESPONSE_PREVIEW:', accumulatedJson);
-    }
+    console.log('DEBUG_RAW_RESPONSE_PREVIEW:', accumulatedJson.substring(0, 2000)); // Log first 2000 chars
 
     // Parse the full accumulated JSON
     try {
@@ -420,22 +418,22 @@ app.post('/api/v1/chat', async (req, res) => {
       const messages = JSON.parse(cleanBuffer);
 
       if (Array.isArray(messages)) {
-        messages.forEach(msg => {
+        messages.forEach((msg, index) => {
+          if (index < 3) console.log(`DEBUG_MSG_${index}:`, JSON.stringify(msg)); // Log first few messages
+
           if (msg.systemMessage) {
             // 1. Text
             if (msg.systemMessage.text) {
               const t = msg.systemMessage.text;
-              if (t.textType === 'FINAL_RESPONSE' && t.text) {
-                fullResponseText += t.text;
+              if (t.textType === 'FINAL_RESPONSE') {
+                fullResponseText += t.text || t.content || '';
               } else if (t.textType === 'THOUGHT' && t.parts && t.parts[0]?.text) {
-                // Optional: include thought process in debug or italic text
                 fullResponseText += `\n*Thought: ${t.parts[0].text}*\n`;
               }
             }
             // 2. Chart
             if (msg.systemMessage.chart) {
               finalChart = msg.systemMessage.chart;
-              // Add instruction text if not present
               if (finalChart.query?.instructions) {
                 fullResponseText += `\n\n${finalChart.query.instructions}`;
               }
