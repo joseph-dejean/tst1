@@ -434,17 +434,48 @@ app.post('/api/v1/chat', async (req, res) => {
             // 2. Chart
             if (msg.systemMessage.chart) {
               finalChart = msg.systemMessage.chart;
-              if (finalChart.query?.instructions) {
-                fullResponseText += `\n\n${finalChart.query.instructions}`;
+              // Add instruction text if present, but avoid duplication if it looks like a prompt
+              if (finalChart.query?.instructions && !fullResponseText.includes(finalChart.query.instructions)) {
+                fullResponseText += `\n\n**Visual Analysis:** ${finalChart.query.instructions}`;
               }
             }
 
             // 3. Data (Alternative location)
-            if (msg.systemMessage.data) {
-              console.log(`DEBUG_MSG_${index}_DATA_FOUND`, msg.systemMessage.data);
-              // Sometimes results are in data.result?
-              if (msg.systemMessage.data.result) {
-                fullResponseText += `\n\n[Data Result Found: ${JSON.stringify(msg.systemMessage.data.result).substring(0, 100)}...]`;
+            if (msg.systemMessage.data?.result) {
+              const result = msg.systemMessage.data.result;
+              console.log(`DEBUG_MSG_${index}_DATA_FOUND`, result);
+
+              // Format Data as Markdown Table
+              if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+                const rows = result.data;
+                const columns = Object.keys(rows[0]);
+
+                // Header
+                let tableMd = `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
+
+                // Rows (Limit to 5 to avoid spamming chat)
+                rows.slice(0, 5).forEach(row => {
+                  tableMd += `| ${values = columns.map(col => row[col]).join(' | ')} |\n`;
+                });
+                // Fix variable name in map
+
+                rows.slice(0, 5).forEach(row => {
+                  // Simple row rendering
+                  tableMd += `| ${columns.map(col => row[col]).join(' | ')} |\n`;
+                });
+
+                // Reset and do it cleanly
+                tableMd = `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
+                rows.slice(0, 5).forEach(row => {
+                  const vals = columns.map(c => row[c]);
+                  tableMd += `| ${vals.join(' | ')} |\n`;
+                });
+
+                if (rows.length > 5) {
+                  tableMd += `\n*(Showing top 5 of ${rows.length} rows)*\n`;
+                }
+
+                fullResponseText += tableMd;
               }
             }
 
