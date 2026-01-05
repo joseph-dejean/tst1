@@ -400,7 +400,7 @@ app.post('/api/v1/chat', async (req, res) => {
     let accumulatedJson = chatResponse.data.toString('utf-8'); // Convert buffer to string properly
 
     console.log('DEBUG_RAW_RESPONSE_LENGTH:', accumulatedJson.length);
-    console.log('DEBUG_RAW_RESPONSE_PREVIEW:', accumulatedJson.substring(0, 2000)); // Log first 2000 chars
+    console.log('DEBUG_FULL_RAW_RESPONSE:', accumulatedJson); // Log EVERYTHING to find hidden data
 
     // Parse the full accumulated JSON
     try {
@@ -419,9 +419,9 @@ app.post('/api/v1/chat', async (req, res) => {
 
       if (Array.isArray(messages)) {
         messages.forEach((msg, index) => {
-          if (index < 3) console.log(`DEBUG_MSG_${index}:`, JSON.stringify(msg)); // Log first few messages
-
           if (msg.systemMessage) {
+            console.log(`DEBUG_MSG_${index}_KEYS:`, Object.keys(msg.systemMessage)); // Log what keys exist (e.g. text, chart, data?)
+
             // 1. Text
             if (msg.systemMessage.text) {
               const t = msg.systemMessage.text;
@@ -438,7 +438,17 @@ app.post('/api/v1/chat', async (req, res) => {
                 fullResponseText += `\n\n${finalChart.query.instructions}`;
               }
             }
-            // 3. SQL
+
+            // 3. Data (Alternative location)
+            if (msg.systemMessage.data) {
+              console.log(`DEBUG_MSG_${index}_DATA_FOUND`, msg.systemMessage.data);
+              // Sometimes results are in data.result?
+              if (msg.systemMessage.data.result) {
+                fullResponseText += `\n\n[Data Result Found: ${JSON.stringify(msg.systemMessage.data.result).substring(0, 100)}...]`;
+              }
+            }
+
+            // 4. SQL
             if (msg.systemMessage.sqlQuery) {
               finalSql = msg.systemMessage.sqlQuery;
             }
