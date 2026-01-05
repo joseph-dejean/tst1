@@ -387,6 +387,7 @@ app.post('/api/v1/chat', async (req, res) => {
 
     await new Promise((resolve, reject) => {
       chatResponse.data.on('data', (chunk) => {
+        console.log('DEBUG_CHUNK:', chunk.toString()); // Added debug log
         buffer += chunk.toString();
         const lines = buffer.split('\n');
         buffer = lines.pop() || ''; // Keep incomplete line in buffer
