@@ -315,14 +315,8 @@ app.post('/api/v1/chat', async (req, res) => {
       tableReferences = [{
         projectId: projectId,
         datasetId: datasetId,
-        tableId: tableId,
-        schema: {
-          description: context.description || '',
-          fields: (context.schema || []).map((field) => ({
-            name: field.name || field,
-            description: field.description || ''
-          }))
-        }
+        tableId: tableId
+        // Removed manual schema/fields injection to let the API resolve it from BigQuery
       }];
     }
 
