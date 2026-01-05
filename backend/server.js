@@ -172,21 +172,29 @@ app.post('/api/v1/chat', async (req, res) => {
     let projectId, datasetId, tableId;
 
     if (context.fullyQualifiedName) {
-      const fqn = context.fullyQualifiedName;
-      if (fqn.startsWith('bigquery://')) {
-        const parts = fqn.replace('bigquery://', '').split('.');
-        if (parts.length >= 3) {
-          projectId = parts[0];
-          datasetId = parts[1];
-          tableId = parts[2];
-        }
-      } else if (fqn.includes(':')) {
+      let fqn = context.fullyQualifiedName;
+
+      // Handle "bigquery:" prefix (common in Dataplex FQNs)
+      if (fqn.startsWith('bigquery:')) {
+        fqn = fqn.substring(9); // Remove "bigquery:"
+        // Example now: dataplex-ui.coffee_shop.order_item
+      } else if (fqn.startsWith('bigquery://')) {
+        fqn = fqn.replace('bigquery://', '');
+      }
+
+      const parts = fqn.split('.');
+      if (parts.length >= 3) {
+        projectId = parts[0];
+        datasetId = parts[1];
+        tableId = parts[2];
+      } else if (fqn.includes(':') && !fqn.startsWith('bigquery:')) {
+        // Handle older format project:dataset.table if still used, but unlikely with new cleaning
         const [project, rest] = fqn.split(':');
         projectId = project;
-        const parts = rest.split('.');
-        if (parts.length >= 2) {
-          datasetId = parts[0];
-          tableId = parts[1];
+        const restParts = rest.split('.');
+        if (restParts.length >= 2) {
+          datasetId = restParts[0];
+          tableId = restParts[1];
         }
       }
     }
