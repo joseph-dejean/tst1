@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, IconButton } from '@mui/material';
-import { ArrowBack } from '@mui/icons-material';
+import { ArrowBack, Refresh } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import MultiSelect from '../MultiSelect/MultiSelect';
 import axios from 'axios';
@@ -64,45 +64,45 @@ const AdminPanel = () => {
   const [selectedAssetsByProduct, setSelectedAssetsByProduct] = useState<Record<string, any[]>>({});
   const [selectedAspectNamesByType, setSelectedAspectNamesByType] = useState<Record<string, string[]>>({});
 
+  const showSuccess = (message: string) => {
+    setAcknowledgeModalData({ type: 'success', message });
+    setAcknowledgeModalOpen(true);
+  };
+
+  const fetchAppConfig = (showNotification = false) => {
+    setLoading(true);
+    axios.get(URLS.API_URL + URLS.APP_CONFIG, {
+      headers: {
+        Authorization: `Bearer ${id_token}`,
+      }
+    }).then((res) => {
+      const appConfig = res.data;
+      const userData = { ...user!, appConfig };
+      updateUser(id_token, userData);
+
+      if (appConfig.aspects && Array.isArray(appConfig.aspects)) {
+        let o = appConfig.aspects.map((aspect: any) => (aspect.dataplexEntry.entrySource.displayName));
+        let n = appConfig.aspects.map((aspect: any) => (aspect.dataplexEntry.entrySource.resource));
+        setAspectTypeOptions([...new Set(o)]);
+
+        axios.post(URLS.API_URL + URLS.BATCH_ASPECTS, { entryNames: n }, {
+          headers: { Authorization: `Bearer ${id_token}`, 'Content-Type': 'application/json' }
+        }).then(response => {
+          setAspectTypeEditOptions(response.data);
+          setLoading(false);
+          if (showNotification) showSuccess("Metadata configuration refreshed from Dataplex!");
+        });
+      } else {
+        setLoading(false);
+      }
+    }).catch((err) => {
+      console.error("Refresh failed:", err);
+      setLoading(false);
+    });
+  };
 
   useEffect(() => {
-    // axios.get(URLS.API_URL + URLS.APP_CONFIG, {
-    //   headers: {
-    //     Authorization: `Bearer ${id_token}`,
-    //   }
-    // }).then(() => {
-    //   setSelectedAssetsByProduct(user?.appConfig?.defaultSearchAssets || []);
-    //   setSelectedAspectNamesByType(user?.appConfig?.browseByAspectTypes || []);
-    //   console.log('Refreshed app-config');
-    // }).catch(() => {});
-
-    if (user?.appConfig && user?.appConfig.aspects && Array.isArray(user?.appConfig.aspects)) {
-      let o = user?.appConfig.aspects.map((aspect: any) => (aspect.dataplexEntry.entrySource.displayName));
-      let n = user?.appConfig.aspects.map((aspect: any) => (aspect.dataplexEntry.entrySource.resource));
-      setAspectTypeOptions([...new Set(o)]);
-      console.log("Aspect Type Options: ", aspectTypeOptions);
-      console.log("Aspect Type : ", n);
-
-      //let q = `name=${n.join('|')}`;
-
-      axios.post(URLS.API_URL + URLS.BATCH_ASPECTS, {
-        entryNames: n
-      },
-        {
-          headers: {
-            Authorization: `Bearer ${id_token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      ).then(response => {
-        console.log('name options:', response.data);
-        setAspectTypeEditOptions(response.data);//.map((aspect:any) => (aspect.entry.entrySource.displayName));
-        setLoading(false);
-      }).catch(error => {
-        console.error('Error saving configuration:', error);
-      });
-
-    }
+    fetchAppConfig();
   }, []);
 
 
@@ -407,22 +407,32 @@ const AdminPanel = () => {
         </Box>
 
         {/* Governance Section */}
-        <Box sx={{ mt: 6, mb: 2, pt: 4, borderTop: '1px solid #DADCE0' }}>
-          <Typography variant="h6" sx={{ color: '#575757', mb: 2, marginLeft: { xs: '0px', sm: '160px' } }}>
-            Governance & Security
-          </Typography>
-          <Box
-            sx={{
-              marginLeft: { xs: '0px', sm: '160px' },
-              p: 3,
-              border: '1px solid #DADCE0',
-              borderRadius: '12px',
-              backgroundColor: '#F8FAFD',
-              maxWidth: '552px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 2
-            }}
+        <Box sx={{ mb: 6 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, marginLeft: { xs: '0px', sm: '160px' } }}>
+            <Typography variant="h6" sx={{ color: '#575757' }}>
+              Governance and Browser By Annotation configuration
+            </Typography>
+            <Button
+              variant="outlined"
+              startIcon={<Refresh />}
+              size="small"
+              onClick={() => fetchAppConfig(true)}
+              sx={{ color: '#0E4DCA', borderColor: '#0E4DCA' }}
+            >
+              Sync with Dataplex
+            </Button>
+          </Box>
+          <Box sx={{
+            marginLeft: { xs: '0px', sm: '160px' },
+            p: 3,
+            border: '1px solid #DADCE0',
+            borderRadius: '12px',
+            backgroundColor: '#F8FAFD',
+            maxWidth: '552px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2
+          }}
           >
             <Typography variant="body1">
               Manage project-level and resource-level IAM permissions for Dataplex.

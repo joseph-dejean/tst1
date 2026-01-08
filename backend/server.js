@@ -1668,50 +1668,68 @@ app.get('/api/v1/app-configs', async (req, res) => {
   try {
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
     const location = process.env.GCP_LOCATION;
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
+    const accessToken = req.headers.authorization?.split(' ')[1];
 
-    const oauth2Client = new CustomGoogleAuth(accessToken);
-
-    const dataplexClientv1 = new CatalogServiceClient({
-      auth: oauth2Client,
-    });
-
-    const resourceManagerClientv1 = new ProjectsClient({
-      auth: oauth2Client,
-    });
-
-    if (!projectId || !location) {
-      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
+    if (!projectId || !accessToken) {
+      return res.status(401).json({ success: false, error: "Missing Project ID or Access Token" });
     }
 
+    const oauth2Client = new CustomGoogleAuth(accessToken);
+    const dataplexClientv1 = new CatalogServiceClient({ auth: oauth2Client });
+    const resourceManagerClientv1 = new ProjectsClient({ auth: oauth2Client });
+
     const parent = `projects/${projectId}/locations/${location}`;
-    const aspectQuery = `type=projects/dataplex-types/locations/global/entryTypes/aspecttype`
 
-    // Construct the request for the Dataplex API
-    const request = {
-      // The name of the project and location to search within
-      name: parent,
-      query: aspectQuery,
-      pageSize: 999, // Limit the number of results returned
-      pageToken: '',
-    };
+    // We fetch:
+    // 1. Search-based aspects (finds global/system aspects)
+    // 2. Local aspect types (finds user-defined aspects in the project)
+    // 3. Projects list
+    // 4. Local config data
+    const aspectQuery = `type=projects/dataplex-types/locations/global/entryTypes/aspecttype`;
 
-
-    let projects = aspects = [];
+    let aspects = [];
+    let projects = [];
     let configData = {};
+
     try {
-      const [aspectsList, projectList, currentProject, defaultConfigData] = await Promise.all([
-        dataplexClientv1.searchEntries(request, { autoPaginate: false }),
-        resourceManagerClientv1.searchProjects({ pageSize: 2000 }, { autoPaginate: false }),
+      const [searchRes, localAspectsRes, projectListRes, currentProjectRes, defaultConfigData] = await Promise.all([
+        dataplexClientv1.searchEntries({ name: parent, query: aspectQuery, pageSize: 500 }),
+        dataplexClientv1.listAspectTypes({ parent }),
+        resourceManagerClientv1.searchProjects({ pageSize: 100 }),
         resourceManagerClientv1.getProject({ name: `projects/${projectId}` }),
-        fs.readFile(dataFilePath, 'utf8') || {}
+        fs.readFile(dataFilePath, 'utf8').catch(() => '{}')
       ]);
-      aspects = aspectsList[0] || [];
-      let p = projectList[0] ? projectList[0].filter(pr => pr.projectId !== projectId) : [];
-      projects = [currentProject[0], ...p];
+
+      const searchAspects = searchRes[0] || [];
+      const localAspectTypes = localAspectsRes[0] || [];
+
+      // Merge search aspects
+      aspects = [...searchAspects];
+
+      // Convert local AspectTypes to the entry format expected by the frontend
+      localAspectTypes.forEach(at => {
+        // Check if already in search aspects (by name/urn)
+        const exists = aspects.some(a => a.dataplexEntry.name === at.name);
+        if (!exists) {
+          aspects.push({
+            dataplexEntry: {
+              name: at.name,
+              fullyQualifiedName: at.name,
+              entrySource: {
+                displayName: at.displayName || at.name.split('/').pop(),
+                resource: at.name
+              },
+              entryType: 'aspectType'
+            }
+          });
+        }
+      });
+
+      let pList = projectListRes[0] ? projectListRes[0].filter(pr => pr.projectId !== projectId) : [];
+      projects = [currentProjectRes[0], ...pList];
       configData = defaultConfigData ? JSON.parse(defaultConfigData) : {};
     } catch (err) {
-      console.error('Error listing projects for app config:', err);
+      console.error('Error fetching data for app-configs:', err.message);
     }
 
     const reduceAspect = ({ name, fullyQualifiedName, entrySource, entryType }) => ({ name, fullyQualifiedName, entrySource, entryType });
@@ -1727,8 +1745,8 @@ app.get('/api/v1/app-configs', async (req, res) => {
     res.json(configs);
 
   } catch (error) {
-    console.error('Error listing configs:', error);
-    res.status(401).json({ message: 'An error occurred while generating app configs.', details: error.message });
+    console.error('Error generating app configs:', error);
+    res.status(500).json({ success: false, message: 'Failed to generate app configs' });
   }
 });
 
