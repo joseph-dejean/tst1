@@ -514,6 +514,17 @@ app.post('/api/v1/chat', async (req, res) => {
 
   } catch (err) {
     console.error("Conversational Analytics API Error:", err);
+
+    // Decode the actual API error message from buffer
+    if (err.response && err.response.data) {
+      try {
+        const errorMsg = Buffer.from(err.response.data).toString('utf8');
+        console.error("FULL API ERROR MESSAGE:", errorMsg);
+      } catch (decodeErr) {
+        console.error("Could not decode error buffer:", decodeErr);
+      }
+    }
+
     res.status(500).json({
       error: "Failed to generate response from Conversational Analytics API.",
       details: err.message
