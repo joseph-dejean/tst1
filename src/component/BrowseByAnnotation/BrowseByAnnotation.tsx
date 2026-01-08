@@ -80,19 +80,19 @@ const BrowseByAnnotation = () => {
           ...subItem,
           fieldValues: results[index]?.results?.totalSize ?? 0,
         }));
-        
-        setDynamicAnnotationsData((prevData:any) =>
-          prevData.map((annotation:any) =>
+
+        setDynamicAnnotationsData((prevData: any) =>
+          prevData.map((annotation: any) =>
             annotation.title === item.title
               ? { ...annotation, subItems: updatedSubItems, countsFetched: true }
               : annotation
           )
         );
 
-        setSelectedItem((prevItem: any) => ({ 
-            ...prevItem, 
-            subItems: updatedSubItems, 
-            countsFetched: true 
+        setSelectedItem((prevItem: any) => ({
+          ...prevItem,
+          subItems: updatedSubItems,
+          countsFetched: true
         }));
 
       } catch (error) {
@@ -106,25 +106,25 @@ const BrowseByAnnotation = () => {
 
   }, [selectedItem, selectedSubItem, dispatch, id_token]);
 
-  useEffect(()=> {
-    if(user?.appConfig && user?.appConfig?.browseByAspectTypes){
+  useEffect(() => {
+    if (user?.appConfig && user?.appConfig?.browseByAspectTypes) {
       let fullAspectList = user?.appConfig?.aspects || [];
-      let aspectList:any = user?.appConfig?.browseByAspectTypes;
-      let generatedData:any[] = [];
-      if(!aspectList || Object.keys(aspectList).length === 0){
+      let aspectList: any = user?.appConfig?.browseByAspectTypes;
+      let generatedData: any[] = [];
+      if (!aspectList || Object.keys(aspectList).length === 0) {
         console.log('No aspect types configured for browsing.');
         setDynamicAnnotationsData([]);
-      }else{
-        Object.keys(aspectList).forEach((a:string)=>{
-          let aspectInfo = fullAspectList.find((fa:any) => fa.dataplexEntry.name === a);
-          let subItems = aspectList[a].map((f:string) => {
+      } else {
+        Object.keys(aspectList).forEach((a: string) => {
+          let aspectInfo = fullAspectList.find((fa: any) => fa.dataplexEntry.name === a);
+          let subItems = aspectList[a].map((f: string) => {
             return { title: f, fieldValues: 0, assets: 0 };
           });
           generatedData.push({
             title: aspectInfo?.dataplexEntry.entrySource.displayName || (aspectInfo?.dataplexEntry.name ? aspectInfo.dataplexEntry.name.split('/').pop() : 'Unknown Aspect'),
             fieldValues: subItems.length || 0,
             assets: 0,
-            name:a,
+            name: a,
             subItems: subItems
           })
         });
@@ -132,7 +132,7 @@ const BrowseByAnnotation = () => {
       }
 
       setLoader(false);
-      
+
       // setBrowseByAspectType(annotationsData);
 
       // let q = `name=${n.join('|')}`;
@@ -155,12 +155,12 @@ const BrowseByAnnotation = () => {
       // });
 
     }
-  }, []);
+  }, [user?.appConfig]);
 
-  const handleItemClick = (item:any) => {
+  const handleItemClick = (item: any) => {
     setSelectedItem(item);
   };
-  const handleSubItemClick = (subItem:any) => {
+  const handleSubItemClick = (subItem: any) => {
     setSelectedSubItem(subItem);
   };
 
@@ -180,25 +180,25 @@ const BrowseByAnnotation = () => {
           onItemClick={handleItemClick}
           selectedSubItem={selectedSubItem}
           onSubItemClick={handleSubItemClick}
-          annotationsData={dynamicAnnotationsData} 
+          annotationsData={dynamicAnnotationsData}
         />
       </Box>
     ) : (<Box sx={{ display: 'flex', height: '85vh', width: '100%', backgroundColor: '#F8FAFD', justifyContent: 'center', alignContent: 'center', alignItems: 'center' }}>
-          <Typography 
-            sx={{ 
-              margin: 'auto',
-              fontSize: '16px',
-              fontWeight: 500,
-              color: '#575757',
-              fontFamily: '"Google Sans Text", sans-serif' 
-          }}>
-            No Aspects for browse by experience selected
-          </Typography>
-        </Box>
-    )
-  ):(<Box sx={{ display: 'flex', height: '100vh', width: '100%', backgroundColor: '#F8FAFD' }}>
-      <CircularProgress sx={{ margin: 'auto' }} />
+      <Typography
+        sx={{
+          margin: 'auto',
+          fontSize: '16px',
+          fontWeight: 500,
+          color: '#575757',
+          fontFamily: '"Google Sans Text", sans-serif'
+        }}>
+        No Aspects for browse by experience selected
+      </Typography>
     </Box>
+    )
+  ) : (<Box sx={{ display: 'flex', height: '100vh', width: '100%', backgroundColor: '#F8FAFD' }}>
+    <CircularProgress sx={{ margin: 'auto' }} />
+  </Box>
   );
 };
 

@@ -419,33 +419,37 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
     items: [],
     defaultExpanded: false,
   };
-  if (annotations && user?.appConfig && user?.appConfig.aspects && Array.isArray(user?.appConfig.aspects)) {
-    annotations.items = user?.appConfig.aspects.map((aspect: any) => ({
-      name: aspect.dataplexEntry.entrySource.displayName || (aspect.dataplexEntry.name ? aspect.dataplexEntry.name.split('/').pop() : ''),
-      type: "aspectType",
-      data: aspect.dataplexEntry
-    }));
-  }
-  if (projects && user?.appConfig && user?.appConfig.projects && Array.isArray(user?.appConfig.projects)) {
-    let plist: any = projectsLoaded ? projectsList : user?.appConfig.projects;
-    let p: any = plist.map((project: any) => ({
-      name: project.projectId,
-      type: "project",
-      data: {}
-    }));
-
-    projects.items = [
-      ...p,
-      {
-        name: 'Others',
-        type: "project",
-        data: {}
-      }
-    ];
-  }
-
-
   const [filterData, setFilterData] = useState<any[]>([annotations, assets, products, projects]);
+
+  useEffect(() => {
+    if (user?.appConfig) {
+      if (user.appConfig.aspects && Array.isArray(user.appConfig.aspects)) {
+        annotations.items = user.appConfig.aspects.map((aspect: any) => ({
+          name: aspect.dataplexEntry.entrySource.displayName || (aspect.dataplexEntry.name ? aspect.dataplexEntry.name.split('/').pop() : ''),
+          type: "aspectType",
+          data: aspect.dataplexEntry
+        }));
+      }
+
+      let pItems = [];
+      if (user.appConfig.projects && Array.isArray(user.appConfig.projects)) {
+        let plist: any = projectsLoaded ? projectsList : user.appConfig.projects;
+        pItems = plist.map((project: any) => ({
+          name: project.projectId,
+          type: "project",
+          data: {}
+        }));
+        pItems.push({ name: 'Others', type: "project", data: {} });
+      }
+
+      setFilterData([
+        { ...annotations },
+        { ...assets },
+        { ...products },
+        { ...projects, items: pItems }
+      ]);
+    }
+  }, [user?.appConfig, projectsLoaded, projectsList]);
 
   const [showSubAnnotationsPanel, setShowSubAnnotationsPanel] = useState(false);
   const [selectedAnnotationForSubPanel, setSelectedAnnotationForSubPanel] = useState<string>('');
@@ -922,7 +926,7 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
                   (filter.title === 'Assets' || filter.title === 'Products' ?
                     // Sort assets and products to show selected items first
                     filter.items :
-                    filter.items.slice(0, 10)
+                    filter.items.slice(0, 20)
                   ).map((item: any) => (
                     <div key={`${filter.title}-${item.name}`} style={{
                       display: 'flex',

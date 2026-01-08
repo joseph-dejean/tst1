@@ -1692,9 +1692,11 @@ app.get('/api/v1/app-configs', async (req, res) => {
     let configData = {};
 
     try {
-      const [searchRes, localAspectsRes, projectListRes, currentProjectRes, defaultConfigData] = await Promise.all([
-        dataplexClientv1.searchEntries({ name: parent, query: aspectQuery, pageSize: 500 }),
+      const globalParent = `projects/${projectId}/locations/global`;
+      const [searchRes, localAspectsRes, globalAspectsRes, projectListRes, currentProjectRes, defaultConfigData] = await Promise.all([
+        dataplexClientv1.searchEntries({ name: parent, query: 'type=aspecttype', pageSize: 500 }),
         dataplexClientv1.listAspectTypes({ parent }),
+        dataplexClientv1.listAspectTypes({ parent: globalParent }).catch(() => [[]]),
         resourceManagerClientv1.searchProjects({ pageSize: 100 }),
         resourceManagerClientv1.getProject({ name: `projects/${projectId}` }),
         fs.readFile(dataFilePath, 'utf8').catch(() => '{}')
@@ -1702,12 +1704,15 @@ app.get('/api/v1/app-configs', async (req, res) => {
 
       const searchAspects = searchRes[0] || [];
       const localAspectTypes = localAspectsRes[0] || [];
+      const globalAspectTypes = globalAspectsRes[0] || [];
 
-      // Merge search aspects
+      // Merge results
       aspects = [...searchAspects];
 
+      const allLocalAspects = [...localAspectTypes, ...globalAspectTypes];
+
       // Convert local AspectTypes to the entry format expected by the frontend
-      localAspectTypes.forEach(at => {
+      allLocalAspects.forEach(at => {
         // Check if already in search aspects (by name/urn)
         const exists = aspects.some(a => a.dataplexEntry.name === at.name);
         if (!exists) {
