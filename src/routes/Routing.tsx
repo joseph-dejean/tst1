@@ -21,14 +21,11 @@ import { ProtectedRoute } from '../auth/ProtectedRoute';
 import BrowseByAnnotation from '../component/BrowseByAnnotation/BrowseByAnnotation';
 import SessionExpirationWrapper from '../component/Auth/SessionExpirationWrapper';
 import UserGuide from '../component/Guide/UserGuide';
-<<<<<<< HEAD
 import DataProductPage from '../component/DataProduct/DataProductPage';
 import DataProductManager from '../component/DataProduct/DataProductManager';
 import PermissionsPanel from '../component/AdminPanel/PermissionsPanel';
 import AccessRequestsDashboard from '../component/AccessRequests/AccessRequestsDashboard';
-=======
 import Glossaries from '../component/Glossaries/Glossaries';
->>>>>>> upstream/main
 
 const Routing = () => {
   // state to hold the user object
@@ -207,17 +204,13 @@ const Routing = () => {
           </ProtectedRoute>
         }
       />
-<<<<<<< HEAD
-      <Route
-=======
-
       <Route
         path="/glossaries"
         element={
           <ProtectedRoute>
             <SessionExpirationWrapper>
               <>
-                <Navbar searchBar={true}/>
+                <Navbar searchBar={true} />
                 <Glossaries />
               </>
             </SessionExpirationWrapper>
@@ -225,8 +218,7 @@ const Routing = () => {
         }
       />
 
-     <Route
->>>>>>> upstream/main
+      <Route
         path="/guide"
         element={
           <ProtectedRoute>

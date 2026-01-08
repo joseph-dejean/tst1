@@ -394,7 +394,7 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange, isGlos
     }
   };
 
-  const handleAccordionChange = (section: string) => (event: React.SyntheticEvent, isExpanded: boolean) => {
+  const handleAccordionChange = (section: string) => (_: React.SyntheticEvent, isExpanded: boolean) => {
     setExpandedSections(prev => ({ ...prev, [section]: isExpanded }));
   };
 
@@ -737,8 +737,8 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange, isGlos
           onClose={handleCloseMultiSelect}
           filterType={currentFilterType}
           options={filterData.find((f: any) => f.title === currentFilterType)?.items.map((item: any) => item.name) || []}
-          selectedItems={selectedFilters.filter(f => f.type === (filterData.find((fd: any) => fd.title === currentFilterType)?.items[0]?.type)).map(f => f.name)}
-          onSelectionChange={handleMultiSelectChange}
+          value={selectedFilters.filter(f => f.type === (filterData.find((fd: any) => fd.title === currentFilterType)?.items[0]?.type)).map(f => f.name)}
+          onChange={handleMultiSelectChange}
           position={multiselectPosition}
         />
       )}
@@ -750,10 +750,10 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange, isGlos
           annotationName={selectedAnnotationForSubPanel}
           subAnnotations={subAnnotationData}
           selectedSubAnnotations={selectedSubAnnotations}
-          onSelectionChange={handleSubAnnotationsChange}
-          onApply={handleSubAnnotationsApply}
+          subAnnotationsloader={!subAnnotationsloaded}
+          onSubAnnotationsChange={handleSubAnnotationsChange}
+          onSubAnnotationsApply={handleSubAnnotationsApply}
           clickPosition={clickPosition}
-          loaded={subAnnotationsloaded}
         />
       )}
     </>
