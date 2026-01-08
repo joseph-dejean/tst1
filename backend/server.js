@@ -85,8 +85,8 @@ const getOrCreateDataAgent = async (tableReferences, accessToken, systemInstruct
       description: `Data agent for ${tableReferences.length} table(s)`,
       data_analytics_agent: {
         published_context: {
-          datasource_references: bigqueryDataSource,
-          system_instruction: systemInstruction
+          datasourceReferences: bigqueryDataSource,
+          systemInstruction: systemInstruction
         }
       }
     };
@@ -377,9 +377,9 @@ app.post('/api/v1/chat', async (req, res) => {
       chatPayload = {
         parent: `projects/${projectId_env}/locations/${location}`,
         messages: messages,
-        inline_context: {
-          datasource_references: bigqueryDataSource,
-          system_instruction: systemInstruction
+        inlineContext: {
+          datasourceReferences: bigqueryDataSource,
+          systemInstruction: systemInstruction
         }
       };
     }
