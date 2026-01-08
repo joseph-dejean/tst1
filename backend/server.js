@@ -71,7 +71,7 @@ const getOrCreateDataAgent = async (tableReferences, accessToken, systemInstruct
     }
 
     const projectId_env = 'dataplex-ui'; // Hardcoded project ID
-    const location = process.env.GCP_LOCATION || 'global';
+    const location = process.env.GCP_LOCATION || 'us-central1';
     const agentId = `agent_${tableId.substring(0, 40)}`;
 
     const bigqueryDataSource = {
@@ -264,7 +264,7 @@ app.post('/api/v1/chat', async (req, res) => {
 
     // Use Conversational Analytics API with inline context for BigQuery tables
     const projectId_env = 'dataplex-ui'; // Hardcoded project ID
-    const location = process.env.GCP_LOCATION || 'global';
+    const location = process.env.GCP_LOCATION || 'us-central1';
     const chatUrl = `https://geminidataanalytics.googleapis.com/v1beta/projects/${projectId_env}/locations/${location}:chat`;
 
     // Build BigQuery data source reference
