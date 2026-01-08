@@ -12,7 +12,7 @@ import Avatar from '@mui/material/Avatar';
 import Tooltip from '@mui/material/Tooltip';
 import MenuItem from '@mui/material/MenuItem';
 import './Navbar.css'
-import { HelpOutline, MenuBook, Home, Person, AccountCircle, Logout, Menu as MenuIcon, Security, Storage } from '@mui/icons-material';
+import { HelpOutline, MenuBook, Home, Person, AccountCircle, Logout, Menu as MenuIcon, Security, Storage, AdminPanelSettings } from '@mui/icons-material';
 import SearchBar from '../SearchBar/SearchBar';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch } from '../../app/store';
@@ -321,6 +321,12 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
                   <Typography sx={{ fontSize: "0.875rem", fontWeight: 500 }}>Admin Panel</Typography>
                 </Box>
               </MenuItem> */}
+              <MenuItem onClick={() => { handleCloseNavMenu(); navigate('/data-products'); }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: "0.5rem" }}>
+                  <Storage sx={{ fontSize: "1.25rem", color: "#5F6367" }} />
+                  <Typography sx={{ fontSize: "0.875rem", fontWeight: 500 }}>Data Products</Typography>
+                </Box>
+              </MenuItem>
               <MenuItem onClick={() => { handleCloseNavMenu(); navigate('/guide') }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: "0.5rem" }}>
                   <MenuBook sx={{ fontSize: "1.25rem", color: "#5F6367" }} />
@@ -384,6 +390,38 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
                   }}
                 >
                   <Storage sx={{
+                    fontSize: "1.5rem",
+                    color: "#5F6368"
+                  }} />
+                </IconButton>
+              </Tooltip>
+
+              <Tooltip title="Access Requests">
+                <IconButton
+                  onClick={() => navigate('/access-requests')}
+                  sx={{
+                    p: 0,
+                    width: "1.5rem", // 24px
+                    height: "1.5rem" // 24px
+                  }}
+                >
+                  <Security sx={{
+                    fontSize: "1.5rem",
+                    color: "#5F6368"
+                  }} />
+                </IconButton>
+              </Tooltip>
+
+              <Tooltip title="Admin Panel">
+                <IconButton
+                  onClick={() => navigate('/admin-panel')}
+                  sx={{
+                    p: 0,
+                    width: "1.5rem", // 24px
+                    height: "1.5rem" // 24px
+                  }}
+                >
+                  <AdminPanelSettings sx={{
                     fontSize: "1.5rem",
                     color: "#5F6368"
                   }} />
@@ -483,6 +521,29 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
                   </Box>
                 </MenuItem>
               ))}
+              <MenuItem key="DataProducts" onClick={() => {
+                handleCloseUserMenu();
+                navigate('/data-products');
+              }}>
+                <Box sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: "0.25rem"
+                }}>
+                  <Storage sx={{
+                    fontSize: "1.25rem", // 20px
+                    color: "#5F6367"
+                  }} />
+                  <Typography sx={{
+                    textAlign: 'center',
+                    fontSize: "0.875rem", // 14px
+                    fontWeight: 500,
+                    lineHeight: 1.43
+                  }}>
+                    Data Products
+                  </Typography>
+                </Box>
+              </MenuItem>
               {(user?.hasRole || user?.roles?.includes('admin') || user?.roles?.includes('manager')) && (
                 <MenuItem key="AccessRequests" onClick={() => {
                   handleCloseUserMenu();
