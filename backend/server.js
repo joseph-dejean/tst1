@@ -126,6 +126,80 @@ app.post('/api/v1/dataproducts', async (req, res) => {
   }
 });
 
+// --- IAM MANAGEMENT (PROXY) ---
+
+app.post('/api/v1/iam/get', async (req, res) => {
+  try {
+    const { resourceName } = req.body; // e.g. projects/PROJECT/locations/LOC/lakes/LAKE
+    const accessToken = req.headers.authorization?.split(' ')[1];
+
+    if (!resourceName || !accessToken) {
+      return res.status(400).json({ success: false, error: "Missing Resource Name or Access Token" });
+    }
+
+    const url = `https://dataplex.googleapis.com/v1/${resourceName}:getIamPolicy`;
+
+    const response = await axios.post(url, {}, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    res.json({ success: true, data: response.data });
+  } catch (error) {
+    console.error("Error fetching IAM Policy:", error.message);
+    res.status(500).json({ success: false, error: "Failed to fetch IAM Policy", details: error.response?.data });
+  }
+});
+
+app.post('/api/v1/iam/set', async (req, res) => {
+  try {
+    const { resourceName, policy } = req.body;
+    const accessToken = req.headers.authorization?.split(' ')[1];
+
+    if (!resourceName || !policy || !accessToken) {
+      return res.status(400).json({ success: false, error: "Missing required fields" });
+    }
+
+    const url = `https://dataplex.googleapis.com/v1/${resourceName}:setIamPolicy`;
+
+    const response = await axios.post(url, { policy }, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    res.json({ success: true, data: response.data });
+  } catch (error) {
+    console.error("Error setting IAM Policy:", error.message);
+    res.status(500).json({ success: false, error: "Failed to set IAM Policy", details: error.response?.data });
+  }
+});
+
+// --- RESOURCES FOR PERMISSIONS (Lakes/Zones) ---
+app.get('/api/v1/iam/resources', async (req, res) => {
+  try {
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const location = process.env.GCP_LOCATION || 'us-central1';
+    const accessToken = req.headers.authorization?.split(' ')[1];
+
+    const url = `https://dataplex.googleapis.com/v1/projects/${projectId}/locations/${location}/lakes`;
+
+    const response = await axios.get(url, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+
+    res.json({ success: true, data: response.data.lakes || [] });
+  } catch (error) {
+    console.error("Error listing Lakes for IAM:", error.message);
+    res.status(500).json({ success: false, error: "Failed to fetch resources" });
+  }
+});
+
 // --- START DATA AGENT MANAGEMENT ---
 // Simple in-memory cache for data agents (key: table identifier, value: agent resource name)
 const dataAgentCache = new Map();

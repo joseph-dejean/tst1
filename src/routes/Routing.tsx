@@ -23,6 +23,7 @@ import SessionExpirationWrapper from '../component/Auth/SessionExpirationWrapper
 import UserGuide from '../component/Guide/UserGuide';
 import DataProductPage from '../component/DataProduct/DataProductPage';
 import DataProductManager from '../component/DataProduct/DataProductManager';
+import PermissionsPanel from '../component/AdminPanel/PermissionsPanel';
 import AccessRequestsDashboard from '../component/AccessRequests/AccessRequestsDashboard';
 
 const Routing = () => {
@@ -137,6 +138,19 @@ const Routing = () => {
                   <Navbar searchBar={true} />
                 </div>
                 <ViewDetails />
+              </>
+            </SessionExpirationWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin-permissions"
+        element={
+          <ProtectedRoute>
+            <SessionExpirationWrapper>
+              <>
+                <Navbar searchBar={true} />
+                <PermissionsPanel />
               </>
             </SessionExpirationWrapper>
           </ProtectedRoute>
