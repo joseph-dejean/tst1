@@ -86,7 +86,11 @@ const getOrCreateDataAgent = async (tableReferences, accessToken, systemInstruct
       data_analytics_agent: {
         published_context: {
           datasourceReferences: bigqueryDataSource,
-          systemInstruction: systemInstruction
+          systemInstruction: {
+            parts: [
+              { text: systemInstruction }
+            ]
+          }
         }
       }
     };
@@ -353,7 +357,9 @@ app.post('/api/v1/chat', async (req, res) => {
     }
     messages.push({
       userMessage: {
-        text: message
+        parts: [
+          { text: message }
+        ]
       }
     });
 
@@ -379,7 +385,11 @@ app.post('/api/v1/chat', async (req, res) => {
         messages: messages,
         inlineContext: {
           datasourceReferences: bigqueryDataSource,
-          systemInstruction: systemInstruction
+          systemInstruction: {
+            parts: [
+              { text: systemInstruction }
+            ]
+          }
         }
       };
     }
@@ -415,10 +425,10 @@ app.post('/api/v1/chat', async (req, res) => {
       // Handle trailing commas
       if (cleanBuffer.endsWith(',]')) cleanBuffer = cleanBuffer.slice(0, -2) + ']';
 
-      const messages = JSON.parse(cleanBuffer);
+      const parsedMessages = JSON.parse(cleanBuffer);
 
-      if (Array.isArray(messages)) {
-        messages.forEach((msg, index) => {
+      if (Array.isArray(parsedMessages)) {
+        parsedMessages.forEach((msg, index) => {
           if (msg.systemMessage) {
             console.log(`DEBUG_MSG_${index}_KEYS:`, Object.keys(msg.systemMessage)); // Log what keys exist (e.g. text, chart, data?)
 
