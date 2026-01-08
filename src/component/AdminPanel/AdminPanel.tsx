@@ -316,37 +316,24 @@ const AdminPanel = () => {
           </Typography>
         </Box>
 
-        {/* Search Sections */}
-        <Box sx={{
-          display: 'flex',
-          flex: 1,
-          flexDirection: { xs: 'column', lg: 'row' },
-          gap: { xs: '40px', lg: '20px' }
-        }}>
+        {/* Sections Grid */}
+        <Box sx={{ px: { xs: 0, sm: '160px' }, maxWidth: '1400px' }}>
           {/* Default Search Section */}
-          <Box sx={{ flex: 1 }}>
+          <Box sx={{ mb: 6 }}>
             <Typography
               sx={{
                 fontWeight: 500,
-                fontStyle: 'normal',
                 fontSize: '18px',
-                lineHeight: '24px',
-                letterSpacing: '0px',
                 color: '#575757',
-                marginBottom: '20px',
-                marginLeft: { xs: '0px', sm: '160px' },
-                textAlign: { xs: 'center', sm: 'left' }
+                mb: 3
               }}
             >
               Default Search
             </Typography>
-
             <Box sx={{
-              display: 'flex',
-              gap: '40px',
-              flexWrap: 'wrap',
-              marginLeft: { xs: '0px', sm: '160px' },
-              justifyContent: { xs: 'center', sm: 'flex-start' }
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
+              gap: 4
             }}>
               <MultiSelect
                 label="Products"
@@ -355,39 +342,36 @@ const AdminPanel = () => {
                 value={products}
                 onChange={setProducts}
                 editOptions={productEditOptions}
-                //onSubChange={setAssets}
-                css={{
-                  width: '100%',
-                  maxWidth: '552px'
-                }}
+                onEditSelectionsChange={setSelectedAssetsByProduct}
+                css={{ width: '100%' }}
+              />
+              <MultiSelect
+                label="Assets"
+                placeholder="Select Assets"
+                options={Object.values(productEditOptions).flat()}
+                value={assets}
+                onChange={setAssets}
+                css={{ width: '100%' }}
               />
             </Box>
           </Box>
 
           {/* Default Browse Section */}
-          <Box sx={{ flex: 1 }}>
+          <Box sx={{ mb: 6 }}>
             <Typography
               sx={{
                 fontWeight: 500,
-                fontStyle: 'normal',
                 fontSize: '18px',
-                lineHeight: '24px',
-                letterSpacing: '0px',
                 color: '#575757',
-                marginBottom: '20px',
-                marginRight: { xs: '0px', sm: '160px' },
-                textAlign: { xs: 'center', sm: 'left' }
+                mb: 3
               }}
             >
               Default Browse
             </Typography>
-
             <Box sx={{
-              display: 'flex',
-              gap: '40px',
-              flexWrap: 'wrap',
-              marginRight: { xs: '0px', sm: '160px' },
-              justifyContent: { xs: 'center', sm: 'flex-start' }
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
+              gap: 4
             }}>
               <MultiSelect
                 label="Aspect Type"
@@ -396,11 +380,16 @@ const AdminPanel = () => {
                 value={aspectType}
                 onChange={setAspectType}
                 editOptions={aspectTypeEditOptions}
-                //onSubChange={setAspectName}
-                css={{
-                  width: '100%',
-                  maxWidth: '552px'
-                }}
+                onEditSelectionsChange={setSelectedAspectNamesByType}
+                css={{ width: '100%' }}
+              />
+              <MultiSelect
+                label="Aspect Name"
+                placeholder="Select Aspect Name"
+                options={Array.isArray(aspectTypeOptions) ? aspectTypeOptions : []}
+                value={aspectName}
+                onChange={setAspectName}
+                css={{ width: '100%' }}
               />
             </Box>
           </Box>

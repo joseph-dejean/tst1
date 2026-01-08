@@ -56,6 +56,7 @@ const PermissionsPanel: React.FC = () => {
     const [openAdd, setOpenAdd] = useState(false);
     const [newMember, setNewMember] = useState('');
     const [newRole, setNewRole] = useState('roles/dataplex.viewer');
+    const [memberType, setMemberType] = useState<'user' | 'group' | 'serviceAccount'>('user');
 
     const dataplexRoles = [
         { value: 'roles/dataplex.viewer', label: 'Dataplex Viewer' },
@@ -124,9 +125,9 @@ const PermissionsPanel: React.FC = () => {
     const handleAddMember = () => {
         if (!policy || !newMember) return;
 
-        const memberToAdd = newMember.startsWith('user:') || newMember.startsWith('serviceAccount:') || newMember.startsWith('group:')
+        const memberToAdd = newMember.includes(':')
             ? newMember
-            : `user:${newMember}`;
+            : `${memberType}:${newMember}`;
 
         const newPolicy = JSON.parse(JSON.stringify(policy)) as IAMPolicy;
         let binding = newPolicy.bindings.find(b => b.role === newRole);
@@ -277,12 +278,25 @@ const PermissionsPanel: React.FC = () => {
                 <DialogTitle>Add New Access Binding</DialogTitle>
                 <DialogContent>
                     <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <FormControl fullWidth>
+                            <InputLabel>Member Type</InputLabel>
+                            <Select
+                                value={memberType}
+                                label="Member Type"
+                                onChange={(e) => setMemberType(e.target.value as any)}
+                            >
+                                <MenuItem value="user">User</MenuItem>
+                                <MenuItem value="group">Google Group</MenuItem>
+                                <MenuItem value="serviceAccount">Service Account</MenuItem>
+                            </Select>
+                        </FormControl>
                         <TextField
-                            label="User Email (e.g. user@test.com)"
+                            label={memberType === 'group' ? "Group Email" : memberType === 'serviceAccount' ? "Service Account Email" : "User Email"}
                             fullWidth
                             value={newMember}
                             onChange={(e) => setNewMember(e.target.value)}
                             variant="outlined"
+                            placeholder={memberType === 'group' ? "my-group@googlegroups.com" : "user@company.com"}
                         />
                         <FormControl fullWidth>
                             <InputLabel>Dataplex Role</InputLabel>
