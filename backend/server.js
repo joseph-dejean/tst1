@@ -419,33 +419,33 @@ app.post('/api/v1/chat', async (req, res) => {
         // For Data Products, include information about all tables
         prompt = `
           You are a helpful Data Steward assistant for Dataplex.
-          
+
           The user is asking about a Data Product: ${context.name}
           Description: ${context.description}
-          
+
           This Data Product contains the following tables:
           ${context.tables.map((table, idx) => `
             ${idx + 1}. ${table.name} (${table.type})
                - Fully Qualified Name: ${table.fullyQualifiedName}
                - Description: ${table.description || 'No description'}
           `).join('\n')}
-          
+
           User Question: ${message}
-          
+
           Answer the user's question about this Data Product and its tables. Keep it concise.
         `;
       } else {
         // For regular tables
         prompt = `
           You are a helpful Data Steward assistant for Dataplex.
-          
+
           Here is the metadata for the dataset the user is looking at:
           Name: ${context.name}
           Description: ${context.description}
           Schema/Columns: ${JSON.stringify(context.schema || [])}
-          
+
           User Question: ${message}
-          
+
           Answer the user's question based strictly on the metadata provided above. Keep it concise.
         `;
       }
@@ -603,8 +603,7 @@ app.post('/api/v1/chat', async (req, res) => {
       // Ensure it's a valid list if it does not start with [
       if (cleanBuffer && !cleanBuffer.startsWith('[')) {
         // It might be multiple JSON objects concatenated or separated by newlines
-        // Regex to join } { into },{
-        cleanBuffer = `[${cleanBuffer.replace(/\}\s*\{/g, '},{')}]`;
+        // Regex to join } { into },{\n        cleanBuffer = `[${cleanBuffer.replace(/\}\s*\{/g, '},{')}]`;
       }
 
       // Handle trailing commas
@@ -645,8 +644,22 @@ app.post('/api/v1/chat', async (req, res) => {
                 const rows = result.data;
                 const columns = Object.keys(rows[0]);
 
-                // Generate Markdown Table
+                // Header
                 let tableMd = `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
+
+                // Rows (Limit to 5 to avoid spamming chat)
+                rows.slice(0, 5).forEach(row => {
+                  tableMd += `| ${values = columns.map(col => row[col]).join(' | ')} |\n`;
+                });
+                // Fix variable name in map
+
+                rows.slice(0, 5).forEach(row => {
+                  // Simple row rendering
+                  tableMd += `| ${columns.map(col => row[col]).join(' | ')} |\n`;
+                });
+
+                // Reset and do it cleanly
+                tableMd = `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
                 rows.slice(0, 5).forEach(row => {
                   const vals = columns.map(c => row[c]);
                   tableMd += `| ${vals.join(' | ')} |\n`;
@@ -686,19 +699,11 @@ app.post('/api/v1/chat', async (req, res) => {
 
     // Send structured response
     console.log('Sending response to frontend:', { replyLength: fullResponseText.length, hasChart: !!finalChart });
-    let finalData = null;
-    try {
-      const messages = JSON.parse(accumulatedJson && accumulatedJson.startsWith('[') ? accumulatedJson : `[${accumulatedJson.replace(/\}\s*\{/g, '},{')}]`);
-      const dataMsg = messages.find(m => m.systemMessage?.data?.result);
-      if (dataMsg) finalData = dataMsg.systemMessage.data.result.data;
-    } catch (e) { }
-
     res.json({
       reply: fullResponseText,
       chart: finalChart,
       sql: finalSql,
-      data: finalData,
-      conversationHistory: []
+      conversationHistory: [] // Future: maintain history
     });
 
   } catch (err) {
