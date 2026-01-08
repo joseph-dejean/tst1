@@ -13,7 +13,85 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  chart?: any;
+  sql?: string;
+  data?: any[];
 }
+
+const DataTable: React.FC<{ data: any[] }> = ({ data }) => {
+  if (!data || data.length === 0) return null;
+  const columns = Object.keys(data[0]);
+
+  return (
+    <Box sx={{ mt: 2, overflowX: 'auto', border: '1px solid #DADCE0', borderRadius: '4px' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+        <thead>
+          <tr style={{ backgroundColor: '#F8FAFD' }}>
+            {columns.map(col => (
+              <th key={col} style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #DADCE0', fontWeight: 600 }}>{col}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {data.slice(0, 10).map((row, i) => (
+            <tr key={i}>
+              {columns.map(col => (
+                <td key={col} style={{ padding: '8px', borderBottom: '1px solid #F0F0F0' }}>{String(row[col])}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {data.length > 10 && (
+        <Typography variant="caption" sx={{ p: 1, display: 'block', color: '#575757', fontStyle: 'italic' }}>
+          Showing first 10 rows of {data.length}
+        </Typography>
+      )}
+    </Box>
+  );
+};
+
+const DataChart: React.FC<{ chart: any }> = ({ chart }) => {
+  if (!chart || !chart.data) return null;
+
+  const data = chart.data;
+  const labels = chart.columnLabels || [];
+  const chartType = chart.chartType || 'BAR';
+
+  if (chartType === 'BAR') {
+    const maxVal = Math.max(...data.map((d: any) => d.value ?? 0), 1);
+    return (
+      <Box sx={{ mt: 3, p: 2, border: '1px solid #DADCE0', borderRadius: '8px', backgroundColor: '#ffffff' }}>
+        <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>{chart.query?.instructions || 'Visual Analysis'}</Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+          {data.slice(0, 8).map((item: any, i: number) => (
+            <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography sx={{ width: '100px', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {item.label || labels[i] || `Item ${i + 1}`}
+              </Typography>
+              <Box sx={{ flex: 1, height: '24px', backgroundColor: '#F0F4F8', borderRadius: '4px', position: 'relative' }}>
+                <Box
+                  sx={{
+                    height: '100%',
+                    width: `${(item.value / maxVal) * 100}%`,
+                    backgroundColor: '#0E4DCA',
+                    borderRadius: '4px',
+                    transition: 'width 1s ease-in-out'
+                  }}
+                />
+              </Box>
+              <Typography sx={{ width: '40px', fontSize: '0.75rem', fontWeight: 600 }}>
+                {item.value}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      </Box>
+    );
+  }
+
+  return null;
+};
 
 const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
   const { user } = useAuth();
@@ -137,7 +215,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
       const assistantMsg: Message = {
         role: 'assistant',
         content: res.data.reply || 'No response received.',
-        timestamp: new Date()
+        timestamp: new Date(),
+        chart: res.data.chart,
+        sql: res.data.sql,
+        data: res.data.data
       };
       setMessages(prev => [...prev, assistantMsg]);
 
@@ -223,6 +304,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
                   <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
                     {msg.content}
                   </Typography>
+                  {msg.data && <DataTable data={msg.data} />}
+                  {msg.chart && <DataChart chart={msg.chart} />}
+                  {msg.sql && (
+                    <Box sx={{ mt: 2, p: 1, backgroundColor: '#f5f5f5', borderRadius: '4px', borderLeft: '4px solid #0E4DCA' }}>
+                      <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>Generated SQL:</Typography>
+                      <Typography variant="caption" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>{msg.sql}</Typography>
+                    </Box>
+                  )}
                   <Typography
                     variant="caption"
                     sx={{

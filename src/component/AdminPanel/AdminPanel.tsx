@@ -59,7 +59,7 @@ const AdminPanel = () => {
     message: string;
   }>({ type: 'success', message: '' });
   const [loading, setLoading] = useState(true);
-  const [aspectTypeOptions, setAspectTypeOptions] = useState<any>({});
+  const [aspectTypeOptions, setAspectTypeOptions] = useState<any[]>([]);
   const [aspectTypeEditOptions, setAspectTypeEditOptions] = useState<any>({});
   const [selectedAssetsByProduct, setSelectedAssetsByProduct] = useState<Record<string, any[]>>({});
   const [selectedAspectNamesByType, setSelectedAspectNamesByType] = useState<Record<string, string[]>>({});

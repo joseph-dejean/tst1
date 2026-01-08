@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import type { DataProduct } from '../../types/DataProduct';
 import SearchEntriesCard from '../SearchEntriesCard/SearchEntriesCard';
 import Api from '../../api/api';
+import ChatTab from '../ConversationalAnalytics/ChatTab';
 
 /**
  * Data Product Page Component
@@ -110,39 +111,48 @@ const DataProductPage: React.FC = () => {
         </Box>
 
         {/* Tables/Assets Section */}
-        <Card>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              Tables & Assets ({tables.length})
-            </Typography>
-            {isComingSoon ? (
-              <Box sx={{ p: 3, textAlign: 'center' }}>
-                <Typography variant="body1" color="text.secondary">
-                  This Data Product is coming soon. Tables and assets will be available here once the product is active.
-                </Typography>
-              </Box>
-            ) : tables.length === 0 ? (
-              <Box sx={{ p: 3, textAlign: 'center' }}>
-                <Typography variant="body1" color="text.secondary">
-                  No tables or assets are currently associated with this Data Product.
-                </Typography>
-              </Box>
-            ) : (
-              <Box>
-                {tables.map((table: any, index: number) => (
-                  <Box key={table?.name || index} sx={{ mb: 2 }}>
-                    <SearchEntriesCard
-                      entry={table}
-                      onDoubleClick={(entry: any) => {
-                        navigate('/view-details', { state: { entry } });
-                      }}
-                    />
-                  </Box>
-                ))}
-              </Box>
-            )}
-          </CardContent>
-        </Card>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '3fr 2fr' }, gap: 3 }}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Tables & Assets ({tables.length})
+              </Typography>
+              {isComingSoon ? (
+                <Box sx={{ p: 3, textAlign: 'center' }}>
+                  <Typography variant="body1" color="text.secondary">
+                    This Data Product is coming soon. Tables and assets will be available here once the product is active.
+                  </Typography>
+                </Box>
+              ) : tables.length === 0 ? (
+                <Box sx={{ p: 3, textAlign: 'center' }}>
+                  <Typography variant="body1" color="text.secondary">
+                    No tables or assets are currently associated with this Data Product.
+                  </Typography>
+                </Box>
+              ) : (
+                <Box>
+                  {tables.map((table: any, index: number) => (
+                    <Box key={table?.name || index} sx={{ mb: 2 }}>
+                      <SearchEntriesCard
+                        entry={table}
+                        onDoubleClick={(entry: any) => {
+                          navigate('/view-details', { state: { entry } });
+                        }}
+                      />
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Chat Section */}
+          <Card>
+            <CardContent>
+              <ChatTab entry={{ ...dataProduct, _isDataProduct: true, _dataProduct: { ...dataProduct, tables } }} />
+            </CardContent>
+          </Card>
+        </Box>
       </Box>
     </Box>
   );
