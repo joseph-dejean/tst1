@@ -228,8 +228,8 @@ const getOrCreateDataAgent = async (tableReferences, accessToken, systemInstruct
       return dataAgentCache.get(tableId);
     }
 
-    const projectId_env = process.env.GOOGLE_CLOUD_PROJECT_ID || 'dataplex-ui'; // Use env var
-    const location = process.env.GCP_LOCATION || 'us-central1';
+    const projectId_env = 'dataplex-ui'; // Hardcoded project ID
+    const location = process.env.GCP_LOCATION || 'global';
     const agentId = `agent_${tableId.substring(0, 40)}`;
 
     const bigqueryDataSource = {
@@ -371,7 +371,7 @@ app.post('/api/v1/chat', async (req, res) => {
     if (!projectId || !datasetId || !tableId) {
       // Fallback: Use Vertex AI for non-BigQuery tables or when FQN is not available
       const vertex_ai = new VertexAI({
-        project: process.env.GOOGLE_CLOUD_PROJECT_ID || 'dataplex-ui',
+        project: 'dataplex-ui', // Hardcoded project ID
         location: process.env.GCP_LOCATION || 'us-central1'
       });
       const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
@@ -421,8 +421,8 @@ app.post('/api/v1/chat', async (req, res) => {
     }
 
     // Use Conversational Analytics API with inline context for BigQuery tables
-    const projectId_env = process.env.GOOGLE_CLOUD_PROJECT_ID || 'dataplex-ui';
-    const location = process.env.GCP_LOCATION || 'us-central1';
+    const projectId_env = 'dataplex-ui'; // Hardcoded project ID
+    const location = process.env.GCP_LOCATION || 'global';
     const chatUrl = `https://geminidataanalytics.googleapis.com/v1beta/projects/${projectId_env}/locations/${location}:chat`;
 
     // Build BigQuery data source reference
@@ -483,7 +483,7 @@ app.post('/api/v1/chat', async (req, res) => {
     // If no valid table references found, fall back to Vertex AI
     if (tableReferences.length === 0) {
       const vertex_ai = new VertexAI({
-        project: process.env.GOOGLE_CLOUD_PROJECT_ID || 'dataplex-ui',
+        project: 'dataplex-ui', // Hardcoded project ID
         location: process.env.GCP_LOCATION || 'us-central1'
       });
       const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
