@@ -34,44 +34,7 @@ class CustomGoogleAuth extends GoogleAuth {
     return 'googleapis.com'; // default public cloud domain
   }
 }
-const searchEntries = async (dataplexClientv1, query, parent) => {
-  try {
-    let query = `fully_qualified_name=${fqn}`;
 
-    // Construct the request for the Dataplex API
-    const request = {
-      // The name of the project and location to search within
-      name: parent,
-      query: query,
-      pageSize: 1, // Limit the number of results returned
-    };
-
-    console.log('Performing Dataplex search with query:', query);
-
-    // Call the searchEntries method of the Dataplex client
-    const [response] = await dataplexClientv1.searchEntries(request);
-    console.log('Search response:', response);
-
-    return response;
-  } catch (error) {
-    throw new Error(error.message);
-  }
-};
-const getEntryByName = async (dataplexClientv1, entryName) => {
-  try {
-    if (!entryName) {
-      reject([null, 'FQN is not provided or incorrect']);
-    }
-    console.log('Found entry name calling getEntry:', entryName);
-
-    // The getEntry method returns an entry.
-    const [entry] = await dataplexClientv1.getEntry({ name: entryName, view: protos.google.cloud.dataplex.v1.EntryView.ALL });
-    return entry;
-
-  } catch (error) {
-    return [null, error.message];
-  }
-};
 
 const app = express();
 
@@ -265,8 +228,8 @@ const getOrCreateDataAgent = async (tableReferences, accessToken, systemInstruct
       return dataAgentCache.get(tableId);
     }
 
-    const projectId_env = 'dataplex-ui'; // Hardcoded project ID
-    const location = process.env.GCP_LOCATION || 'global';
+    const projectId_env = process.env.GOOGLE_CLOUD_PROJECT_ID || 'dataplex-ui'; // Use env var
+    const location = process.env.GCP_LOCATION || 'us-central1';
     const agentId = `agent_${tableId.substring(0, 40)}`;
 
     const bigqueryDataSource = {
@@ -408,7 +371,7 @@ app.post('/api/v1/chat', async (req, res) => {
     if (!projectId || !datasetId || !tableId) {
       // Fallback: Use Vertex AI for non-BigQuery tables or when FQN is not available
       const vertex_ai = new VertexAI({
-        project: 'dataplex-ui', // Hardcoded project ID
+        project: process.env.GOOGLE_CLOUD_PROJECT_ID || 'dataplex-ui',
         location: process.env.GCP_LOCATION || 'us-central1'
       });
       const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
@@ -419,33 +382,33 @@ app.post('/api/v1/chat', async (req, res) => {
         // For Data Products, include information about all tables
         prompt = `
           You are a helpful Data Steward assistant for Dataplex.
-
+          
           The user is asking about a Data Product: ${context.name}
           Description: ${context.description}
-
+          
           This Data Product contains the following tables:
           ${context.tables.map((table, idx) => `
             ${idx + 1}. ${table.name} (${table.type})
                - Fully Qualified Name: ${table.fullyQualifiedName}
                - Description: ${table.description || 'No description'}
           `).join('\n')}
-
+          
           User Question: ${message}
-
+          
           Answer the user's question about this Data Product and its tables. Keep it concise.
         `;
       } else {
         // For regular tables
         prompt = `
           You are a helpful Data Steward assistant for Dataplex.
-
+          
           Here is the metadata for the dataset the user is looking at:
           Name: ${context.name}
           Description: ${context.description}
           Schema/Columns: ${JSON.stringify(context.schema || [])}
-
+          
           User Question: ${message}
-
+          
           Answer the user's question based strictly on the metadata provided above. Keep it concise.
         `;
       }
@@ -458,8 +421,8 @@ app.post('/api/v1/chat', async (req, res) => {
     }
 
     // Use Conversational Analytics API with inline context for BigQuery tables
-    const projectId_env = 'dataplex-ui'; // Hardcoded project ID
-    const location = process.env.GCP_LOCATION || 'global';
+    const projectId_env = process.env.GOOGLE_CLOUD_PROJECT_ID || 'dataplex-ui';
+    const location = process.env.GCP_LOCATION || 'us-central1';
     const chatUrl = `https://geminidataanalytics.googleapis.com/v1beta/projects/${projectId_env}/locations/${location}:chat`;
 
     // Build BigQuery data source reference
@@ -520,7 +483,7 @@ app.post('/api/v1/chat', async (req, res) => {
     // If no valid table references found, fall back to Vertex AI
     if (tableReferences.length === 0) {
       const vertex_ai = new VertexAI({
-        project: 'dataplex-ui', // Hardcoded project ID
+        project: process.env.GOOGLE_CLOUD_PROJECT_ID || 'dataplex-ui',
         location: process.env.GCP_LOCATION || 'us-central1'
       });
       const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
@@ -603,7 +566,8 @@ app.post('/api/v1/chat', async (req, res) => {
       // Ensure it's a valid list if it does not start with [
       if (cleanBuffer && !cleanBuffer.startsWith('[')) {
         // It might be multiple JSON objects concatenated or separated by newlines
-        // Regex to join } { into },{\n        cleanBuffer = `[${cleanBuffer.replace(/\}\s*\{/g, '},{')}]`;
+        // Regex to join } { into },{
+        cleanBuffer = `[${cleanBuffer.replace(/\}\s*\{/g, '},{')}]`;
       }
 
       // Handle trailing commas
@@ -1533,283 +1497,6 @@ app.post('/api/v1/get-process-and-job-details', async (req, res) => {
   } catch (error) {
     console.error('Error searching for lineage links:', error);
     res.status(500).json({ message: 'An error occurred while fetching data lineage query.', details: error.message });
-  }
-});
-
-/**
- * POST /api/lineage-column-level
- * A protected endpoint to fetch data lineage for a specific resource.
- *
- * Request Body:
- * {
- * "fqn": "The fully qualified name of the target resource (e.g., //bigquery.googleapis.com/projects/p/datasets/d/tables/t)"
- * }
- */
-
-async function fetchAllLineage(dataplexLineageClientv1, parent, fqn, type, results = []) {
-  let param = {};
-  if (type === 'source') {
-    param = {
-      parent: parent,
-      source: {
-        fullyQualifiedName: fqn,
-      }
-    }
-  } else if (type === 'target') {
-    param = {
-      parent: parent,
-      target: {
-        fullyQualifiedName: fqn,
-      }
-    }
-  }
-  const response = await dataplexLineageClientv1.searchLinks(param);
-
-  results.children = [];
-  console.log(`Found ${response[0].length} ${type} links for FQN: ${fqn}`);
-
-  for (const child of response[0]) {
-    // Recursively fetch grandchildren
-    console.log(`Fetching lineage for child FQN: ${type === 'source' ? child.target.fullyQualifiedName : child.source.fullyQualifiedName}`);
-    const childWithChildren = await fetchAllLineage(dataplexLineageClientv1, parent, fqn, type, results);
-    results.children.push(childWithChildren);
-  }
-  return results;
-}
-
-function getAllLinks(node, result = []) {
-  if (!node) return result;
-
-  if (node.name) {
-    result.push(node.name);
-  }
-
-  if (Array.isArray(node.children)) {
-    for (const child of node.children) {
-      getAllLinks(child, result);
-    }
-  }
-
-  return result;
-}
-
-function getAllFQNs(node, type, result = []) {
-  if (!node) return result;
-
-  if (node.name && type == 'source') {
-    result.push(node.source.fullyQualifiedName);
-  }
-  else if (node.name && type == 'target') {
-    result.push(node.target.fullyQualifiedName);
-  }
-
-  if (Array.isArray(node.children)) {
-    for (const child of node.children) {
-      getAllFQNs(child, result, type);
-    }
-  }
-
-  return result;
-}
-
-function setProcessByValue(node, targetValue, processValueArray, type) {
-  if (!node) return;
-
-  node.process = '';
-
-  if (node.name === targetValue && type == 'source') {
-    node.process = processValueArray[targetValue] || '';
-  }
-  else if (node.name === targetValue && type == 'target') {
-    node.process = processValueArray[targetValue] || '';
-  }
-
-  if (Array.isArray(node.children)) {
-    for (const child of node.children) {
-      setProcessByValue(child, targetValue, processValueArray, type);
-    }
-  }
-
-  return node;
-}
-
-app.post('/api/v1/lineage-column-level', async (req, res) => {
-  const { parent, fqn } = req.body;
-
-  if (!fqn && !parent) {
-    return res.status(400).json({ message: 'Bad Request: A "fqn and parent" field is required.' });
-  }
-
-  try {
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
-
-    const dataplexClinetv1 = new CatalogServiceClient({
-      auth: oauth2Client,
-    });
-
-    const dataplexLineageClientv1 = new LineageClient({
-      auth: oauth2Client,
-    });
-
-    //const parent = `projects/${projectId}/locations/us`;
-    console.log(`Searching for lineage links targeting resource: ${fqn}`);
-
-    // The searchLinks method returns an iterable. We'll collect all results.
-    const source = dataplexLineageClientv1.searchLinks({
-      parent: parent,
-      source: {
-        fullyQualifiedName: fqn,
-      }
-    });
-    const target = dataplexLineageClientv1.searchLinks({
-      parent: parent,
-      target: {
-        fullyQualifiedName: fqn,
-      }
-    });
-
-    const [sourceLinks, targetLinks] = await Promise.all([
-      source, target
-    ]);
-
-    let sourceFQNs = sourceLinks[0].map(s => s.target.fullyQualifiedName);
-    let targetFQNs = targetLinks[0].map(t => t.source.fullyQualifiedName);
-
-    let sourceLineagePromises = sourceFQNs.map(sFQN => fetchAllLineage(dataplexLineageClientv1, parent, sFQN, 'source', sourceLinks[0].filter(s => (s.target.fullyQualifiedName === sFQN))[0]));
-    let targetLineagePromises = targetFQNs.map(tFQN => fetchAllLineage(dataplexLineageClientv1, parent, tFQN, 'target', targetLinks[0].filter(t => (t.source.fullyQualifiedName === tFQN))[0]));
-
-    const [sourceLineageResults, targetLineageResults] = await Promise.all([
-      Promise.all(sourceLineagePromises),
-      Promise.all(targetLineagePromises)
-    ]);
-
-    let sFQNs = [];
-    let tFQNs = [];
-
-    let sLinks = [];
-    let tLinks = [];
-
-    sourceLineageResults.forEach(s => {
-      sFQNs.push(...getAllFQNs(s, 'target'))
-      sLinks.push(...getAllLinks(s))
-    })
-
-    targetLineageResults.forEach(s => {
-      tFQNs.push(...getAllFQNs(s, 'source'))
-      tLinks.push(...getAllLinks(s))
-    })
-
-    let fqnArray = [...sFQNs, ...tFQNs];
-    fqnArray = fqnArray.length > 20 ? fqnArray.slice(0, 20) : fqnArray;
-    console.log('fqn', fqnArray);
-
-    const links = [...sLinks, ...tLinks];
-    console.log('links', links);
-    //const links = [...sourceLinks[0].map(s => s.name), ...targetLinks[0].map(t => t.name)];
-    let sourceData = sourceLinks[0];
-    let targetData = targetLinks[0];
-    let results = [];
-    if (links.length > 0) {
-      const batchProcess = dataplexLineageClientv1.batchSearchLinkProcesses({
-        parent: parent,
-        links: links,
-        pageSize: 20
-      });
-
-      const [batchProcessLinks] = await Promise.all([
-        batchProcess
-      ]);
-
-      results = await Promise.allSettled(
-        fqnArray.map(async (item) => {
-          let query = `fully_qualified_name=${item}`;
-
-          // Construct the request for the Dataplex API
-          const request = {
-            // The name of the project and location to search within
-            name: parent,
-            query: query,
-            pageSize: 1, // Limit the number of results returned
-          };
-
-          // Call the searchEntries method of the Dataplex client
-          const [searchResponse] = await dataplexClinetv1.searchEntries(request);
-          if (searchResponse.length > 0) {
-            const entryName = searchResponse.length > 0 ? searchResponse[0].dataplexEntry.name : null;
-            const [entry] = await dataplexClinetv1.getEntry({ name: entryName, view: protos.google.cloud.dataplex.v1.EntryView.ALL });
-            return entry;
-          } else {
-            return null;
-          }
-        }
-        )
-      );
-
-      const successes = results
-        .filter(r => r.status === 'fulfilled')
-        .map(r => r.value);
-
-      // const failures = results
-      //   .filter(r => r.status === 'rejected')
-      //   .map(r => r.reason);
-
-      if (batchProcessLinks[0].length > 0) {
-        //batchData = batchProcessLinks[0];
-        const linkToProcessMap = {};
-
-        batchProcessLinks[0].forEach(f => {
-          f.links.forEach(l => {
-            linkToProcessMap[l.link] = f.process;
-          });
-        });
-        // Object.keys(linkToProcessMap).forEach((key) => {
-        //     sourceData = setProcessByValue(sourceLineageResults[0], key, linkToProcessMap);
-        //     targetData = setProcessByValue(targetLineageResults[0], key, linkToProcessMap);
-        // })
-        sourceData = sourceLineageResults.map(s => {
-          let sData = {};
-          Object.keys(linkToProcessMap).forEach((key) => {
-            if (s.name === key)
-              sData = setProcessByValue(s, key, linkToProcessMap, 'source');
-          })
-          return sData;
-        });
-
-        targetData = targetLineageResults.map(s => {
-          let tData = {};
-          Object.keys(linkToProcessMap).forEach((key) => {
-            if (s.name === key)
-              tData = setProcessByValue(s, key, linkToProcessMap, 'target');
-          })
-          return tData;
-        });
-      }
-
-      if (successes.length > 0) {
-        const fqnToEntryMap = {};
-        successes.forEach(entry => {
-          fqnToEntryMap[entry.fullyQualifiedName] = entry;
-        });
-
-        sourceData = sourceData.map(s => ({
-          ...s,
-          targetEntry: fqnToEntryMap[s.target.fullyQualifiedName] || null
-        }));
-        targetData = targetData.map(s => ({
-          ...s,
-          sourceEntry: fqnToEntryMap[s.source.fullyQualifiedName] || null
-        }));
-      }
-    }
-
-
-    res.json({ sourceLinks: sourceData, targetLinks: targetData });//, batchSearchLinkProcesses : batchData});
-
-  } catch (error) {
-    console.error('Error searching for lineage links:', error);
-    res.status(500).json({ message: 'An error occurred while fetching data lineage.', details: error.message });
   }
 });
 
