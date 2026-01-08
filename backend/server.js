@@ -42,164 +42,6 @@ app.use(cors());
 // Middleware to parse JSON request bodies
 app.use(express.json());
 
-// --- REAL DATA PRODUCT MANAGEMENT (PROXY) ---
-
-app.get('/api/v1/dataproducts', async (req, res) => {
-  try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-    const location = process.env.GCP_LOCATION || 'us-central1';
-    const accessToken = req.headers.authorization?.split(' ')[1];
-
-    if (!projectId || !accessToken) {
-      return res.status(401).json({ success: false, error: "Missing Project ID or Access Token" });
-    }
-
-    const url = `https://dataplex.googleapis.com/v1/projects/${projectId}/locations/${location}/dataProducts`;
-
-    // Proxy request to Dataplex API
-    const response = await axios.get(url, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    res.json({ success: true, data: response.data.dataProducts || [] });
-
-  } catch (error) {
-    console.error("Error fetching Data Products from GCP:", error.message);
-    // If 404, it might mean the API is not enabled or no products exist, return empty
-    if (error.response?.status === 404) {
-      res.json({ success: true, data: [] });
-    } else {
-      res.status(error.response?.status || 500).json({
-        success: false,
-        error: error.message,
-        details: error.response?.data
-      });
-    }
-  }
-});
-
-app.get('/api/v1/dataproducts/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-    const location = process.env.GCP_LOCATION || 'us-central1';
-    const accessToken = req.headers.authorization?.split(' ')[1];
-
-    const url = `https://dataplex.googleapis.com/v1/projects/${projectId}/locations/${location}/dataProducts/${id}`;
-
-    const response = await axios.get(url, {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
-
-    res.json({ success: true, data: response.data });
-  } catch (error) {
-    console.error(`Error fetching Data Product ${req.params.id}:`, error.message);
-    res.status(error.response?.status || 404).json({ success: false, error: "Product not found" });
-  }
-});
-
-app.post('/api/v1/dataproducts', async (req, res) => {
-  try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-    const location = process.env.GCP_LOCATION || 'us-central1';
-    const accessToken = req.headers.authorization?.split(' ')[1];
-
-    // ID generation or extraction
-    const dataProductId = req.body.id || `dp-${Date.now()}`;
-    const url = `https://dataplex.googleapis.com/v1/projects/${projectId}/locations/${location}/dataProducts?data_product_id=${dataProductId}`;
-
-    const response = await axios.post(url, req.body, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    res.json({ success: true, data: response.data });
-
-  } catch (error) {
-    console.error("Error creating Data Product:", error.message);
-    res.status(500).json({ success: false, error: "Failed to create Data Product", details: error.response?.data });
-  }
-});
-
-// --- IAM MANAGEMENT (PROXY) ---
-
-app.post('/api/v1/iam/get', async (req, res) => {
-  try {
-    const { resourceName } = req.body; // e.g. projects/PROJECT/locations/LOC/lakes/LAKE
-    const accessToken = req.headers.authorization?.split(' ')[1];
-
-    if (!resourceName || !accessToken) {
-      return res.status(400).json({ success: false, error: "Missing Resource Name or Access Token" });
-    }
-
-    const url = `https://dataplex.googleapis.com/v1/${resourceName}:getIamPolicy`;
-
-    const response = await axios.post(url, {}, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    res.json({ success: true, data: response.data });
-  } catch (error) {
-    console.error("Error fetching IAM Policy:", error.message);
-    res.status(500).json({ success: false, error: "Failed to fetch IAM Policy", details: error.response?.data });
-  }
-});
-
-app.post('/api/v1/iam/set', async (req, res) => {
-  try {
-    const { resourceName, policy } = req.body;
-    const accessToken = req.headers.authorization?.split(' ')[1];
-
-    if (!resourceName || !policy || !accessToken) {
-      return res.status(400).json({ success: false, error: "Missing required fields" });
-    }
-
-    const url = `https://dataplex.googleapis.com/v1/${resourceName}:setIamPolicy`;
-
-    const response = await axios.post(url, { policy }, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    res.json({ success: true, data: response.data });
-  } catch (error) {
-    console.error("Error setting IAM Policy:", error.message);
-    res.status(500).json({ success: false, error: "Failed to set IAM Policy", details: error.response?.data });
-  }
-});
-
-// --- RESOURCES FOR PERMISSIONS (Lakes/Zones) ---
-app.get('/api/v1/iam/resources', async (req, res) => {
-  try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-    const location = process.env.GCP_LOCATION || 'us-central1';
-    const accessToken = req.headers.authorization?.split(' ')[1];
-
-    const url = `https://dataplex.googleapis.com/v1/projects/${projectId}/locations/${location}/lakes`;
-
-    const response = await axios.get(url, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`
-      }
-    });
-
-    res.json({ success: true, data: response.data.lakes || [] });
-  } catch (error) {
-    console.error("Error listing Lakes for IAM:", error.message);
-    res.status(500).json({ success: false, error: "Failed to fetch resources" });
-  }
-});
-
 // --- START DATA AGENT MANAGEMENT ---
 // Simple in-memory cache for data agents (key: table identifier, value: agent resource name)
 const dataAgentCache = new Map();
@@ -1668,73 +1510,50 @@ app.get('/api/v1/app-configs', async (req, res) => {
   try {
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
     const location = process.env.GCP_LOCATION;
-    const accessToken = req.headers.authorization?.split(' ')[1];
-
-    if (!projectId || !accessToken) {
-      return res.status(401).json({ success: false, error: "Missing Project ID or Access Token" });
-    }
+    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
 
     const oauth2Client = new CustomGoogleAuth(accessToken);
-    const dataplexClientv1 = new CatalogServiceClient({ auth: oauth2Client });
-    const resourceManagerClientv1 = new ProjectsClient({ auth: oauth2Client });
+
+    const dataplexClientv1 = new CatalogServiceClient({
+      auth: oauth2Client,
+    });
+
+    const resourceManagerClientv1 = new ProjectsClient({
+      auth: oauth2Client,
+    });
+
+    if (!projectId || !location) {
+      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
+    }
 
     const parent = `projects/${projectId}/locations/${location}`;
+    const aspectQuery = `type=projects/dataplex-types/locations/global/entryTypes/aspecttype`
 
-    // We fetch:
-    // 1. Search-based aspects (finds global/system aspects)
-    // 2. Local aspect types (finds user-defined aspects in the project)
-    // 3. Projects list
-    // 4. Local config data
-    const aspectQuery = `type=projects/dataplex-types/locations/global/entryTypes/aspecttype`;
+    // Construct the request for the Dataplex API
+    const request = {
+      // The name of the project and location to search within
+      name: parent,
+      query: aspectQuery,
+      pageSize: 999, // Limit the number of results returned
+      pageToken: '',
+    };
 
-    let aspects = [];
-    let projects = [];
+
+    let projects = aspects = [];
     let configData = {};
-
     try {
-      const globalParent = `projects/${projectId}/locations/global`;
-      const [searchRes, localAspectsRes, globalAspectsRes, projectListRes, currentProjectRes, defaultConfigData] = await Promise.all([
-        dataplexClientv1.searchEntries({ name: parent, query: 'type=aspecttype', pageSize: 500 }),
-        dataplexClientv1.listAspectTypes({ parent }),
-        dataplexClientv1.listAspectTypes({ parent: globalParent }).catch(() => [[]]),
-        resourceManagerClientv1.searchProjects({ pageSize: 100 }),
+      const [aspectsList, projectList, currentProject, defaultConfigData] = await Promise.all([
+        dataplexClientv1.searchEntries(request, { autoPaginate: false }),
+        resourceManagerClientv1.searchProjects({ pageSize: 2000 }, { autoPaginate: false }),
         resourceManagerClientv1.getProject({ name: `projects/${projectId}` }),
-        fs.readFile(dataFilePath, 'utf8').catch(() => '{}')
+        fs.readFile(dataFilePath, 'utf8') || {}
       ]);
-
-      const searchAspects = searchRes[0] || [];
-      const localAspectTypes = localAspectsRes[0] || [];
-      const globalAspectTypes = globalAspectsRes[0] || [];
-
-      // Merge results
-      aspects = [...searchAspects];
-
-      const allLocalAspects = [...localAspectTypes, ...globalAspectTypes];
-
-      // Convert local AspectTypes to the entry format expected by the frontend
-      allLocalAspects.forEach(at => {
-        // Check if already in search aspects (by name/urn)
-        const exists = aspects.some(a => a.dataplexEntry.name === at.name);
-        if (!exists) {
-          aspects.push({
-            dataplexEntry: {
-              name: at.name,
-              fullyQualifiedName: at.name,
-              entrySource: {
-                displayName: at.displayName || at.name.split('/').pop(),
-                resource: at.name
-              },
-              entryType: 'aspectType'
-            }
-          });
-        }
-      });
-
-      let pList = projectListRes[0] ? projectListRes[0].filter(pr => pr.projectId !== projectId) : [];
-      projects = [currentProjectRes[0], ...pList];
+      aspects = aspectsList[0] || [];
+      let p = projectList[0] ? projectList[0].filter(pr => pr.projectId !== projectId) : [];
+      projects = [currentProject[0], ...p];
       configData = defaultConfigData ? JSON.parse(defaultConfigData) : {};
     } catch (err) {
-      console.error('Error fetching data for app-configs:', err.message);
+      console.error('Error listing projects for app config:', err);
     }
 
     const reduceAspect = ({ name, fullyQualifiedName, entrySource, entryType }) => ({ name, fullyQualifiedName, entrySource, entryType });
@@ -1750,8 +1569,8 @@ app.get('/api/v1/app-configs', async (req, res) => {
     res.json(configs);
 
   } catch (error) {
-    console.error('Error generating app configs:', error);
-    res.status(500).json({ success: false, message: 'Failed to generate app configs' });
+    console.error('Error listing configs:', error);
+    res.status(401).json({ message: 'An error occurred while generating app configs.', details: error.message });
   }
 });
 
