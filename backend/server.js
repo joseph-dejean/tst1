@@ -645,22 +645,8 @@ app.post('/api/v1/chat', async (req, res) => {
                 const rows = result.data;
                 const columns = Object.keys(rows[0]);
 
-                // Header
+                // Generate Markdown Table
                 let tableMd = `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
-
-                // Rows (Limit to 5 to avoid spamming chat)
-                rows.slice(0, 5).forEach(row => {
-                  tableMd += `| ${values = columns.map(col => row[col]).join(' | ')} |\n`;
-                });
-                // Fix variable name in map
-
-                rows.slice(0, 5).forEach(row => {
-                  // Simple row rendering
-                  tableMd += `| ${columns.map(col => row[col]).join(' | ')} |\n`;
-                });
-
-                // Reset and do it cleanly
-                tableMd = `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
                 rows.slice(0, 5).forEach(row => {
                   const vals = columns.map(c => row[c]);
                   tableMd += `| ${vals.join(' | ')} |\n`;
