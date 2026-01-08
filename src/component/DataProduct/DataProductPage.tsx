@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Typography, Card, CardContent, Chip, Badge, CircularProgress } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getDataProductById } from '../../mocks/mockDataProducts';
+
 import type { DataProduct } from '../../types/DataProduct';
 import SearchEntriesCard from '../SearchEntriesCard/SearchEntriesCard';
 import Api from '../../api/api';
@@ -24,43 +24,39 @@ const DataProductPage: React.FC = () => {
       return;
     }
 
-    // Get Data Product from mock data
-    const product = getDataProductById(id);
-    if (!product) {
-      navigate('/search');
-      return;
-    }
+    const fetchDataProduct = async () => {
+      try {
+        setLoading(true);
+        const response = await Api.get(`/dataproducts/${id}`);
+        // Response data extraction depends on API format.
+        // Assuming response.data.data is the product object
+        if (response.data && response.data.data) {
+          const product = response.data.data;
+          setDataProduct(product);
+          // If product has assets/tables, set them.
+          // Note: Dataplex API might use different field names like 'assets' or 'tables'.
+          // We'll check both.
+          const assets = product.tables || product.assets || [];
+          if (assets.length > 0) {
+            setTables(assets); // If they are full objects
+            // If they are just refs, we might need fetchTableDetails(assets)
+          }
+        } else {
+          console.error("Product data missing in response");
+          // Optional: Navigate away or show error
+        }
+      } catch (error) {
+        console.error("Error fetching data product:", error);
+        // Optional: Navigate away or show error
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    setDataProduct(product);
-
-    // If Data Product has tables, fetch their details
-    if (product.tables && product.tables.length > 0) {
-      fetchTableDetails(product.tables);
-    } else {
-      setLoading(false);
-    }
+    fetchDataProduct();
   }, [id, navigate]);
 
-  const fetchTableDetails = async (tableRefs: DataProduct['tables']) => {
-    try {
-      const promises = tableRefs.map(async (tableRef) => {
-        try {
-          const response = await Api.get('/get-entry', { entryName: tableRef.entryName });
-          return response.data;
-        } catch (error) {
-          console.error(`Error fetching table ${tableRef.entryName}:`, error);
-          return null;
-        }
-      });
 
-      const results = await Promise.all(promises);
-      setTables(results.filter(Boolean));
-    } catch (error) {
-      console.error('Error fetching table details:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (

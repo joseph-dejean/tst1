@@ -42,6 +42,90 @@ app.use(cors());
 // Middleware to parse JSON request bodies
 app.use(express.json());
 
+// --- REAL DATA PRODUCT MANAGEMENT (PROXY) ---
+
+app.get('/api/v1/dataproducts', async (req, res) => {
+  try {
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const location = process.env.GCP_LOCATION || 'us-central1';
+    const accessToken = req.headers.authorization?.split(' ')[1];
+
+    if (!projectId || !accessToken) {
+      return res.status(401).json({ success: false, error: "Missing Project ID or Access Token" });
+    }
+
+    const url = `https://dataplex.googleapis.com/v1/projects/${projectId}/locations/${location}/dataProducts`;
+
+    // Proxy request to Dataplex API
+    const response = await axios.get(url, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    res.json({ success: true, data: response.data.dataProducts || [] });
+
+  } catch (error) {
+    console.error("Error fetching Data Products from GCP:", error.message);
+    // If 404, it might mean the API is not enabled or no products exist, return empty
+    if (error.response?.status === 404) {
+      res.json({ success: true, data: [] });
+    } else {
+      res.status(error.response?.status || 500).json({
+        success: false,
+        error: error.message,
+        details: error.response?.data
+      });
+    }
+  }
+});
+
+app.get('/api/v1/dataproducts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const location = process.env.GCP_LOCATION || 'us-central1';
+    const accessToken = req.headers.authorization?.split(' ')[1];
+
+    const url = `https://dataplex.googleapis.com/v1/projects/${projectId}/locations/${location}/dataProducts/${id}`;
+
+    const response = await axios.get(url, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+
+    res.json({ success: true, data: response.data });
+  } catch (error) {
+    console.error(`Error fetching Data Product ${req.params.id}:`, error.message);
+    res.status(error.response?.status || 404).json({ success: false, error: "Product not found" });
+  }
+});
+
+app.post('/api/v1/dataproducts', async (req, res) => {
+  try {
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const location = process.env.GCP_LOCATION || 'us-central1';
+    const accessToken = req.headers.authorization?.split(' ')[1];
+
+    // ID generation or extraction
+    const dataProductId = req.body.id || `dp-${Date.now()}`;
+    const url = `https://dataplex.googleapis.com/v1/projects/${projectId}/locations/${location}/dataProducts?data_product_id=${dataProductId}`;
+
+    const response = await axios.post(url, req.body, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    res.json({ success: true, data: response.data });
+
+  } catch (error) {
+    console.error("Error creating Data Product:", error.message);
+    res.status(500).json({ success: false, error: "Failed to create Data Product", details: error.response?.data });
+  }
+});
+
 // --- START DATA AGENT MANAGEMENT ---
 // Simple in-memory cache for data agents (key: table identifier, value: agent resource name)
 const dataAgentCache = new Map();
