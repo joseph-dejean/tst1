@@ -12,14 +12,14 @@ export const getEntryType = (namePath: string = '', separator: string = '') => {
 export const getFormatedDate = (date: any) => {
   if (!date) return '-';
   const myDate = new Date(date * 1000);
-  const formatedDate = new Intl.DateTimeFormat('en-US', { 
-    month: "short", 
-    day: "numeric", 
+  const formatedDate = new Intl.DateTimeFormat('en-US', {
+    month: "short",
+    day: "numeric",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
-    second: "2-digit", 
-    hour12: true 
+    second: "2-digit",
+    hour12: true
   }).format(myDate);
   return formatedDate;
 };
@@ -28,30 +28,30 @@ export const getFormattedDateTimeParts = (timestamp: any) => {
   if (!timestamp) {
     return { date: '-', time: '' };
   }
-  
+
   const myDate = new Date(timestamp * 1000);
 
-  const date = new Intl.DateTimeFormat('en-US', { 
-    month: "short", 
-    day: "numeric", 
+  const date = new Intl.DateTimeFormat('en-US', {
+    month: "short",
+    day: "numeric",
     year: "numeric",
   }).format(myDate);
 
-  const time = new Intl.DateTimeFormat('en-US', { 
+  const time = new Intl.DateTimeFormat('en-US', {
     hour: "numeric",
     minute: "2-digit",
-    second: "2-digit", 
-    hour12: true 
+    second: "2-digit",
+    hour12: true
   }).format(myDate);
 
-  return { date, time }; 
+  return { date, time };
 };
 
 export const getFormattedDateTimePartsByDateTime = (dateTime: any) => {
   if (!dateTime) {
     return { date: '-', time: '' };
   }
-  
+
   let timeValue = dateTime;
   if (typeof dateTime === 'object' && dateTime !== null && 'seconds' in dateTime) {
     timeValue = Number(dateTime.seconds) * 1000;
@@ -63,29 +63,29 @@ export const getFormattedDateTimePartsByDateTime = (dateTime: any) => {
     return { date: '-', time: '' };
   }
 
-  const date = new Intl.DateTimeFormat('en-US', { 
-    month: "short", 
-    day: "numeric", 
+  const date = new Intl.DateTimeFormat('en-US', {
+    month: "short",
+    day: "numeric",
     year: "numeric",
   }).format(myDate);
 
-  const time = new Intl.DateTimeFormat('en-US', { 
+  const time = new Intl.DateTimeFormat('en-US', {
     hour: "numeric",
     minute: "2-digit",
-    second: "2-digit", 
-    hour12: true 
+    second: "2-digit",
+    hour12: true
   }).format(myDate);
 
-  return { date, time }; 
+  return { date, time };
 };
 
 
-export const generateBigQueryLink = (entry:any) => {
+export const generateBigQueryLink = (entry: any) => {
   if (!entry?.name || !entry?.fullyQualifiedName) return '';
 
   const type = getEntryType(entry.name, '/');
   const fqnParts = entry.fullyQualifiedName.split(':').pop().split('.');
-  
+
   if (fqnParts.length < 2) return '';
 
   const project = fqnParts[0];
@@ -128,19 +128,19 @@ export const hasValidAnnotationData = (aspectData: any): boolean => {
 
   const validFields = fieldKeys.filter(key => {
     const item = fields[key];
-    return (item.kind === 'stringValue' && item.stringValue) || 
-           (item.kind === "listValue" && item.listValue && item.listValue.values && item.listValue.values.length > 0);
+    return (item.kind === 'stringValue' && item.stringValue) ||
+      (item.kind === "listValue" && item.listValue && item.listValue.values && item.listValue.values.length > 0);
   });
 
   return validFields.length > 0;
 };
 
 export const typeAliases = [
-  "Bucket","Cluster","Code asset","Connection","Dashboard",
-  "Dashboard element","element","Data Exchange","Exchange","Data source connection","Data source",
-  "Data stream","stream","Database","Database schema","schema","Dataset","Explore",
-  "Feature group","group","Feature online store","store","Feature view","Fileset",
-  "Folder","Function","Glossary","Glossary Category","Glossary Term",
-  "Listing","Look","Model","Repository","Resource","Routine","Service",
-  "Table","View","Other"
+  "Bucket", "Cluster", "Code asset", "Connection", "Dashboard",
+  "Dashboard element", "element", "Data Exchange", "Exchange", "Data Product", "Data source connection", "Data source",
+  "Data stream", "stream", "Database", "Database schema", "schema", "Dataset", "Explore",
+  "Feature group", "group", "Feature online store", "store", "Feature view", "Fileset",
+  "Folder", "Function", "Glossary", "Glossary Category", "Glossary Term",
+  "Listing", "Look", "Model", "Repository", "Resource", "Routine", "Service",
+  "Table", "View", "Other"
 ];

@@ -1,4 +1,4 @@
-import {Box, Tooltip, Typography} from '@mui/material';
+import { Box, Tooltip, Typography } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import Tag from '../Tags/Tag';
 import { AccessTime, LocationOnOutlined } from '@mui/icons-material';
@@ -14,6 +14,7 @@ import DashboardElementIcon from '../../assets/svg/dashboard_element_icon.svg';
 import DataExchangeIcon from '../../assets/svg/data_exchange_icon.svg';
 import DataStreamIcon from '../../assets/svg/data_stream_icon.svg';
 import DatabaseSchemaIcon from '../../assets/svg/database_schema_icon.svg';
+import DataplexIcon from '../../assets/svg/Dataplex.svg';
 import DatasetIcon from '../../assets/svg/dataset_icon.svg';
 import ExploreIcon from '../../assets/svg/explore_icon.svg';
 import FeatureGroupIcon from '../../assets/svg/feature_group_icon.svg';
@@ -129,6 +130,10 @@ const getAssetIcon = (assetName: string) => {
       return DashboardElementIcon;
     case 'Data exchange':
       return DataExchangeIcon;
+    case 'Data product':
+    case 'Data Product':
+    case 'Product':
+      return DataplexIcon;
     case 'Data source connection':
       return ConnectionIcon;
     case 'Data stream':
@@ -179,7 +184,7 @@ const getAssetIcon = (assetName: string) => {
       return GenericIcon;
   }
 };
-const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSelected = false, onDoubleClick, disableHoverEffect = false, hideTopBorderOnHover = false, index}) => {
+const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSelected = false, onDoubleClick, disableHoverEffect = false, hideTopBorderOnHover = false, index }) => {
   const entryData = entry;//useState<any>(entry);
   //const [parentName, setParentName] = useState<string>('');
   const [name, setName] = useState<string>('');
@@ -187,7 +192,7 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
   const [modifiedDate, setModifiedDate] = useState<string>('');
   const [systemName, setSystemName] = useState<string>('');
   const [description, setDescription] = useState<string>('');
-  
+
   // Use shared favorite state
   // const { isFavorite, toggleFavorite } = useFavorite(entry.name);
   //const [avatarColors, setAvatarColors] = useState<{bg: string, text: string}>({bg: '#E3F2FD', text: '#1976D2'});
@@ -208,18 +213,18 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
   //     { bg: '#FFF2CC', text: '#F57F17' }, // Yellow theme
   //     { bg: '#EFEBE9', text: '#5D4037' }, // Brown theme
   //   ];
-    
+
   //   const randomIndex = Math.floor(Math.random() * themeColors.length);
   //   return themeColors[randomIndex];
   // };
 
 
-//   const getNames = (namePath: string = '' , separator: string = '' ) => {
-//     const segments: string[] = namePath.split(separator);
-//     //let eType = segments[segments.length - 2];
-//     return segments[segments.length - 1];
-//     //setParentName(segments[segments.length - 3] !== import.meta.env.VITE_GCP_PROJECT_ID ? segments[segments.length - 3] : '');
-//   };
+  //   const getNames = (namePath: string = '' , separator: string = '' ) => {
+  //     const segments: string[] = namePath.split(separator);
+  //     //let eType = segments[segments.length - 2];
+  //     return segments[segments.length - 1];
+  //     //setParentName(segments[segments.length - 3] !== import.meta.env.VITE_GCP_PROJECT_ID ? segments[segments.length - 3] : '');
+  //   };
 
   // const handleFavoriteClick = (event: React.MouseEvent) => {
   //   event.stopPropagation(); // Prevent triggering the parent onClick
@@ -244,17 +249,17 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
     setSystemName(entry.entrySource.system);
     setEntryType(entry.entryType.split('-').length > 1 ? entry.entryType.split('-').pop() : entry.name.split('/').at(-2).charAt(0).toUpperCase() + entry.name.split('/').at(-2).slice(1));
     const myDate = (typeof entry.updateTime !== 'string') ? new Date(entry.updateTime.seconds * 1000) : new Date(entry.updateTime);
-    const formattedDate = new Intl.DateTimeFormat('en-US', { month: "short" , day: "numeric", year: "numeric" }).format(myDate);
+    const formattedDate = new Intl.DateTimeFormat('en-US', { month: "short", day: "numeric", year: "numeric" }).format(myDate);
     setModifiedDate(formattedDate);
     setDescription(entry.entrySource.description ?? '');
-    
+
     // Generate random avatar colors for this card
     //setAvatarColors(generateRandomColors());
   }, [entry]);
 
   return (
     <>
-      <Box sx={{ 
+      <Box sx={{
         flex: '1 1 auto',
         minWidth: 0, // Allow shrinking below content size
         ...sx,
@@ -267,7 +272,7 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
           }
         })
       }}>
-        <Box 
+        <Box
           onDoubleClick={() => onDoubleClick?.(entry)}
           sx={{
             padding: "1.25rem 0.5rem 1.25rem 0.5rem",
@@ -303,8 +308,8 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
             },
           }}
           className="entriesHoverEffect"
-          
-          >
+
+        >
           <div style={{
             width: "100%",
             flex: '1 1 auto',
@@ -312,46 +317,46 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
             marginLeft: '0.5rem'
           }}>
             <div style={{
-              display: "flex", 
-              justifyContent: "space-between", 
+              display: "flex",
+              justifyContent: "space-between",
               alignItems: "center",
               flex: '1 1 auto',
               minWidth: 0
             }}>
               <div style={{
-                display: "flex", 
-                alignItems: "center", 
+                display: "flex",
+                alignItems: "center",
                 flex: '1 1 auto',
                 minWidth: 0, // Allow content to shrink and wrap
                 gap: '0.75rem' // Uniform spacing between title, tags, dates, location
               }}>
                 {getAssetIcon(capitalizeFirstLetter(entryType)) && (
-                        <img 
-                          src={getAssetIcon(capitalizeFirstLetter(entryType))!} 
-                          alt={capitalizeFirstLetter(entryType)} 
-                          style={{
-                            width: '1.25rem',
-                            height: '1.25rem',
-                            flex: '0 0 auto'
-                          }}
-                />)}
+                  <img
+                    src={getAssetIcon(capitalizeFirstLetter(entryType))!}
+                    alt={capitalizeFirstLetter(entryType)}
+                    style={{
+                      width: '1.25rem',
+                      height: '1.25rem',
+                      flex: '0 0 auto'
+                    }}
+                  />)}
                 <Tooltip title={name} arrow placement='top'>
-                <Typography component="span" 
-                variant="heading2Medium"
-                sx={{ 
-                  color: "#0B57D0", 
-                  fontSize: "1.125rem", 
-                  fontWeight: 400,
-                  flex: '0 1 auto', // Allow shrinking but don't grow
-                  minWidth: 0, // Allow text truncation
-                  overflow: 'hidden',
-                  maxWidth: '300px',
-                  textOverflow: 'ellipsis',
-                  // textTransform:'capitalize',
-                  whiteSpace: 'nowrap'
-                }}>
-                  {name}
-                </Typography>
+                  <Typography component="span"
+                    variant="heading2Medium"
+                    sx={{
+                      color: "#0B57D0",
+                      fontSize: "1.125rem",
+                      fontWeight: 400,
+                      flex: '0 1 auto', // Allow shrinking but don't grow
+                      minWidth: 0, // Allow text truncation
+                      overflow: 'hidden',
+                      maxWidth: '300px',
+                      textOverflow: 'ellipsis',
+                      // textTransform:'capitalize',
+                      whiteSpace: 'nowrap'
+                    }}>
+                    {name}
+                  </Typography>
                 </Tooltip>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <Tag text={(() => {
@@ -366,9 +371,9 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
                     padding: "0.25rem 0.5rem",
                     fontWeight: 500,
                     borderRadius: '8px',
-                    textTransform:"capitalize",
+                    textTransform: "capitalize",
                     flexShrink: 0 // Prevent tag from shrinking
-                  }}/>
+                  }} />
                   <Tag text={entryType} css={{
                     fontFamily: '"Google Sans Text", sans-serif',
                     color: '#004A77',
@@ -379,50 +384,50 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
                     padding: "0.25rem 0.5rem",
                     fontWeight: 500,
                     borderRadius: '8px',
-                    textTransform:'capitalize',
+                    textTransform: 'capitalize',
                     flexShrink: 0 // Prevent tag from shrinking
-                  }}/>
+                  }} />
                 </div>
                 <Tooltip title={`Last Modified at ${modifiedDate}`} arrow placement='top'>
-                <span style={{ 
-                  color: "#575757", 
-                  fontSize: "0.875rem", 
-                  fontWeight: 500, 
-                  display: "flex", 
-                  alignItems: "center",
-                  flex: '0 0 auto', // Fixed size, don't grow or shrink
-                  gap: '0.25rem'
-                }}>
-                  <AccessTime style={{fontSize: 14}}/>
-                  <span>{modifiedDate}</span>
-                </span>
+                  <span style={{
+                    color: "#575757",
+                    fontSize: "0.875rem",
+                    fontWeight: 500,
+                    display: "flex",
+                    alignItems: "center",
+                    flex: '0 0 auto', // Fixed size, don't grow or shrink
+                    gap: '0.25rem'
+                  }}>
+                    <AccessTime style={{ fontSize: 14 }} />
+                    <span>{modifiedDate}</span>
+                  </span>
                 </Tooltip>
                 <Tooltip title={`Location - ${entryData.entrySource.location}`} arrow placement='top'>
-                <span style={{ 
-                  color: "#575757", 
-                  fontSize: "0.875rem", 
-                  fontWeight: 500, 
-                  display: "flex", 
-                  alignItems: "center",
-                  flex: '0 1 auto', // Allow shrinking for location text
-                  gap: '0.125rem',
-                  minWidth: 0
-                }}>
-                  <LocationOnOutlined style={{fontSize: 14, flexShrink: 0}}/>
                   <span style={{
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
+                    color: "#575757",
+                    fontSize: "0.875rem",
+                    fontWeight: 500,
+                    display: "flex",
+                    alignItems: "center",
+                    flex: '0 1 auto', // Allow shrinking for location text
+                    gap: '0.125rem',
+                    minWidth: 0
                   }}>
-                    {entryData.entrySource.location}
+                    <LocationOnOutlined style={{ fontSize: 14, flexShrink: 0 }} />
+                    <span style={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {entryData.entrySource.location}
+                    </span>
                   </span>
-                </span>
                 </Tooltip>
-                <span style={{ 
-                  color: "#575757", 
-                  fontSize: "0.875rem", 
-                  fontWeight: 500, 
-                  display: "flex", 
+                <span style={{
+                  color: "#575757",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                  display: "flex",
                   alignItems: "center",
                   flex: '0 1 auto', // Allow shrinking for owner email
                   gap: '0.25rem',
@@ -453,7 +458,7 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
                 </span>
               </div>
               <div style={{
-                display: "flex", 
+                display: "flex",
                 alignItems: "center",
                 flex: '0 0 auto' // Fixed size for favorite button
               }}>
@@ -494,7 +499,7 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
             }}>
               {/* <label>Parent : {parentName} </label><br/> */}
               <p style={{
-                padding: 0, 
+                padding: 0,
                 margin: 0,
                 marginTop: "0.3125rem",
                 fontSize: "0.875rem",

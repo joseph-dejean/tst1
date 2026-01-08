@@ -155,6 +155,8 @@ const getAssetIcon = (assetName: string) => {
       return DashboardElementIcon;
     case 'Data exchange':
       return DataExchangeIcon;
+    case 'Data Product':
+      return DataplexIcon;
     case 'Data source connection':
       return ConnectionIcon;
     case 'Data stream':
@@ -207,7 +209,7 @@ const getAssetIcon = (assetName: string) => {
 };
 
 // FilterDropdown component
-const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => {
+const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
   // const [anchorEl, setAnchorEl] = useState(null);
   // const [selectedCategory, setSelectedCategory] = useState(null);
   const { user } = useAuth();
@@ -217,13 +219,13 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
   const projectsLoaded = useSelector((state: any) => state.projects.isloaded);
   const projectsList = useSelector((state: any) => state.projects.items);
   const [loading, setLoading] = useState(false);
-  let annotations:any = {
+  let annotations: any = {
     title: 'Aspects',
     items: [
     ],
     defaultExpanded: false,
   };
-  let assets:any = {
+  let assets: any = {
     title: 'Assets',
     items: [
       {
@@ -252,6 +254,10 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
       },
       {
         "name": "Data exchange",
+        "type": "typeAliases"
+      },
+      {
+        "name": "Data Product",
         "type": "typeAliases"
       },
       {
@@ -357,7 +363,7 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
     ],
     defaultExpanded: false,
   };
-  let products:any = {
+  let products: any = {
     title: 'Products',
     items: [
       {
@@ -407,29 +413,29 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
     ],
     defaultExpanded: false,
   };
-  
-  let projects:any = {
+
+  let projects: any = {
     title: 'Projects',
     items: [],
     defaultExpanded: false,
   };
-  if(annotations && user?.appConfig && user?.appConfig.aspects && Array.isArray(user?.appConfig.aspects)){
-    annotations.items = user?.appConfig.aspects.map((aspect:any) => ({
+  if (annotations && user?.appConfig && user?.appConfig.aspects && Array.isArray(user?.appConfig.aspects)) {
+    annotations.items = user?.appConfig.aspects.map((aspect: any) => ({
       name: aspect.dataplexEntry.entrySource.displayName || (aspect.dataplexEntry.name ? aspect.dataplexEntry.name.split('/').pop() : ''),
       type: "aspectType",
       data: aspect.dataplexEntry
     }));
   }
-  if(projects && user?.appConfig && user?.appConfig.projects && Array.isArray(user?.appConfig.projects)){
-    let plist:any = projectsLoaded ? projectsList : user?.appConfig.projects;
-    let p:any = plist.map((project:any) => ({
+  if (projects && user?.appConfig && user?.appConfig.projects && Array.isArray(user?.appConfig.projects)) {
+    let plist: any = projectsLoaded ? projectsList : user?.appConfig.projects;
+    let p: any = plist.map((project: any) => ({
       name: project.projectId,
       type: "project",
       data: {}
     }));
 
     projects.items = [
-      ...p, 
+      ...p,
       {
         name: 'Others',
         type: "project",
@@ -454,21 +460,21 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
   const [selectedFilters, setSelectedFilters] = useState<any[]>(filters ?? []);
 
   useEffect(() => {
-    if(!projectsLoaded) {
+    if (!projectsLoaded) {
       dispatch(getProjects({ id_token: user?.token }));
     }
   }, []);
 
   useEffect(() => {
-    if(projectsLoaded){
-      let plist:any = projectsList;
-      let p:any = plist.map((project:any) => ({
+    if (projectsLoaded) {
+      let plist: any = projectsList;
+      let p: any = plist.map((project: any) => ({
         name: project.projectId,
         type: "project",
         data: {}
       }));
-      setFilterData((prevData:any) => prevData.map((filterCategory:any) => {
-        if(filterCategory.title === 'Projects'){
+      setFilterData((prevData: any) => prevData.map((filterCategory: any) => {
+        if (filterCategory.title === 'Projects') {
           return { ...filterCategory, items: [...p, { name: 'Others', type: "project", data: {} }] };
         }
         return filterCategory;
@@ -483,14 +489,14 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
   // Auto-select asset filters when search term matches asset names
   useEffect(() => {
     if (searchTerm && searchType === 'All' && searchTerm.length >= 3) {
-      const matchingAssets = assets.items.filter((asset: any) => 
+      const matchingAssets = assets.items.filter((asset: any) =>
         asset.name.toLowerCase() === (searchTerm.toLowerCase())
       );
-      
+
       if (matchingAssets.length > 0) {
         // Get current asset filters
         const currentAssetFilters = selectedFilters.filter((f: any) => f.type === 'typeAliases');
-        
+
         // Add matching assets that aren't already selected
         const newAssetFilters = matchingAssets
           .filter((asset: any) => !currentAssetFilters.some((f: any) => f.name === asset.name))
@@ -499,7 +505,7 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
             type: asset.type,
             data: asset.data
           }));
-        
+
         if (newAssetFilters.length > 0) {
           const updatedFilters = [...selectedFilters, ...newAssetFilters];
           setSelectedFilters(updatedFilters);
@@ -524,17 +530,17 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
   useEffect(() => {
     if (searchType && searchType !== 'All') {
       // Find the matching product in the products list
-      const matchingProduct = products.items.find((product: any) => 
+      const matchingProduct = products.items.find((product: any) =>
         product.name === searchType
       );
-      
+
       if (matchingProduct) {
         // Get current product filters
         const currentProductFilters = selectedFilters.filter((f: any) => f.type === 'system');
-        
+
         // Check if this product is already selected
         const isAlreadySelected = currentProductFilters.some((f: any) => f.name === searchType);
-        
+
         if (!isAlreadySelected) {
           // Remove any existing product filters and add the new one
           const nonProductFilters = selectedFilters.filter((f: any) => f.type !== 'system');
@@ -543,7 +549,7 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
             type: matchingProduct.type,
             data: matchingProduct.data
           };
-          
+
           const updatedFilters = [...nonProductFilters, newProductFilter];
           setSelectedFilters(updatedFilters);
           onFilterChange(updatedFilters);
@@ -562,15 +568,15 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
   // Auto-expand accordions when search term exists or specific product is selected
 
   const handleCheckboxChange = (filter: any) => {
-    const updatedFilters = selectedFilters.some(item => item.name === filter.name )
+    const updatedFilters = selectedFilters.some(item => item.name === filter.name)
       ? selectedFilters.filter((f) => f.name !== filter.name)
       : [...selectedFilters, filter];
-      console.log("updated filter" ,updatedFilters);
+    console.log("updated filter", updatedFilters);
 
     setSelectedFilters(updatedFilters);
     onFilterChange(updatedFilters); // Notify parent
     dispatch({ type: 'search/setSearchFilters', payload: { searchFilters: updatedFilters } });
-    
+
     // Sync with search type if this is a Products filter
     // if (filter.type === 'system') {
     //   const systemFilters = updatedFilters.filter((f: any) => f.type === 'system');
@@ -585,7 +591,7 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
     //   // as the dropdown only supports single selection
     // }
     if (filter.type === 'system' && filter.name === "BigQuery") {
-      if (!updatedFilters.find(item => item.name === filter.name)){
+      if (!updatedFilters.find(item => item.name === filter.name)) {
         dispatch({ type: 'search/setSearchType', payload: { searchType: 'All' } });
       }
     }
@@ -608,36 +614,36 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
     dispatch({ type: 'search/setSearchType', payload: { searchType: 'All' } });
     setLoading(true);
     setTimeout(() => {
-      setLoading(false);  
+      setLoading(false);
     }, 100); // Simulate loading delay
   };
 
 
   const handleViewAllItems = (filterType: string, event: React.MouseEvent) => {
     setCurrentFilterType(filterType);
-    
+
     // Get the position of the clicked accordion to position the modal adjacent to it
     const accordionElement = event.currentTarget.closest('.MuiAccordion-root');
     if (accordionElement) {
       const rect = accordionElement.getBoundingClientRect();
       const headerElement = accordionElement.querySelector('.MuiAccordionSummary-root');
       const headerRect = headerElement ? headerElement.getBoundingClientRect() : rect;
-      
+
       setMultiselectPosition({
-        top: ((headerRect.top + window.scrollY + 341) > window.innerHeight) 
+        top: ((headerRect.top + window.scrollY + 341) > window.innerHeight)
           ? window.innerHeight - 360
           : headerRect.top + window.scrollY, // Align with accordion header
         left: rect.right + 16 // Position to the right of the accordion with some spacing
       });
     }
-    
+
     setShowMultiSelect(true);
   };
 
 
   const handleMultiSelectChange = (selectedItems: string[]) => {
     console.log('Generic multiselect change:', selectedItems, 'for filter:', currentFilterType);
-    
+
     // Find the current filter data
     const currentFilter = filterData.find((f: any) => f.title === currentFilterType);
     if (!currentFilter) return;
@@ -650,10 +656,10 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
 
     // Remove existing filters of this type
     const filteredSelectedFilters = selectedFilters.filter((sf: any) => sf.type !== (currentFilter.items[0]?.type || 'typeAliases'));
-    
+
     // Add new filters
     const updatedFilters = [...filteredSelectedFilters, ...newFilters];
-    
+
     setSelectedFilters(updatedFilters);
     onFilterChange(updatedFilters);
   };
@@ -667,20 +673,20 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
   // Mock data for sub-annotations - in real app this would come from API
   const getSubAnnotationsForAnnotation = async (annotationData: any) => {
     axios.defaults.headers.common['Authorization'] = `Bearer ${user?.token ?? ''}`;
-    
+
     const response = await axios.post(URLS.API_URL + URLS.GET_ASPECT_DETAIL, {
-      name:annotationData.entrySource.resource
+      name: annotationData.entrySource.resource
     });
 
     const data = await response.data;
     console.log('filter subannotations', data);
-    
+
     // Transform recordFields to include type information
     // For demo purposes, create sample fields that match the ideal design
     const sampleFields = [
       { name: 'Temaplate_Field', type: 'string' }
     ];
-    
+
     const transformedFields = data.metadataTemplate.recordFields?.map((r: any) => ({
       name: String(r.name || ''),
       type: r.type || 'string', // Default to string if type is not specified
@@ -692,26 +698,26 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
         return String(val);
       }) : undefined
     })) || sampleFields;
-    
+
     setSubAnnotationData(transformedFields);
     setSubAnnotationsloaded(true);
   };
 
-  const handleEditNoteClick = (annotationName: string, data:any, event: React.MouseEvent) => {
+  const handleEditNoteClick = (annotationName: string, data: any, event: React.MouseEvent) => {
     setSelectedAnnotationForSubPanel(annotationName);
     setSubAnnotationData([]);
     setSubAnnotationsloaded(false);
     getSubAnnotationsForAnnotation(data);
-    
+
     // Check if the parent annotation is already selected
-    const isParentSelected = selectedFilters.some(filter => 
+    const isParentSelected = selectedFilters.some(filter =>
       filter.name === annotationName && filter.type === 'aspectType'
     );
-    
+
     // If parent is selected, initialize with some default sub-annotations (or keep empty)
     // In a real app, you might want to load previously selected sub-annotations from an API
     setSelectedSubAnnotations(isParentSelected ? [] : []); // For now, always start empty
-    
+
     const rect = event.currentTarget.getBoundingClientRect();
     setClickPosition({ top: rect.top, right: rect.right });
 
@@ -720,7 +726,7 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
 
   const handleSubAnnotationsChange = (selectedSubAnnotations: any[]) => {
     setSelectedSubAnnotations(selectedSubAnnotations);
-    
+
     // Don't auto-check parent annotation - this will be handled by Apply button
     console.log('Sub-annotations changed for', selectedAnnotationForSubPanel, ':', selectedSubAnnotations);
   };
@@ -739,13 +745,13 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
         type: 'aspectType',
         subAnnotationData: appliedSubAnnotations // You can include additional data if needed
       };
-      
+
       // Add parent annotation to selected filters if not already present
       if (!selectedFilters.some(filter => filter.name === selectedAnnotationForSubPanel && filter.type === 'aspectType')) {
         const updatedFilters = [...selectedFilters, parentAnnotation];
         setSelectedFilters(updatedFilters);
         onFilterChange(updatedFilters);
-      }else{
+      } else {
 
         const updatedFilters = [...selectedFilters.filter(filter => filter.name !== selectedAnnotationForSubPanel && filter.type === 'aspectType'), parentAnnotation];
         setSelectedFilters(updatedFilters);
@@ -753,13 +759,13 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
       }
     } else {
       // If no sub-annotations are applied, remove the parent annotation
-      const updatedFilters = selectedFilters.filter(filter => 
+      const updatedFilters = selectedFilters.filter(filter =>
         !(filter.name === selectedAnnotationForSubPanel && filter.type === 'aspectType')
       );
       setSelectedFilters(updatedFilters);
       onFilterChange(updatedFilters);
     }
-    
+
     // Close the panel
     handleCloseSubAnnotationsPanel();
   };
@@ -794,8 +800,8 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
       }}
     >
       <Box sx={{ position: 'relative' }}>
-      <Box sx={{ flexGrow: 1, flexShrink: 1 }} style={{padding:"0.3125rem 0 0.3125rem 0.3125rem", marginTop:"1.25rem", paddingBottom:"1.5625rem", display: "flex", flexDirection: "column", flex: "0 0 auto"}}>
-        <div style={{
+        <Box sx={{ flexGrow: 1, flexShrink: 1 }} style={{ padding: "0.3125rem 0 0.3125rem 0.3125rem", marginTop: "1.25rem", paddingBottom: "1.5625rem", display: "flex", flexDirection: "column", flex: "0 0 auto" }}>
+          <div style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -803,16 +809,16 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
             paddingRight: 0,
             flex: "1 1 auto",
             marginTop: "-20px"
-        }}>
-            <Typography sx={{fontWeight:"500", fontSize:"1rem", color:"#1F1F1F", flex: "0 1 auto", fontFamily: "Google sans text, sans-serif", marginLeft: '5px'}}>Filters</Typography>
-            <Button onClick={handleFilterClear} 
+          }}>
+            <Typography sx={{ fontWeight: "500", fontSize: "1rem", color: "#1F1F1F", flex: "0 1 auto", fontFamily: "Google sans text, sans-serif", marginLeft: '5px' }}>Filters</Typography>
+            <Button onClick={handleFilterClear}
               disabled={selectedFilters.length === 0}
               sx={{
                 fontFamily: '"Google Sans Text", sans-serif',
-                fontWeight:"700", 
-                color:"#1f1f1f", 
-                fontSize:"0.75rem",
-                fontStyle:"normal", 
+                fontWeight: "700",
+                color: "#1f1f1f",
+                fontSize: "0.75rem",
+                fontStyle: "normal",
                 display: "flex",
                 marginRight: "8px",
                 alignItems: "center",
@@ -826,66 +832,68 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
                   color: '#1f1f1f',
                   opacity: '30%',
                 },
-            }}>Clear</Button>
-        </div>
-      </Box>
-      <Box
-        sx={{
-          height: '1px',
-          backgroundColor: '#E0E0E0',
-          marginLeft: '5px',
-          marginRight: '3.5px',
-        }}
-      />
-      <div style={{
-        fontSize:"0.75rem", 
-        display: "flex", 
-        flexDirection: "column", 
-        flex: "1 1 auto"
-      }}>
-        {filterData.map((filter:any) => 
+              }}>Clear</Button>
+          </div>
+        </Box>
+        <Box
+          sx={{
+            height: '1px',
+            backgroundColor: '#E0E0E0',
+            marginLeft: '5px',
+            marginRight: '3.5px',
+          }}
+        />
+        <div style={{
+          fontSize: "0.75rem",
+          display: "flex",
+          flexDirection: "column",
+          flex: "1 1 auto"
+        }}>
+          {filterData.map((filter: any) =>
           (
-            <Accordion 
-              key={filter.title} 
+            <Accordion
+              key={filter.title}
               expanded={expandedSections[filter.title] || filter.defaultExpanded}
               onChange={handleAccordionChange(filter.title)}
-              style={{background : "none", boxShadow:"none", margin: 0, flex: "0 0 auto"}}
+              style={{ background: "none", boxShadow: "none", margin: 0, flex: "0 0 auto" }}
               disableGutters
               sx={{
-                    background: "none",
-                    boxShadow: "none",
-                    '&:before': {
-                      content: '""',
-                      position: 'absolute',
-                      top: 0,
-                      backgroundColor: '#E0E0E0',
-                      height: '1px',
-                      left: '5px',
-                      right: '3.5px',
-                      opacity: 1,
-                    },
-                    borderTop: 'none',
-                  }}
+                background: "none",
+                boxShadow: "none",
+                '&:before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  backgroundColor: '#E0E0E0',
+                  height: '1px',
+                  left: '5px',
+                  right: '3.5px',
+                  opacity: 1,
+                },
+                borderTop: 'none',
+              }}
             >
               <AccordionSummary
                 expandIcon={<ExpandMoreIcon />}
-                aria-controls={filter.title+"-content"}
-                id={filter.title+"-header"}
-                sx={{ padding:"0rem 0.7rem 0rem 0.65rem", flex: "0 0 auto", minHeight: 'auto',
+                aria-controls={filter.title + "-content"}
+                id={filter.title + "-header"}
+                sx={{
+                  padding: "0rem 0.7rem 0rem 0.65rem", flex: "0 0 auto", minHeight: 'auto',
                   '& .MuiAccordionSummary-content': {
-                  lineHeight: '48px',
-                  margin: "14px -1.2px"
-                },
-                '& .MuiAccordionSummary-expandIconWrapper': {
-                  marginRight: '-3px',
-                },
-                  '&.Mui-expanded': { 
+                    lineHeight: '48px',
+                    margin: "14px -1.2px"
+                  },
+                  '& .MuiAccordionSummary-expandIconWrapper': {
+                    marginRight: '-3px',
+                  },
+                  '&.Mui-expanded': {
                     minHeight: 'auto',
                     '& .MuiAccordionSummary-content': {
-                   lineHeight: '48px',
-                   margin: "14px -1.2px"
+                      lineHeight: '48px',
+                      margin: "14px -1.2px"
+                    }
                   }
-               }}}
+                }}
               >
                 <div style={{
                   display: "flex",
@@ -893,29 +901,29 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
                   gap: "0.5rem",
                   flex: "0 1 auto",
                 }}>
-                  <Typography component="span" 
-                    sx={{fontWeight:"500", fontSize:"14px", lineHeight:"20px", color:"#1F1F1F", fontStyle:"Regular"}}>
-                      {filter.title}
+                  <Typography component="span"
+                    sx={{ fontWeight: "500", fontSize: "14px", lineHeight: "20px", color: "#1F1F1F", fontStyle: "Regular" }}>
+                    {filter.title}
                   </Typography>
                 </div>
               </AccordionSummary>
               <AccordionDetails sx={{
-                paddingTop: 0,                 
-                paddingBottom: "0.5rem",       
-                paddingLeft: "0.5rem",         
+                paddingTop: 0,
+                paddingBottom: "0.5rem",
+                paddingLeft: "0.5rem",
                 paddingRight: "0.5rem",
                 flex: "1 1 auto",
                 overflowY: "hidden",
-                color:"#1F1F1F",
-                fontWeight:"400",
-                fontSize:"0.75rem",
+                color: "#1F1F1F",
+                fontWeight: "400",
+                fontSize: "0.75rem",
               }}>
                 {
-                  (filter.title === 'Assets' || filter.title === 'Products' ? 
+                  (filter.title === 'Assets' || filter.title === 'Products' ?
                     // Sort assets and products to show selected items first
-                    filter.items : 
+                    filter.items :
                     filter.items.slice(0, 10)
-                  ).map((item:any) => (
+                  ).map((item: any) => (
                     <div key={`${filter.title}-${item.name}`} style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -930,42 +938,42 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
                         flex: '1 1 auto',
                         paddingLeft: '0.45rem',
                       }}>
-                        <FormControlLabel 
+                        <FormControlLabel
                           control={
-                          <Checkbox 
-                            checked={selectedFilters.some(i => i.name === item.name && i.type === item.type)} 
-                            icon={
-                              <Box sx={{
-                                width: '16px',
-                                height: '16px',
-                                borderRadius: '4px',
-                                border: '2px solid var(--Text-Secondary, #575757)',
-                                opacity: 1,
-                              }} />
-                            }
-                            checkedIcon={
-                              <Box sx={{
-                                width: '16px',
-                                height: '16px',
-                                borderRadius: '4px',
-                                border: '2px solid #0E4DCA',
-                                backgroundColor: '#0E4DCA',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}>
-                                <CheckIcon sx={{ fontSize: '14px', color: '#FFFFFF' }} />
-                              </Box>
-                            }
-                            sx={{
-                              padding: '0.25rem',
-                              marginRight: '8px',
-                              '& .MuiSvgIcon-root': {
-                                width: '18px',
-                                height: '18px',
-                              },
-                            }}
-                          />}
+                            <Checkbox
+                              checked={selectedFilters.some(i => i.name === item.name && i.type === item.type)}
+                              icon={
+                                <Box sx={{
+                                  width: '16px',
+                                  height: '16px',
+                                  borderRadius: '4px',
+                                  border: '2px solid var(--Text-Secondary, #575757)',
+                                  opacity: 1,
+                                }} />
+                              }
+                              checkedIcon={
+                                <Box sx={{
+                                  width: '16px',
+                                  height: '16px',
+                                  borderRadius: '4px',
+                                  border: '2px solid #0E4DCA',
+                                  backgroundColor: '#0E4DCA',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}>
+                                  <CheckIcon sx={{ fontSize: '14px', color: '#FFFFFF' }} />
+                                </Box>
+                              }
+                              sx={{
+                                padding: '0.25rem',
+                                marginRight: '8px',
+                                '& .MuiSvgIcon-root': {
+                                  width: '18px',
+                                  height: '18px',
+                                },
+                              }}
+                            />}
                           label={
                             <div style={{
                               display: 'flex',
@@ -974,9 +982,9 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
                               flex: '1 1 auto'
                             }}>
                               {filter.title === 'Products' && getProductIcon(item.name) && (
-                                <img 
-                                  src={getProductIcon(item.name)!} 
-                                  alt={item.name} 
+                                <img
+                                  src={getProductIcon(item.name)!}
+                                  alt={item.name}
                                   style={{
                                     width: '1.25rem',
                                     height: '1.25rem',
@@ -985,37 +993,37 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
                                 />
                               )}
                               {filter.title === 'Assets' && getAssetIcon(item.name) && (
-                                <img 
-                                  src={getAssetIcon(item.name)!} 
-                                  alt={item.name} 
+                                <img
+                                  src={getAssetIcon(item.name)!}
+                                  alt={item.name}
                                   style={{
                                     width: '1.25rem',
                                     height: '1.25rem',
                                     flex: '0 0 auto',
-                                    opacity:1,
+                                    opacity: 1,
                                   }}
                                 />
                               )}
                               {/* <Tooltip title={item.name} placement="top" arrow> */}
-                                <span style={{
-                                  flex: '1 1 auto',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  maxWidth: '8rem',
-                                  fontSize: '0.75rem',
-                                  color: '#1F1F1F',
-                                  fontWeight: '400',
-                                }}>
-                                  {item.name}
-                                </span>
+                              <span style={{
+                                flex: '1 1 auto',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                maxWidth: '8rem',
+                                fontSize: '0.75rem',
+                                color: '#1F1F1F',
+                                fontWeight: '400',
+                              }}>
+                                {item.name}
+                              </span>
                               {/* </Tooltip> */}
                             </div>
                           }
                           sx={{
                             '& .MuiFormControlLabel-label': {
-                              fontWeight: '500' ,
-                              color: '#4c4c4c' ,
+                              fontWeight: '500',
+                              color: '#4c4c4c',
                               fontSize: '0.75rem',
                               display: 'flex',
                               alignItems: 'center'
@@ -1026,9 +1034,9 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
                         />
                       </div>
                       {filter.title === 'Aspects' && (
-                        <img 
-                          src={EditNoteIcon} 
-                          alt="Edit Note" 
+                        <img
+                          src={EditNoteIcon}
+                          alt="Edit Note"
                           style={{
                             width: '1.25rem',
                             height: '1.25rem',
@@ -1041,7 +1049,7 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleEditNoteClick(item.name,item.data, e);
+                            handleEditNoteClick(item.name, item.data, e);
                           }}
                         />
                       )}
@@ -1078,40 +1086,40 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters , onFilterChange }) => 
               </AccordionDetails>
             </Accordion>
           )
+          )}
+        </div>
+
+        {/* Other Accordions for different filter types */}
+
+
+        {/* MultiSelect Modal for all filter types */}
+        {showMultiSelect && currentFilterType && multiselectPosition && (
+          <FilterAnnotationsMultiSelect
+            options={filterData.find((f: any) => f.title === currentFilterType)?.items.map((item: any) => item.name) || []}
+            value={selectedFilters.filter((sf: any) => sf.type === (filterData.find((f: any) => f.title === currentFilterType)?.items[0]?.type || 'typeAliases')).map((sf: any) => sf.name)}
+            onChange={handleMultiSelectChange}
+            onClose={handleCloseMultiSelect}
+            isOpen={showMultiSelect}
+            filterType={currentFilterType}
+            position={multiselectPosition}
+          />
         )}
-      </div>
 
-       {/* Other Accordions for different filter types */}
-
-
-    {/* MultiSelect Modal for all filter types */}
-    {showMultiSelect && currentFilterType && multiselectPosition && (
-      <FilterAnnotationsMultiSelect
-        options={filterData.find((f:any) => f.title === currentFilterType)?.items.map((item:any) => item.name) || []}
-        value={selectedFilters.filter((sf:any) => sf.type === (filterData.find((f:any) => f.title === currentFilterType)?.items[0]?.type || 'typeAliases')).map((sf:any) => sf.name)}
-        onChange={handleMultiSelectChange}
-        onClose={handleCloseMultiSelect}
-        isOpen={showMultiSelect}
-        filterType={currentFilterType}
-        position={multiselectPosition}
-      />
-    )}
-
-      {/* Sub-Annotations Panel */}
-      {showSubAnnotationsPanel && (
-        <FilterSubAnnotationsPanel
-          annotationName={selectedAnnotationForSubPanel}
-          subAnnotations={subAnnotationData}
-          subAnnotationsloader={!subAnnotationsloaded}
-          selectedSubAnnotations={selectedSubAnnotations}
-          onSubAnnotationsChange={handleSubAnnotationsChange}
-          onSubAnnotationsApply={handleSubAnnotationsApply}
-          onClose={handleCloseSubAnnotationsPanel}
-          isOpen={showSubAnnotationsPanel}
-          clickPosition={clickPosition}
-        />
-      )}
-    </Box>
+        {/* Sub-Annotations Panel */}
+        {showSubAnnotationsPanel && (
+          <FilterSubAnnotationsPanel
+            annotationName={selectedAnnotationForSubPanel}
+            subAnnotations={subAnnotationData}
+            subAnnotationsloader={!subAnnotationsloaded}
+            selectedSubAnnotations={selectedSubAnnotations}
+            onSubAnnotationsChange={handleSubAnnotationsChange}
+            onSubAnnotationsApply={handleSubAnnotationsApply}
+            onClose={handleCloseSubAnnotationsPanel}
+            isOpen={showSubAnnotationsPanel}
+            clickPosition={clickPosition}
+          />
+        )}
+      </Box>
     </Box>
   ) : (<></>);
 }
