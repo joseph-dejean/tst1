@@ -67,44 +67,13 @@ import { getProjects } from '../../features/projects/projectsSlice';
  * This component renders the main filter sidebar for the application. It displays
  * filter options grouped into expandable accordions: "Aspects" (Annotations),
  * "Assets", "Products", and "Projects".
- *
- * Key functionalities include:
- * 1.  **Filter Selection**: Allows users to select/deselect filters via checkboxes.
- * 2.  **Parent Communication**: Uses the `onFilterChange` prop to notify the parent
- * component of any changes to the selected filters.
- * 3.  **Redux Integration**:
- * - Reads `searchTerm` and `searchType` from the Redux store.
- * - Automatically selects "Asset" filters if the `searchTerm` matches an asset name.
- * - Automatically selects a "Product" filter if the `searchType` is set to a
- * specific product.
- * - Dispatches filter changes back to the Redux store.
- * 4.  **Dynamic Data**: Populates "Aspects" and "Projects" from the `user.appConfig`
- * provided by the `useAuth` hook.
- * 5.  **Advanced Filter Modals**:
- * - Renders a "See...more" button for categories with many items, which opens
- * the `FilterAnnotationsMultiSelect` modal.
- * - For "Aspects", it shows an "edit" icon that opens the
- * `FilterSubAnnotationsPanel`, allowing for more granular,
- * field-level filtering. This panel fetches sub-annotation data via an API call.
- * 6.  **Iconography**: Uses helper functions (`getProductIcon`, `getAssetIcon`) to
- * display appropriate icons for "Product" and "Asset" filter items.
- *
- * @param {FilterProps} props - The props for the component.
- * @param {any[]} [props.filters] - An optional array of the currently selected
- * filter objects, used to initialize and sync the component's state.
- * @param {(selectedFilters: any[]) => void} props.onFilterChange - A callback
- * function that is invoked with the complete array of selected filters whenever
- * a selection is made, cleared, or modified.
- *
- * @returns {React.ReactElement} A React element rendering the filter sidebar UI.
- * Returns an empty fragment (`<></>`) during a brief loading state after
- * clearing filters.
  */
 
 //interface for the filter dropdown Props
 interface FilterProps {
   filters?: any[];
   onFilterChange: (selectedFilters: any[]) => void;
+  isGlossary?: boolean;
 }
 
 // Function to get icon for product
@@ -208,208 +177,74 @@ const getAssetIcon = (assetName: string) => {
   }
 };
 
-// FilterDropdown component
-const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
-  // const [anchorEl, setAnchorEl] = useState(null);
-  // const [selectedCategory, setSelectedCategory] = useState(null);
+const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange, isGlossary = false }) => {
   const { user } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
   const searchTerm = useSelector((state: any) => state.search.searchTerm);
   const searchType = useSelector((state: any) => state.search.searchType);
   const projectsLoaded = useSelector((state: any) => state.projects.isloaded);
   const projectsList = useSelector((state: any) => state.projects.items);
-  const [loading, setLoading] = useState(false);
+
   let annotations: any = {
     title: 'Aspects',
-    items: [
-    ],
+    items: [],
     defaultExpanded: false,
   };
+
   let assets: any = {
     title: 'Assets',
     items: [
-      {
-        "name": "Bucket",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Cluster",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Code asset",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Connection",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Dashboard",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Dashboard element",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Data exchange",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Data Product",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Data source connection",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Data stream",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Database",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Database schema",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Dataset",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Explore",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Feature group",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Feature online store",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Feature view",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Fileset",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Folder",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Function",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Glossary",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Glossary Category",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Glossary Term",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Listing",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Look",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Model",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Repository",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Resource",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Routine",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Service",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Table",
-        "type": "typeAliases"
-      },
-      {
-        "name": "View",
-        "type": "typeAliases"
-      },
-      {
-        "name": "Other",
-        "type": "typeAliases"
-      }
+      { "name": "Bucket", "type": "typeAliases" },
+      { "name": "Cluster", "type": "typeAliases" },
+      { "name": "Code asset", "type": "typeAliases" },
+      { "name": "Connection", "type": "typeAliases" },
+      { "name": "Dashboard", "type": "typeAliases" },
+      { "name": "Dashboard element", "type": "typeAliases" },
+      { "name": "Data exchange", "type": "typeAliases" },
+      { "name": "Data Product", "type": "typeAliases" },
+      { "name": "Data source connection", "type": "typeAliases" },
+      { "name": "Data stream", "type": "typeAliases" },
+      { "name": "Database", "type": "typeAliases" },
+      { "name": "Database schema", "type": "typeAliases" },
+      { "name": "Dataset", "type": "typeAliases" },
+      { "name": "Explore", "type": "typeAliases" },
+      { "name": "Feature group", "type": "typeAliases" },
+      { "name": "Feature online store", "type": "typeAliases" },
+      { "name": "Feature view", "type": "typeAliases" },
+      { "name": "Fileset", "type": "typeAliases" },
+      { "name": "Folder", "type": "typeAliases" },
+      { "name": "Function", "type": "typeAliases" },
+      { "name": "Glossary", "type": "typeAliases" },
+      { "name": "Glossary Category", "type": "typeAliases" },
+      { "name": "Glossary Term", "type": "typeAliases" },
+      { "name": "Listing", "type": "typeAliases" },
+      { "name": "Look", "type": "typeAliases" },
+      { "name": "Model", "type": "typeAliases" },
+      { "name": "Repository", "type": "typeAliases" },
+      { "name": "Resource", "type": "typeAliases" },
+      { "name": "Routine", "type": "typeAliases" },
+      { "name": "Service", "type": "typeAliases" },
+      { "name": "Table", "type": "typeAliases" },
+      { "name": "View", "type": "typeAliases" },
+      { "name": "Other", "type": "typeAliases" }
     ],
     defaultExpanded: false,
   };
+
   let products: any = {
     title: 'Products',
     items: [
-      {
-        "name": "Analytics Hub",
-        "type": "system"
-      },
-      {
-        "name": "BigQuery",
-        "type": "system"
-      },
-      {
-        "name": "Cloud BigTable",
-        "type": "system"
-      },
-      {
-        "name": "Cloud Pub/Sub",
-        "type": "system"
-      },
-      {
-        "name": "Cloud Spanner",
-        "type": "system"
-      },
-      {
-        "name": "Cloud SQL",
-        "type": "system"
-      },
-      {
-        "name": "Dataform",
-        "type": "system"
-      },
-      {
-        "name": "Dataplex Universal Catalog",
-        "type": "system"
-      },
-      {
-        "name": "Dataproc Metastore",
-        "type": "system"
-      },
-      {
-        "name": "Vertex AI",
-        "type": "system"
-      },
-      {
-        "name": "Others",
-        "type": "system"
-      }
+      { "name": "Analytics Hub", "type": "system" },
+      { "name": "BigQuery", "type": "system" },
+      { "name": "Cloud BigTable", "type": "system" },
+      { "name": "Cloud Pub/Sub", "type": "system" },
+      { "name": "Cloud Spanner", "type": "system" },
+      { "name": "Cloud SQL", "type": "system" },
+      { "name": "Dataform", "type": "system" },
+      { "name": "Dataplex Universal Catalog", "type": "system" },
+      { "name": "Dataproc Metastore", "type": "system" },
+      { "name": "Vertex AI", "type": "system" },
+      { "name": "Others", "type": "system" }
     ],
     defaultExpanded: false,
   };
@@ -419,7 +254,12 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
     items: [],
     defaultExpanded: false,
   };
-  const [filterData, setFilterData] = useState<any[]>([annotations, assets, products, projects]);
+
+  const [filterData, setFilterData] = useState<any[]>(
+    isGlossary
+      ? [assets, products, projects]
+      : [annotations, assets, products, projects]
+  );
 
   useEffect(() => {
     if (user?.appConfig) {
@@ -442,14 +282,13 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
         pItems.push({ name: 'Others', type: "project", data: {} });
       }
 
-      setFilterData([
-        { ...annotations },
-        { ...assets },
-        { ...products },
-        { ...projects, items: pItems }
-      ]);
+      const newData = isGlossary
+        ? [assets, products, { ...projects, items: pItems }]
+        : [{ ...annotations }, assets, products, { ...projects, items: pItems }];
+
+      setFilterData(newData);
     }
-  }, [user?.appConfig, projectsLoaded, projectsList]);
+  }, [user?.appConfig, projectsLoaded, projectsList, isGlossary]);
 
   const [showSubAnnotationsPanel, setShowSubAnnotationsPanel] = useState(false);
   const [selectedAnnotationForSubPanel, setSelectedAnnotationForSubPanel] = useState<string>('');
@@ -470,38 +309,18 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
   }, []);
 
   useEffect(() => {
-    if (projectsLoaded) {
-      let plist: any = projectsList;
-      let p: any = plist.map((project: any) => ({
-        name: project.projectId,
-        type: "project",
-        data: {}
-      }));
-      setFilterData((prevData: any) => prevData.map((filterCategory: any) => {
-        if (filterCategory.title === 'Projects') {
-          return { ...filterCategory, items: [...p, { name: 'Others', type: "project", data: {} }] };
-        }
-        return filterCategory;
-      }));
-    }
-  }, [projectsLoaded]);
-  // Keep internal selection in sync with parent-provided filters
-  useEffect(() => {
     setSelectedFilters(filters ?? []);
   }, [filters]);
 
-  // Auto-select asset filters when search term matches asset names
   useEffect(() => {
+    if (isGlossary) return;
     if (searchTerm && searchType === 'All' && searchTerm.length >= 3) {
       const matchingAssets = assets.items.filter((asset: any) =>
         asset.name.toLowerCase() === (searchTerm.toLowerCase())
       );
 
       if (matchingAssets.length > 0) {
-        // Get current asset filters
         const currentAssetFilters = selectedFilters.filter((f: any) => f.type === 'typeAliases');
-
-        // Add matching assets that aren't already selected
         const newAssetFilters = matchingAssets
           .filter((asset: any) => !currentAssetFilters.some((f: any) => f.name === asset.name))
           .map((asset: any) => ({
@@ -517,10 +336,10 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
         }
       }
     }
-  }, [searchTerm, searchType, assets.items, selectedFilters, onFilterChange]);
+  }, [searchTerm, searchType, assets.items, selectedFilters, onFilterChange, isGlossary]);
 
-  // Clear asset filters when search term is cleared or search type changes from 'All'
   useEffect(() => {
+    if (isGlossary) return;
     if (!searchTerm || searchType !== 'All') {
       const nonAssetFilters = selectedFilters.filter((f: any) => f.type !== 'typeAliases');
       if (nonAssetFilters.length !== selectedFilters.length) {
@@ -528,32 +347,22 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
         onFilterChange(nonAssetFilters);
       }
     }
-  }, [searchTerm, searchType, selectedFilters, onFilterChange]);
+  }, [searchTerm, searchType, selectedFilters, onFilterChange, isGlossary]);
 
-  // Auto-select product when specific product is selected from search bar
   useEffect(() => {
     if (searchType && searchType !== 'All') {
-      // Find the matching product in the products list
-      const matchingProduct = products.items.find((product: any) =>
-        product.name === searchType
-      );
-
+      const matchingProduct = products.items.find((product: any) => product.name === searchType);
       if (matchingProduct) {
-        // Get current product filters
         const currentProductFilters = selectedFilters.filter((f: any) => f.type === 'system');
-
-        // Check if this product is already selected
         const isAlreadySelected = currentProductFilters.some((f: any) => f.name === searchType);
 
         if (!isAlreadySelected) {
-          // Remove any existing product filters and add the new one
           const nonProductFilters = selectedFilters.filter((f: any) => f.type !== 'system');
           const newProductFilter = {
             name: matchingProduct.name,
             type: matchingProduct.type,
             data: matchingProduct.data
           };
-
           const updatedFilters = [...nonProductFilters, newProductFilter];
           setSelectedFilters(updatedFilters);
           onFilterChange(updatedFilters);
@@ -569,31 +378,15 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
     'Projects': false
   });
 
-  // Auto-expand accordions when search term exists or specific product is selected
-
   const handleCheckboxChange = (filter: any) => {
-    const updatedFilters = selectedFilters.some(item => item.name === filter.name)
-      ? selectedFilters.filter((f) => f.name !== filter.name)
+    const updatedFilters = selectedFilters.some(item => item.name === filter.name && item.type === filter.type)
+      ? selectedFilters.filter((f) => !(f.name === filter.name && f.type === filter.type))
       : [...selectedFilters, filter];
-    console.log("updated filter", updatedFilters);
 
     setSelectedFilters(updatedFilters);
-    onFilterChange(updatedFilters); // Notify parent
+    onFilterChange(updatedFilters);
     dispatch({ type: 'search/setSearchFilters', payload: { searchFilters: updatedFilters } });
 
-    // Sync with search type if this is a Products filter
-    // if (filter.type === 'system') {
-    //   const systemFilters = updatedFilters.filter((f: any) => f.type === 'system');
-    //   if (systemFilters.length === 0) {
-    //     // No system filters selected, set search type to 'All'
-    //     dispatch({ type: 'search/setSearchType', payload: { searchType: 'All' } });
-    //   } else if (systemFilters.length === 1) {
-    //     // One system filter selected, set search type to that filter
-    //     dispatch({ type: 'search/setSearchType', payload: { searchType: systemFilters[0].name } });
-    //   }
-    //   // If multiple system filters are selected, we don't change the search type
-    //   // as the dropdown only supports single selection
-    // }
     if (filter.type === 'system' && filter.name === "BigQuery") {
       if (!updatedFilters.find(item => item.name === filter.name)) {
         dispatch({ type: 'search/setSearchType', payload: { searchType: 'All' } });
@@ -601,67 +394,27 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
     }
   };
 
-
-  const handleAccordionChange = (panel: string) => (_event: React.SyntheticEvent, isExpanded: boolean) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [panel]: isExpanded
-    }));
+  const handleAccordionChange = (section: string) => (event: React.SyntheticEvent, isExpanded: boolean) => {
+    setExpandedSections(prev => ({ ...prev, [section]: isExpanded }));
   };
 
-  // Removed useEffect to prevent automatic filter changes on mount/unmount
-
-  const handleFilterClear = () => {
-    setSelectedFilters([]);
-    onFilterChange([]); // Notify parent
-    dispatch({ type: 'search/setSearchFilters', payload: { searchFilters: [] } });
-    dispatch({ type: 'search/setSearchType', payload: { searchType: 'All' } });
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-    }, 100); // Simulate loading delay
-  };
-
-
-  const handleViewAllItems = (filterType: string, event: React.MouseEvent) => {
+  const handleSeeMoreClick = (filterType: string, event: React.MouseEvent) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setMultiselectPosition({ top: rect.top, left: rect.left });
     setCurrentFilterType(filterType);
-
-    // Get the position of the clicked accordion to position the modal adjacent to it
-    const accordionElement = event.currentTarget.closest('.MuiAccordion-root');
-    if (accordionElement) {
-      const rect = accordionElement.getBoundingClientRect();
-      const headerElement = accordionElement.querySelector('.MuiAccordionSummary-root');
-      const headerRect = headerElement ? headerElement.getBoundingClientRect() : rect;
-
-      setMultiselectPosition({
-        top: ((headerRect.top + window.scrollY + 341) > window.innerHeight)
-          ? window.innerHeight - 360
-          : headerRect.top + window.scrollY, // Align with accordion header
-        left: rect.right + 16 // Position to the right of the accordion with some spacing
-      });
-    }
-
     setShowMultiSelect(true);
   };
 
-
   const handleMultiSelectChange = (selectedItems: string[]) => {
-    console.log('Generic multiselect change:', selectedItems, 'for filter:', currentFilterType);
-
-    // Find the current filter data
     const currentFilter = filterData.find((f: any) => f.title === currentFilterType);
     if (!currentFilter) return;
 
-    // Convert selected items to filter format
     const newFilters = selectedItems.map(item => ({
       name: item,
-      type: currentFilter.items[0]?.type || 'typeAliases' // Use the type from the first item
+      type: currentFilter.items[0]?.type || 'typeAliases'
     }));
 
-    // Remove existing filters of this type
     const filteredSelectedFilters = selectedFilters.filter((sf: any) => sf.type !== (currentFilter.items[0]?.type || 'typeAliases'));
-
-    // Add new filters
     const updatedFilters = [...filteredSelectedFilters, ...newFilters];
 
     setSelectedFilters(updatedFilters);
@@ -674,7 +427,6 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
     setMultiselectPosition(null);
   };
 
-  // Mock data for sub-annotations - in real app this would come from API
   const getSubAnnotationsForAnnotation = async (annotationData: any) => {
     axios.defaults.headers.common['Authorization'] = `Bearer ${user?.token ?? ''}`;
 
@@ -683,19 +435,11 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
     });
 
     const data = await response.data;
-    console.log('filter subannotations', data);
-
-    // Transform recordFields to include type information
-    // For demo purposes, create sample fields that match the ideal design
-    const sampleFields = [
-      { name: 'Temaplate_Field', type: 'string' }
-    ];
-
+    const sampleFields = [{ name: 'Temaplate_Field', type: 'string' }];
     const transformedFields = data.metadataTemplate.recordFields?.map((r: any) => ({
       name: String(r.name || ''),
-      type: r.type || 'string', // Default to string if type is not specified
+      type: r.type || 'string',
       enumValues: r.enumValues ? r.enumValues.map((val: any) => {
-        // Handle object values properly
         if (typeof val === 'object' && val !== null) {
           return val.name || val.value || val.label || JSON.stringify(val);
         }
@@ -713,26 +457,18 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
     setSubAnnotationsloaded(false);
     getSubAnnotationsForAnnotation(data);
 
-    // Check if the parent annotation is already selected
     const isParentSelected = selectedFilters.some(filter =>
       filter.name === annotationName && filter.type === 'aspectType'
     );
 
-    // If parent is selected, initialize with some default sub-annotations (or keep empty)
-    // In a real app, you might want to load previously selected sub-annotations from an API
-    setSelectedSubAnnotations(isParentSelected ? [] : []); // For now, always start empty
-
+    setSelectedSubAnnotations(isParentSelected ? [] : []);
     const rect = event.currentTarget.getBoundingClientRect();
     setClickPosition({ top: rect.top, right: rect.right });
-
     setShowSubAnnotationsPanel(true);
   };
 
   const handleSubAnnotationsChange = (selectedSubAnnotations: any[]) => {
     setSelectedSubAnnotations(selectedSubAnnotations);
-
-    // Don't auto-check parent annotation - this will be handled by Apply button
-    console.log('Sub-annotations changed for', selectedAnnotationForSubPanel, ':', selectedSubAnnotations);
   };
 
   const handleCloseSubAnnotationsPanel = () => {
@@ -742,119 +478,46 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
   };
 
   const handleSubAnnotationsApply = (appliedSubAnnotations: any[]) => {
-    // When Apply button is clicked in FilterSubAnnotationsPanel, check the parent annotation
     if (appliedSubAnnotations.length > 0) {
       const parentAnnotation = {
         name: selectedAnnotationForSubPanel,
         type: 'aspectType',
-        subAnnotationData: appliedSubAnnotations // You can include additional data if needed
+        subAnnotationData: appliedSubAnnotations
       };
 
-      // Add parent annotation to selected filters if not already present
-      if (!selectedFilters.some(filter => filter.name === selectedAnnotationForSubPanel && filter.type === 'aspectType')) {
+      const alreadySelected = selectedFilters.some(filter =>
+        filter.name === selectedAnnotationForSubPanel && filter.type === 'aspectType'
+      );
+
+      if (!alreadySelected) {
         const updatedFilters = [...selectedFilters, parentAnnotation];
         setSelectedFilters(updatedFilters);
         onFilterChange(updatedFilters);
-      } else {
-
-        const updatedFilters = [...selectedFilters.filter(filter => filter.name !== selectedAnnotationForSubPanel && filter.type === 'aspectType'), parentAnnotation];
-        setSelectedFilters(updatedFilters);
-        onFilterChange(updatedFilters);
+        dispatch({ type: 'search/setSearchFilters', payload: { searchFilters: updatedFilters } });
       }
-    } else {
-      // If no sub-annotations are applied, remove the parent annotation
-      const updatedFilters = selectedFilters.filter(filter =>
-        !(filter.name === selectedAnnotationForSubPanel && filter.type === 'aspectType')
-      );
-      setSelectedFilters(updatedFilters);
-      onFilterChange(updatedFilters);
     }
-
-    // Close the panel
     handleCloseSubAnnotationsPanel();
   };
 
-  // Debug useEffect to monitor selectedFilters changes
-  // useEffect(() => {
-  //   console.log('selectedFilters changed:', selectedFilters);
-  // }, [selectedFilters]);
-
-  // const handleMenuOpen = (event:any) => {
-  //   setAnchorEl(event.currentTarget);
-  // };
-
-  // const handleMenuClose = () => {
-  //   setAnchorEl(null);
-  // };
-
-  // const handleMenuItemClick = (category:any) => {
-  //   setSelectedCategory(category);
-  //   handleMenuClose();
-  //   // Apply the filter logic here
-  // };
-
-  return !loading ? (
-    <Box
-      sx={{
+  return (
+    <>
+      <Box sx={{
+        width: "100%",
+        display: "flex",
+        flexDirection: "column",
+        flex: "1 1 auto",
         overflowY: "auto",
-        scrollbarWidth: "none", // Firefox
-        "&::-webkit-scrollbar": { display: "none" }, // Chrome/Safari
-        "-ms-overflow-style": "none", // IE and Edge
-        maxHeight: "100%"
-      }}
-    >
-      <Box sx={{ position: 'relative' }}>
-        <Box sx={{ flexGrow: 1, flexShrink: 1 }} style={{ padding: "0.3125rem 0 0.3125rem 0.3125rem", marginTop: "1.25rem", paddingBottom: "1.5625rem", display: "flex", flexDirection: "column", flex: "0 0 auto" }}>
-          <div style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            width: "100%",
-            paddingRight: 0,
-            flex: "1 1 auto",
-            marginTop: "-20px"
-          }}>
-            <Typography sx={{ fontWeight: "500", fontSize: "1rem", color: "#1F1F1F", flex: "0 1 auto", fontFamily: "Google sans text, sans-serif", marginLeft: '5px' }}>Filters</Typography>
-            <Button onClick={handleFilterClear}
-              disabled={selectedFilters.length === 0}
-              sx={{
-                fontFamily: '"Google Sans Text", sans-serif',
-                fontWeight: "700",
-                color: "#1f1f1f",
-                fontSize: "0.75rem",
-                fontStyle: "normal",
-                display: "flex",
-                marginRight: "8px",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "0.25rem",
-                textTransform: "none",
-                minWidth: "auto",
-                height: "2rem",
-                flex: "0 0 auto",
-                '&.Mui-disabled': {
-                  color: '#1f1f1f',
-                  opacity: '30%',
-                },
-              }}>Clear</Button>
-          </div>
-        </Box>
-        <Box
-          sx={{
-            height: '1px',
-            backgroundColor: '#E0E0E0',
-            marginLeft: '5px',
-            marginRight: '3.5px',
-          }}
-        />
+        overflowX: "hidden",
+        backgroundColor: "none",
+        marginLeft: "-0.5rem",
+      }}>
         <div style={{
           fontSize: "0.75rem",
           display: "flex",
           flexDirection: "column",
           flex: "1 1 auto"
         }}>
-          {filterData.map((filter: any) =>
-          (
+          {filterData.map((filter: any) => (
             <Accordion
               key={filter.title}
               expanded={expandedSections[filter.title] || filter.defaultExpanded}
@@ -924,7 +587,6 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
               }}>
                 {
                   (filter.title === 'Assets' || filter.title === 'Products' ?
-                    // Sort assets and products to show selected items first
                     filter.items :
                     filter.items.slice(0, 20)
                   ).map((item: any) => (
@@ -989,26 +651,16 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
                                 <img
                                   src={getProductIcon(item.name)!}
                                   alt={item.name}
-                                  style={{
-                                    width: '1.25rem',
-                                    height: '1.25rem',
-                                    flex: '0 0 auto'
-                                  }}
+                                  style={{ width: '1.25rem', height: '1.25rem', flex: '0 0 auto' }}
                                 />
                               )}
                               {filter.title === 'Assets' && getAssetIcon(item.name) && (
                                 <img
                                   src={getAssetIcon(item.name)!}
                                   alt={item.name}
-                                  style={{
-                                    width: '1.25rem',
-                                    height: '1.25rem',
-                                    flex: '0 0 auto',
-                                    opacity: 1,
-                                  }}
+                                  style={{ width: '1.25rem', height: '1.25rem', flex: '0 0 auto' }}
                                 />
                               )}
-                              {/* <Tooltip title={item.name} placement="top" arrow> */}
                               <span style={{
                                 flex: '1 1 auto',
                                 overflow: 'hidden',
@@ -1021,7 +673,6 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
                               }}>
                                 {item.name}
                               </span>
-                              {/* </Tooltip> */}
                             </div>
                           }
                           sx={{
@@ -1048,84 +699,65 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange }) => {
                             right: 0,
                             top: '50%',
                             transform: 'translateY(-50%)',
-                            cursor: 'pointer',
-                            flex: '0 0 auto'
+                            cursor: 'pointer'
                           }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditNoteClick(item.name, item.data, e);
-                          }}
+                          onClick={(e) => handleEditNoteClick(item.name, item.data, e)}
                         />
                       )}
                     </div>
                   ))
                 }
-                {(filter.title !== 'Assets' && filter.title !== 'Products' && filter.items.length > 10) && (
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    padding: 0,
-                    flex: '0 0 auto'
-                  }}>
-                    <Button
-                      onClick={(e) => handleViewAllItems(filter.title, e)}
-                      sx={{
-                        color: '#0E4DCA',
-                        fontSize: '0.75rem',
-                        fontWeight: '500',
-                        textTransform: 'none',
-                        padding: '0.25rem 0.5rem',
-                        minWidth: 'auto',
-                        flex: '0 0 auto',
-                        '&:hover': {
-                          backgroundColor: 'transparent',
-                          textDecoration: 'underline'
-                        }
-                      }}
-                    >
-                      See {filter.items.length - 10} more
-                    </Button>
-                  </div>
+                {filter.items.length > 20 && filter.title !== 'Assets' && filter.title !== 'Products' && (
+                  <Button
+                    onClick={(e) => handleSeeMoreClick(filter.title, e)}
+                    sx={{
+                      textTransform: 'none',
+                      color: '#0E4DCA',
+                      fontSize: '0.75rem',
+                      fontWeight: 500,
+                      padding: '4px 8px',
+                      marginLeft: '28px',
+                      '&:hover': {
+                        backgroundColor: 'rgba(14, 77, 202, 0.04)',
+                      }
+                    }}
+                  >
+                    See {filter.items.length - 20} more
+                  </Button>
                 )}
               </AccordionDetails>
             </Accordion>
-          )
-          )}
+          ))}
         </div>
-
-        {/* Other Accordions for different filter types */}
-
-
-        {/* MultiSelect Modal for all filter types */}
-        {showMultiSelect && currentFilterType && multiselectPosition && (
-          <FilterAnnotationsMultiSelect
-            options={filterData.find((f: any) => f.title === currentFilterType)?.items.map((item: any) => item.name) || []}
-            value={selectedFilters.filter((sf: any) => sf.type === (filterData.find((f: any) => f.title === currentFilterType)?.items[0]?.type || 'typeAliases')).map((sf: any) => sf.name)}
-            onChange={handleMultiSelectChange}
-            onClose={handleCloseMultiSelect}
-            isOpen={showMultiSelect}
-            filterType={currentFilterType}
-            position={multiselectPosition}
-          />
-        )}
-
-        {/* Sub-Annotations Panel */}
-        {showSubAnnotationsPanel && (
-          <FilterSubAnnotationsPanel
-            annotationName={selectedAnnotationForSubPanel}
-            subAnnotations={subAnnotationData}
-            subAnnotationsloader={!subAnnotationsloaded}
-            selectedSubAnnotations={selectedSubAnnotations}
-            onSubAnnotationsChange={handleSubAnnotationsChange}
-            onSubAnnotationsApply={handleSubAnnotationsApply}
-            onClose={handleCloseSubAnnotationsPanel}
-            isOpen={showSubAnnotationsPanel}
-            clickPosition={clickPosition}
-          />
-        )}
       </Box>
-    </Box>
-  ) : (<></>);
-}
+
+      {showMultiSelect && (
+        <FilterAnnotationsMultiSelect
+          isOpen={showMultiSelect}
+          onClose={handleCloseMultiSelect}
+          filterType={currentFilterType}
+          options={filterData.find((f: any) => f.title === currentFilterType)?.items.map((item: any) => item.name) || []}
+          selectedItems={selectedFilters.filter(f => f.type === (filterData.find((fd: any) => fd.title === currentFilterType)?.items[0]?.type)).map(f => f.name)}
+          onSelectionChange={handleMultiSelectChange}
+          position={multiselectPosition}
+        />
+      )}
+
+      {showSubAnnotationsPanel && (
+        <FilterSubAnnotationsPanel
+          isOpen={showSubAnnotationsPanel}
+          onClose={handleCloseSubAnnotationsPanel}
+          annotationName={selectedAnnotationForSubPanel}
+          subAnnotations={subAnnotationData}
+          selectedSubAnnotations={selectedSubAnnotations}
+          onSelectionChange={handleSubAnnotationsChange}
+          onApply={handleSubAnnotationsApply}
+          clickPosition={clickPosition}
+          loaded={subAnnotationsloaded}
+        />
+      )}
+    </>
+  );
+};
 
 export default FilterDropdown;

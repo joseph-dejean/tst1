@@ -20,9 +20,13 @@ export const URLS = {
     ACCESS_REQUEST : '/access-request',
     GET_PROJECTS: '/get-projects',
     SEND_FEEDBACK: '/send-feedback',
+<<<<<<< HEAD
     CHAT: '/chat',
     GET_ASPECT: '/aspect',
     GET_ACCESS_REQUESTS: '/access-requests',
     UPDATE_ACCESS_REQUEST: '/access-request/update',
     GET_ASPECT_TYPES: '/aspect-types',
+=======
+    LINEAGE_SEARCH_COLUMN_LEVEL: '/lineage-column-level',
+>>>>>>> upstream/main
 }
