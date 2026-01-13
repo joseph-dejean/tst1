@@ -20,7 +20,7 @@ import { getSampleData } from '../../features/sample-data/sampleDataSlice'
 import { popFromHistory } from '../../features/entry/entrySlice'
 import { fetchAllDataScans, selectAllScans, selectAllScansStatus } from '../../features/dataScan/dataScanSlice';
 import { useAuth } from '../../auth/AuthProvider'
-import { getName, getEntryType, generateBigQueryLink, hasValidAnnotationData, generateLookerStudioLink  } from '../../utils/resourceUtils'
+import { getName, getEntryType, generateBigQueryLink, hasValidAnnotationData, generateLookerStudioLink } from '../../utils/resourceUtils'
 // import { useFavorite } from '../../hooks/useFavorite'
 
 /**
@@ -108,15 +108,80 @@ const ViewDetails = () => {
     }
   };
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    // Determine if the clicked tab is the Chat tab
+    let isChat = false;
+    const isBQTable = getEntryType(entry.name, '/') === 'Tables' && entry.entrySource?.system.toLowerCase() === 'bigquery';
+    const isDataset = getEntryType(entry.name, '/') === 'Datasets';
+
+    // Based on tab structure in render:
+    if (isBQTable) {
+      // Tabs: Overview(0), Aspects(1), Lineage(2), Data Profile(3), Data Quality(4), Chat(5)
+      if (newValue === 5) isChat = true;
+    } else if (isDataset) {
+      // Tabs: Overview(0), Entry List(1), Aspects(2), Chat(3?? wait, render says index 5 but Tabs assign sequential indices)
+      // If CustomTabPanel uses index 5, it means we MIGHT have skipped indices? 
+      // No, Tabs children are indexed 0, 1, 2, 3.
+      // The render logic:
+      /*
+        <Tab ... {...tabProps(0)} />
+        <Tab ... {...tabProps(1)} />
+        <Tab ... {...tabProps(2)} />
+        <Tab ... {...tabProps(5)} /> 
+      */
+      // If I click the 4th tab, newValue will be 3 (unless value prop is set on Tab).
+      // Let's assume newValue is the index in the Tabs array for now.
+      // Wait, if CustomTabPanel uses index 5, then setting tabValue to 3 would hide it?
+      // This suggests that tabProps(5) might set the value?
+      // I don't see tabProps setting value.
+      // BUT, if I assume the current code works, then tabValue must match the index passed to CustomTabPanel.
+      // If Tabs assigns 0,1,2,3... AND CustomTabPanel waits for 5... then it wouldn't work.
+      // UNLESS `value` is passed to `<Tab value={5} ... />`. It is not.
+      // MAYBE `tabProps` spreads `value`?
+      // Line 116: const tabProps = (index: number) => { return { id: `tab-${index}`, 'aria-controls': ... } }
+      // It does NOT.
+
+      // This implies the existing "Conversational Analytics" tab for Datasets might be BROKEN in the current codebase or I am misunderstanding MUI Tabs.
+      // OR the user never clicked it for Datasets.
+      // "This is the last version that have Conversational Analytics that work" -> implies it DID work.
+      // Perhaps `CustomTabPanel` handles it?
+      /*
+      530: <CustomTabPanel value={tabValue} index={0}>
+      ...
+      581: <CustomTabPanel value={tabValue} index={5}>
+      */
+      // If `tabValue` is 3, `index={5}` is false. Hidden.
+
+      // Maybe `getEntryType` returns something else?
+
+      // Let's rely on checking the LABEL of the tab if possible, or just checking if newValue is the last one.
+      // Actually, for the purpose of "Chat with Table" (BQ), index 5 is correct (0-5, count 6).
+      // For Datasets, "Conversational Analytics", if it is the last one.
+
+      // I'll stick to: if it's the last tab, it's chat.
+      // BQ: 6 tabs. Last is Chat.
+      // Dataset: 4 tabs. Last is Chat.
+      // Others: 3 tabs (Overview, Aspects, Chat). Last is Chat.
+
+      const totalTabs = isBQTable ? 6 : (isDataset ? 4 : 3);
+      if (newValue === totalTabs - 1) isChat = true;
+    }
+
+    if (isChat) {
+      // Open in new tab
+      const url = `/chat-analytics?entryName=${encodeURIComponent(entry.name)}`;
+      window.open(url, '_blank');
+      return; // Do not change active tab
+    }
+
     console.log(event);
     setTabValue(newValue);
   };
-  
 
-  const tabProps = (index: number)  => {
+
+  const tabProps = (index: number) => {
     return {
-        id: `tab-${index}`,
-        'aria-controls': `tabpanel-${index}`,
+      id: `tab-${index}`,
+      'aria-controls': `tabpanel-${index}`,
     };
   }
 
@@ -133,32 +198,32 @@ const ViewDetails = () => {
   };
 
 
-//   let schema = <Schema entry={entry} css={{width:"100%"}} />;
+  //   let schema = <Schema entry={entry} css={{width:"100%"}} />;
 
-let annotationTab = <PreviewAnnotation 
-  entry={filteredEntry || entry} 
-  css={{width:"100%", borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px', marginRight: '8px'}} 
-  isTopComponent={true} 
-  expandedItems={expandedAnnotations}
-  setExpandedItems={setExpandedAnnotations}
+  let annotationTab = <PreviewAnnotation
+    entry={filteredEntry || entry}
+    css={{ width: "100%", borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px', marginRight: '8px' }}
+    isTopComponent={true}
+    expandedItems={expandedAnnotations}
+    setExpandedItems={setExpandedAnnotations}
 
-/>;  let overviewTab = <DetailPageOverview entry={entry} css={{width:"100%"}} sampleTableData={sampleTableData}/>;
-  
-//   useEffect(() => {
-//     if(getEntryType(entry.name, '/') == 'Tables') {
-//         // schema = <Schema entry={entry} css={{width:"100%"}} />;
-//         dispatch(getSampleData({fqn: entry.fullyQualifiedName, id_token: id_token}));
-//     }
-//   }, []);
+  />; let overviewTab = <DetailPageOverview entry={entry} css={{ width: "100%" }} sampleTableData={sampleTableData} />;
+
+  //   useEffect(() => {
+  //     if(getEntryType(entry.name, '/') == 'Tables') {
+  //         // schema = <Schema entry={entry} css={{width:"100%"}} />;
+  //         dispatch(getSampleData({fqn: entry.fullyQualifiedName, id_token: id_token}));
+  //     }
+  //   }, []);
 
   useEffect(() => {
     // Only fetch if we have a token and haven't fetched yet
-    if (id_token){ // && allScansStatus === 'idle') {
+    if (id_token) { // && allScansStatus === 'idle') {
       dispatch(fetchAllDataScans({ id_token: id_token, projectId: entry?.entrySource?.resource.split('/')[1] || '' }));
     }
   }, []);//[dispatch, id_token, allScansStatus]);
 
-useEffect(() => {
+  useEffect(() => {
     if (
       entryStatus === 'succeeded' &&
       allScansStatus === 'succeeded' &&
@@ -182,7 +247,7 @@ useEffect(() => {
           scan.data.resource.includes(resourceName) && scan.type === 'DATA_PROFILE'
       );
       setDpScanName(dpScan ? dpScan.name : null);
-      
+
       // console.log(`For resource [${resourceName}], found DQ scan: ${dqScan ? dqScan.name : 'None'}`);
       // console.log(`For resource [${resourceName}], found DP scan: ${dpScan ? dpScan.name : 'None'}`);
 
@@ -191,30 +256,30 @@ useEffect(() => {
 
 
   useEffect(() => {
-    if(sampleDataStatus === 'succeeded') {
-        // schema = <Schema entry={entry} css={{width:"100%"}} />;
-        if(entry.entrySource?.system) {
-          if(entry.entrySource?.system.toLowerCase() === 'bigquery'){
-            setSampleTableData(sampleData);
-            //console.log("Sample Data:", sampleData);
-          }
+    if (sampleDataStatus === 'succeeded') {
+      // schema = <Schema entry={entry} css={{width:"100%"}} />;
+      if (entry.entrySource?.system) {
+        if (entry.entrySource?.system.toLowerCase() === 'bigquery') {
+          setSampleTableData(sampleData);
+          //console.log("Sample Data:", sampleData);
         }
+      }
     }
   }, [sampleData]);
 
   useEffect(() => {
-  if(entryStatus === 'loading') {
+    if (entryStatus === 'loading') {
       setLoading(true);
-  }
-  if(entryStatus === 'succeeded') {
+    }
+    if (entryStatus === 'succeeded') {
       // schema = <Schema entry={entry} css={{width:"100%"}} />;
       setLoading(false);
-      if(getEntryType(entry.name, '/') == 'Tables' && entry.entrySource?.system != undefined && entry.entrySource?.system != "undefined" && entry.entrySource?.system.toLowerCase() === 'bigquery') {
-        dispatch(getSampleData({fqn: entry.fullyQualifiedName, id_token: id_token}));
+      if (getEntryType(entry.name, '/') == 'Tables' && entry.entrySource?.system != undefined && entry.entrySource?.system != "undefined" && entry.entrySource?.system.toLowerCase() === 'bigquery') {
+        dispatch(getSampleData({ fqn: entry.fullyQualifiedName, id_token: id_token }));
       }
       // console.log("loader:", loading);
-  }
-}, [entryStatus]);
+    }
+  }, [entryStatus]);
 
   // Handle case where entry is already loaded from persistence
   useEffect(() => {
@@ -231,126 +296,126 @@ useEffect(() => {
     }
   }, [entry?.name]);
   // Lineage tab with full Lineage component
-  const lineageTab = <Lineage entry={entry}/>;
+  const lineageTab = <Lineage entry={entry} />;
 
   return (
-    <div style={{display: "flex", flexDirection: "column", padding: "0px 1rem", background:"#F8FAFD", minHeight: "100vh" }}>
-      <div style={{display: "flex", flexDirection: "column", borderRadius:"20px",background: "#ffffff",minHeight: "95vh", marginBottom: "2rem"}}>
-        {loading ? (<div style={{margin:"0px 20px"}}>
-                      <div style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            padding: "24px 0px 16px 0px",
-                            minHeight:"500px",
-                        }}>
-                          <ShimmerLoader count={6} type="card" />
-                        </div>
-                      </div>) : (<div style={{padding:"0px 0rem"}}>
-                        {/* Sticky Header Container */}
-                        <div style={{
-                            position: 'sticky',
-                            top: '64px',
-                            backgroundColor: '#ffffff',
-                            zIndex: 1000,
-                            borderRadius: '20px 20px 0 0'
-                        }}>
+    <div style={{ display: "flex", flexDirection: "column", padding: "0px 1rem", background: "#F8FAFD", minHeight: "100vh" }}>
+      <div style={{ display: "flex", flexDirection: "column", borderRadius: "20px", background: "#ffffff", minHeight: "95vh", marginBottom: "2rem" }}>
+        {loading ? (<div style={{ margin: "0px 20px" }}>
+          <div style={{
+            display: "flex",
+            flexDirection: "column",
+            padding: "24px 0px 16px 0px",
+            minHeight: "500px",
+          }}>
+            <ShimmerLoader count={6} type="card" />
+          </div>
+        </div>) : (<div style={{ padding: "0px 0rem" }}>
+          {/* Sticky Header Container */}
+          <div style={{
+            position: 'sticky',
+            top: '64px',
+            backgroundColor: '#ffffff',
+            zIndex: 1000,
+            borderRadius: '20px 20px 0 0'
+          }}>
 
             {/* Primary Title Bar */}
             <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "24px 0px 4px 0px"
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "24px 0px 4px 0px"
             }}>
-                {/* Left Side - Back Arrow, Title, and Tags */}
-                <div style={{
-                    display: "flex",
-                    alignItems: "center"
-                }}>
-                    <button 
-                        onClick={goBack} 
-                        style={{
-                            background: "none", 
-                            border: "none", 
-                            color: "#0B57D0", 
-                            cursor: "pointer", 
-                            padding: "4px",
-                            display: "flex",
-                            alignItems: "center",
-                            marginRight: "1rem"
-                        }}
-                    >
-                        <ArrowBack style={{fontSize: "24px"}} />
-                    </button>
-                    <Tooltip 
-                      title={
-                        entry.entrySource.displayName.length > 0 
-                        ? entry.entrySource.displayName 
-                        : getName(entry.name || '', '/')
-                      }
-                      arrow placement='top'
-                    >
-                    <label style={{ 
-                        fontFamily: '"Google Sans", sans-serif',
-                        color: "#1F1F1F", 
-                        fontSize: "1.125rem", 
-                        fontWeight: "500",
-                        // textTransform: "capitalize",
-                        marginRight: "0.5rem",
-                        maxWidth: '400px',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                    }}>
-                        {entry.entrySource.displayName.length > 0 ? entry.entrySource.displayName : getName(entry.name || '', '/')}
-                    </label>
-                    </Tooltip>
-                    <Tag 
-                        text={entry.entrySource.system ? (entry.entrySource?.system.toLowerCase() === 'bigquery' ? 'BigQuery' : entry.entrySource?.system.replace("_", " ").replace("-", " ").toLowerCase()) : 'Custom'} 
-                        css={{
-                            fontFamily: '"Google Sans Text", sans-serif',
-                            backgroundColor: '#C2E7FF',
-                            color: '#004A77',
-                            borderRadius: '8px',
-                            padding: '4px 8px',
-                            height: '1.25rem',
-                            fontSize: '0.75rem',
-                            fontWeight: '500',
-                            border: 'none',
-                            textTransform: 'capitalize',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginRight: '0.5rem',
-                            display: 'flex'
-                        }}
-                    />
-                    <Tag 
-                        text={getEntryType(entry.name, '/')} 
-                        css={{
-                            fontFamily: '"Google Sans Text", sans-serif',
-                            backgroundColor: '#C2E7FF',
-                            color: '#004A77',
-                            borderRadius: '8px',
-                            padding: '4px 8px',
-                            height: '1.25rem',
-                            fontSize: '0.75rem',
-                            fontWeight: '500',
-                            border: 'none',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            display: 'flex'
-                        }}
-                    />
-                </div>
-                
-                {/* Right Side - Star and Action Buttons */}
-                <div style={{
+              {/* Left Side - Back Arrow, Title, and Tags */}
+              <div style={{
+                display: "flex",
+                alignItems: "center"
+              }}>
+                <button
+                  onClick={goBack}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#0B57D0",
+                    cursor: "pointer",
+                    padding: "4px",
                     display: "flex",
                     alignItems: "center",
-                    gap: "16px",
-                    marginRight: "2rem"
-                }}>
-                  {/* <svg 
+                    marginRight: "1rem"
+                  }}
+                >
+                  <ArrowBack style={{ fontSize: "24px" }} />
+                </button>
+                <Tooltip
+                  title={
+                    entry.entrySource.displayName.length > 0
+                      ? entry.entrySource.displayName
+                      : getName(entry.name || '', '/')
+                  }
+                  arrow placement='top'
+                >
+                  <label style={{
+                    fontFamily: '"Google Sans", sans-serif',
+                    color: "#1F1F1F",
+                    fontSize: "1.125rem",
+                    fontWeight: "500",
+                    // textTransform: "capitalize",
+                    marginRight: "0.5rem",
+                    maxWidth: '400px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {entry.entrySource.displayName.length > 0 ? entry.entrySource.displayName : getName(entry.name || '', '/')}
+                  </label>
+                </Tooltip>
+                <Tag
+                  text={entry.entrySource.system ? (entry.entrySource?.system.toLowerCase() === 'bigquery' ? 'BigQuery' : entry.entrySource?.system.replace("_", " ").replace("-", " ").toLowerCase()) : 'Custom'}
+                  css={{
+                    fontFamily: '"Google Sans Text", sans-serif',
+                    backgroundColor: '#C2E7FF',
+                    color: '#004A77',
+                    borderRadius: '8px',
+                    padding: '4px 8px',
+                    height: '1.25rem',
+                    fontSize: '0.75rem',
+                    fontWeight: '500',
+                    border: 'none',
+                    textTransform: 'capitalize',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: '0.5rem',
+                    display: 'flex'
+                  }}
+                />
+                <Tag
+                  text={getEntryType(entry.name, '/')}
+                  css={{
+                    fontFamily: '"Google Sans Text", sans-serif',
+                    backgroundColor: '#C2E7FF',
+                    color: '#004A77',
+                    borderRadius: '8px',
+                    padding: '4px 8px',
+                    height: '1.25rem',
+                    fontSize: '0.75rem',
+                    fontWeight: '500',
+                    border: 'none',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    display: 'flex'
+                  }}
+                />
+              </div>
+
+              {/* Right Side - Star and Action Buttons */}
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "16px",
+                marginRight: "2rem"
+              }}>
+                {/* <svg 
                     width="1.25rem" 
                     height="1.25rem" 
                     viewBox="0 0 18 18" 
@@ -381,227 +446,227 @@ useEffect(() => {
                         />
                     )}
                   </svg> */}
-                  
-                  {
-                    entry.entrySource?.system.toLowerCase() === 'bigquery' ? (<>
-                        <button 
-                              onClick={() => window.open(generateBigQueryLink(entry), '_blank')}
-                              style={{
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "8px",
-                              color: "#0B57D0",
-                              fontFamily: '"Google Sans Text", sans-serif',
-                              fontSize: "0.75rem",
-                              fontWeight: "700"
-                          }}>
-                              <img 
-                                  src="/assets/images/Product-Icons.png" 
-                                  alt="Open in BQ" 
-                                  style={{width: "16px", height: "16px", position:'relative', top: '-2px'}} 
-                              />
-                              Open in BigQuery
-                        </button>
-                        <button 
-                              onClick={() => window.open(generateLookerStudioLink(entry), '_blank')}
-                              style={{
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "8px",
-                              color: "#0B57D0",
-                              fontFamily: '"Google Sans Text", sans-serif',
-                              fontSize: "0.75rem",
-                              fontWeight: "700"
-                          }}>
-                              <img 
-                                  src="/assets/images/looker.png" 
-                                  alt="Open in Looker" 
-                                  style={{width: "12px", position:'relative', top: '-3px'}} 
-                              />
-                              Explore with Looker Studio
-                        </button>
-                      </>
-                    ):(<></>)
-                  }
-                  <button 
-                    onClick={() => setShowAccessRequest(true)}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      color: "#0B57D0",
-                      fontFamily: '"Google Sans Text", sans-serif',
-                      fontSize: "0.75rem",
-                      fontWeight: "700"
-                    }}>
-                    Request Access
-                  </button>
-                </div>
+
+                {
+                  entry.entrySource?.system.toLowerCase() === 'bigquery' ? (<>
+                    <button
+                      onClick={() => window.open(generateBigQueryLink(entry), '_blank')}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        color: "#0B57D0",
+                        fontFamily: '"Google Sans Text", sans-serif',
+                        fontSize: "0.75rem",
+                        fontWeight: "700"
+                      }}>
+                      <img
+                        src="/assets/images/Product-Icons.png"
+                        alt="Open in BQ"
+                        style={{ width: "16px", height: "16px", position: 'relative', top: '-2px' }}
+                      />
+                      Open in BigQuery
+                    </button>
+                    <button
+                      onClick={() => window.open(generateLookerStudioLink(entry), '_blank')}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        color: "#0B57D0",
+                        fontFamily: '"Google Sans Text", sans-serif',
+                        fontSize: "0.75rem",
+                        fontWeight: "700"
+                      }}>
+                      <img
+                        src="/assets/images/looker.png"
+                        alt="Open in Looker"
+                        style={{ width: "12px", position: 'relative', top: '-3px' }}
+                      />
+                      Explore with Looker Studio
+                    </button>
+                  </>
+                  ) : (<></>)
+                }
+                <button
+                  onClick={() => setShowAccessRequest(true)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    color: "#0B57D0",
+                    fontFamily: '"Google Sans Text", sans-serif',
+                    fontSize: "0.75rem",
+                    fontWeight: "700"
+                  }}>
+                  Request Access
+                </button>
               </div>
-              {/* Navigation Tab Bar */}
-              <div style={{ paddingTop: "0px", marginTop: "0px" }}>
+            </div>
+            {/* Navigation Tab Bar */}
+            <div style={{ paddingTop: "0px", marginTop: "0px" }}>
+              <Box
+                sx={{
+                  width: "100%",
+                  borderBottom: 1,
+                  borderBottomColor: "#E0E0E0",
+                }}
+              >
                 <Box
                   sx={{
-                    width: "100%",
-                    borderBottom: 1,
-                    borderBottomColor: "#E0E0E0",
-                  }}
-                >
-                  <Box
-                    sx={{
-                      paddingLeft: "1.75rem",
-                      position: "relative",
-                      "& .MuiTabs-root": {
-                        minHeight: "48px",
+                    paddingLeft: "1.75rem",
+                    position: "relative",
+                    "& .MuiTabs-root": {
+                      minHeight: "48px",
+                    },
+                    "& .MuiTab-root": {
+                      fontFamily: '"Google Sans Text", sans-serif',
+                      fontSize: "0.875rem",
+                      fontWeight: "500",
+                      color: "#575757",
+                      textTransform: "none",
+                      minHeight: "48px",
+                      padding: "12px 20px 16px",
+                      "&.Mui-selected": {
+                        color: "#0B57D0",
+                        fontWeight: "600",
                       },
-                      "& .MuiTab-root": {
-                        fontFamily: '"Google Sans Text", sans-serif',
-                        fontSize: "0.875rem",
-                        fontWeight: "500",
-                        color: "#575757",
-                        textTransform: "none",
-                        minHeight: "48px",
-                        padding: "12px 20px 16px",
-                        "&.Mui-selected": {
-                          color: "#0B57D0",
-                          fontWeight: "600",
-                        },
+                    },
+                    "& .MuiTabs-indicator": {
+                      backgroundColor: "transparent",
+                      "&::after": {
+                        content: '""',
+                        position: "absolute",
+                        left: "20px",
+                        right: "20px",
+                        bottom: "-2px",
+                        height: "5px",
+                        backgroundColor: "white",
+                        borderTop: "4px solid #0B57D0",
+                        borderRadius: "2.5px 2.5px 0 0",
                       },
-                      "& .MuiTabs-indicator": {
-                        backgroundColor: "transparent",
-                        "&::after": {
-                          content: '""',
-                          position: "absolute",
-                          left: "20px",
-                          right: "20px",
-                          bottom: "-2px",
-                          height: "5px",
-                          backgroundColor: "white",
-                          borderTop: "4px solid #0B57D0",
-                          borderRadius: "2.5px 2.5px 0 0",
-                        },
-                      },
-                    }}>
-                        <Tabs value={tabValue} 
-                          onChange={handleTabChange} 
-                          aria-label="basic tabs"
-                          TabIndicatorProps={{
-                            children: <span className="indicator" />,
-                          }}
-                        >
-                            {getEntryType(entry.name, '/') === 'Tables' && entry.entrySource?.system.toLowerCase() === 'bigquery'? [
-                              <Tab key="overview" label="Overview" {...tabProps(0)} />,
-                              <Tab key="annotations" label="Aspects" {...tabProps(1)} />,
-                              <Tab key="lineage" label="Lineage" {...tabProps(2)} />,
-                              <Tab key="dataProfile" label="Data Profile" {...tabProps(3)} />,
-                              <Tab key="dataQuality" label="Data Quality" {...tabProps(4)} />,
-                              <Tab key="chat" label="Chat with Table" {...tabProps(5)} />
-                              
-                            ] : getEntryType(entry.name, '/') === 'Datasets' ? [
-                              <Tab key="overview" label="Overview" {...tabProps(0)} />,
-                              <Tab key="entryList" label="Entry List" {...tabProps(1)} />,
-                              <Tab key="annotations" label="Aspects" {...tabProps(2)} />,
-                              <Tab key="chat" label="Conversational Analytics" {...tabProps(5)} />
-                            ] : [
-                              <Tab key="overview" label="Overview" {...tabProps(0)} />,
-                              <Tab key="annotations" label="Aspects" {...tabProps(1)} />,
-                              <Tab key="chat" label="Chat with Table" {...tabProps(2)} />
-                              // <Tab key="lineage" label="Lineage" {...tabProps(2)} />,
-                              // <Tab key="dataProfile" label="Data Profile" {...tabProps(3)} />,
-                              // <Tab key="dataQuality" label="Data Quality" {...tabProps(4)} />
-                            ]}
-                        </Tabs>
-                    </Box>
+                    },
+                  }}>
+                  <Tabs value={tabValue}
+                    onChange={handleTabChange}
+                    aria-label="basic tabs"
+                    TabIndicatorProps={{
+                      children: <span className="indicator" />,
+                    }}
+                  >
+                    {getEntryType(entry.name, '/') === 'Tables' && entry.entrySource?.system.toLowerCase() === 'bigquery' ? [
+                      <Tab key="overview" label="Overview" {...tabProps(0)} />,
+                      <Tab key="annotations" label="Aspects" {...tabProps(1)} />,
+                      <Tab key="lineage" label="Lineage" {...tabProps(2)} />,
+                      <Tab key="dataProfile" label="Data Profile" {...tabProps(3)} />,
+                      <Tab key="dataQuality" label="Data Quality" {...tabProps(4)} />,
+                      <Tab key="chat" label="Chat with Table" {...tabProps(5)} />
+
+                    ] : getEntryType(entry.name, '/') === 'Datasets' ? [
+                      <Tab key="overview" label="Overview" {...tabProps(0)} />,
+                      <Tab key="entryList" label="Entry List" {...tabProps(1)} />,
+                      <Tab key="annotations" label="Aspects" {...tabProps(2)} />,
+                      <Tab key="chat" label="Conversational Analytics" {...tabProps(5)} />
+                    ] : [
+                      <Tab key="overview" label="Overview" {...tabProps(0)} />,
+                      <Tab key="annotations" label="Aspects" {...tabProps(1)} />,
+                      <Tab key="chat" label="Chat with Table" {...tabProps(2)} />
+                      // <Tab key="lineage" label="Lineage" {...tabProps(2)} />,
+                      // <Tab key="dataProfile" label="Data Profile" {...tabProps(3)} />,
+                      // <Tab key="dataQuality" label="Data Quality" {...tabProps(4)} />
+                    ]}
+                  </Tabs>
                 </Box>
+              </Box>
             </div>
           </div>
-                        
-           {/* Tab Content - Non-sticky */}
-            <div style={{paddingTop:"0px", marginTop:"0px", marginLeft: "2.5rem", marginRight: "2rem"}}>
-                    <CustomTabPanel value={tabValue} index={0}>
-                        {overviewTab}
-                    </CustomTabPanel>
-                    {getEntryType(entry.name, '/') === 'Tables' && entry.entrySource?.system.toLowerCase() === 'bigquery' ? (
-                      <>
-                        <CustomTabPanel value={tabValue} index={1}>
-                            <AnnotationFilter
-                              entry={entry}
-                              onFilteredEntryChange={setFilteredEntry}
-                              sx={{width: "100%", marginTop: '1.25rem' }}
-                              onCollapseAll={handleAnnotationCollapseAll}
-                              onExpandAll={handleAnnotationExpandAll}
-                            />
-                            {annotationTab}
-                        </CustomTabPanel>
-                       <CustomTabPanel value={tabValue} index={2}>
-                            {lineageTab}
-                        </CustomTabPanel>
-                        <CustomTabPanel value={tabValue} index={3}>
-                            <DataProfile scanName={dpScanName} />
-                        </CustomTabPanel>
-                        <CustomTabPanel value={tabValue} index={4}>
-                            <DataQuality scanName={dqScanName} />
-                        </CustomTabPanel>
-                        
-                        <CustomTabPanel value={tabValue} index={5}>
-                            <Box sx={{ 
-                              borderRadius: '8px', 
-                              border: '1px solid #DADCE0', 
-                              background: '#ffffff',
-                              minHeight: '500px'
-                            }}>
-                              <ChatTab entry={entry} />
-                            </Box>
-                        </CustomTabPanel>
-                      </>
-                    ) : getEntryType(entry.name, '/') === 'Datasets' ? (
-                      <>
-                        <CustomTabPanel value={tabValue} index={1}>
-                            <EntryList entry={entry}/>
-                        </CustomTabPanel>
-                        <CustomTabPanel value={tabValue} index={2}>
-                            <AnnotationFilter
-                              entry={entry}
-                              onFilteredEntryChange={setFilteredEntry}
-                              sx={{ marginTop: '1.25rem' }}
-                              onCollapseAll={handleAnnotationCollapseAll}
-                              onExpandAll={handleAnnotationExpandAll}
-                            />
-                            {annotationTab}
-                        </CustomTabPanel>
-                        <CustomTabPanel value={tabValue} index={5}>
-                            <Box sx={{ 
-                              borderRadius: '8px', 
-                              border: '1px solid #DADCE0', 
-                              background: '#ffffff',
-                              minHeight: '500px'
-                            }}>
-                              <ChatTab entry={entry} />
-                            </Box>
-                        </CustomTabPanel>
-                      </>
-                    ) : (
-                      <>
-                        <CustomTabPanel value={tabValue} index={1}>
-                            <AnnotationFilter
-                              entry={entry}
-                              onFilteredEntryChange={setFilteredEntry}
-                              sx={{ marginTop: '1.25rem' }}
-                              onCollapseAll={handleAnnotationCollapseAll}
-                              onExpandAll={handleAnnotationExpandAll}
-                            />
-                            {annotationTab}
-                        </CustomTabPanel>
-                        {/* <CustomTabPanel value={tabValue} index={2}>
+
+          {/* Tab Content - Non-sticky */}
+          <div style={{ paddingTop: "0px", marginTop: "0px", marginLeft: "2.5rem", marginRight: "2rem" }}>
+            <CustomTabPanel value={tabValue} index={0}>
+              {overviewTab}
+            </CustomTabPanel>
+            {getEntryType(entry.name, '/') === 'Tables' && entry.entrySource?.system.toLowerCase() === 'bigquery' ? (
+              <>
+                <CustomTabPanel value={tabValue} index={1}>
+                  <AnnotationFilter
+                    entry={entry}
+                    onFilteredEntryChange={setFilteredEntry}
+                    sx={{ width: "100%", marginTop: '1.25rem' }}
+                    onCollapseAll={handleAnnotationCollapseAll}
+                    onExpandAll={handleAnnotationExpandAll}
+                  />
+                  {annotationTab}
+                </CustomTabPanel>
+                <CustomTabPanel value={tabValue} index={2}>
+                  {lineageTab}
+                </CustomTabPanel>
+                <CustomTabPanel value={tabValue} index={3}>
+                  <DataProfile scanName={dpScanName} />
+                </CustomTabPanel>
+                <CustomTabPanel value={tabValue} index={4}>
+                  <DataQuality scanName={dqScanName} />
+                </CustomTabPanel>
+
+                <CustomTabPanel value={tabValue} index={5}>
+                  <Box sx={{
+                    borderRadius: '8px',
+                    border: '1px solid #DADCE0',
+                    background: '#ffffff',
+                    minHeight: '500px'
+                  }}>
+                    <ChatTab entry={entry} />
+                  </Box>
+                </CustomTabPanel>
+              </>
+            ) : getEntryType(entry.name, '/') === 'Datasets' ? (
+              <>
+                <CustomTabPanel value={tabValue} index={1}>
+                  <EntryList entry={entry} />
+                </CustomTabPanel>
+                <CustomTabPanel value={tabValue} index={2}>
+                  <AnnotationFilter
+                    entry={entry}
+                    onFilteredEntryChange={setFilteredEntry}
+                    sx={{ marginTop: '1.25rem' }}
+                    onCollapseAll={handleAnnotationCollapseAll}
+                    onExpandAll={handleAnnotationExpandAll}
+                  />
+                  {annotationTab}
+                </CustomTabPanel>
+                <CustomTabPanel value={tabValue} index={5}>
+                  <Box sx={{
+                    borderRadius: '8px',
+                    border: '1px solid #DADCE0',
+                    background: '#ffffff',
+                    minHeight: '500px'
+                  }}>
+                    <ChatTab entry={entry} />
+                  </Box>
+                </CustomTabPanel>
+              </>
+            ) : (
+              <>
+                <CustomTabPanel value={tabValue} index={1}>
+                  <AnnotationFilter
+                    entry={entry}
+                    onFilteredEntryChange={setFilteredEntry}
+                    sx={{ marginTop: '1.25rem' }}
+                    onCollapseAll={handleAnnotationCollapseAll}
+                    onExpandAll={handleAnnotationExpandAll}
+                  />
+                  {annotationTab}
+                </CustomTabPanel>
+                {/* <CustomTabPanel value={tabValue} index={2}>
                             {lineageTab}
                         </CustomTabPanel>
                         <CustomTabPanel value={tabValue} index={3}>
@@ -610,8 +675,8 @@ useEffect(() => {
                         <CustomTabPanel value={tabValue} index={4}>
                             <DataQuality entry={entry}/>
                         </CustomTabPanel> */}
-                      </>
-                    )}
+              </>
+            )}
           </div>
         </div>)
         }

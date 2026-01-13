@@ -544,8 +544,38 @@ app.post('/api/v1/chat', async (req, res) => {
 // --- END CONVERSATIONAL ANALYTICS CODE ---
 
 // --- START ACCESS REQUEST MANAGEMENT ---
-// In-memory store for access requests (in production, use a database)
-const accessRequestsStore = [];
+const DATA_FILE = path.join(__dirname, 'accessRequests.json');
+
+// In-memory store for access requests (backed by file)
+let accessRequestsStore = [];
+
+// Load requests from file on startup
+const loadAccessRequests = async () => {
+  try {
+    const data = await fs.readFile(DATA_FILE, 'utf8');
+    accessRequestsStore = JSON.parse(data);
+    console.log(`Loaded ${accessRequestsStore.length} access requests from file.`);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      console.log('No access requests file found, starting with empty store.');
+      accessRequestsStore = [];
+    } else {
+      console.error('Error loading access requests:', error);
+    }
+  }
+};
+
+// Save requests to file
+const saveAccessRequests = async () => {
+  try {
+    await fs.writeFile(DATA_FILE, JSON.stringify(accessRequestsStore, null, 2));
+  } catch (error) {
+    console.error('Error saving access requests:', error);
+  }
+};
+
+// Initialize
+loadAccessRequests();
 
 /**
  * Auto-checker function for access requests
@@ -558,9 +588,11 @@ const shouldAutoApprove = (request) => {
   // 3. Requester has viewer role on the project
 
   // For now, we'll implement a simple rule: auto-approve if the asset name contains "public"
-  if (request.assetName && request.assetName.toLowerCase().includes('public')) {
-    return true;
-  }
+  // if (request.assetName && request.assetName.toLowerCase().includes('public')) {
+  //   return true;
+  // }
+
+  return false;
 
   return false;
 };
@@ -797,6 +829,35 @@ app.post('/api/v1/aspects', async (req, res) => {
     console.error(`Error fetching aspects for entry ${entryName}:`, error);
     // Return a generic error message to the client
     res.status(500).json({ message: 'An error occurred while fetching aspects from Dataplex.', details: error.message });
+  }
+});
+
+/**
+ * POST /api/v1/get-entry
+ * A protected endpoint to fetch full details for a specific Dataplex entry.
+ * The user must be authenticated.
+ */
+app.post('/api/v1/get-entry', async (req, res) => {
+  const { entryName } = req.body;
+  const accessToken = req.headers.authorization?.split(' ')[1];
+
+  if (!entryName) {
+    return res.status(400).json({ message: 'Bad Request: An "entryName" field is required.' });
+  }
+
+  try {
+    const oauth2Client = new CustomGoogleAuth(accessToken);
+    const dataplexClientv1 = new CatalogServiceClient({ auth: oauth2Client });
+
+    const request = { name: entryName, view: 'FULL' };
+    console.log(`Fetching full entry: ${entryName}`);
+
+    const [entry] = await dataplexClientv1.getEntry(request);
+    res.json(entry);
+
+  } catch (error) {
+    console.error(`Error fetching entry ${entryName}:`, error);
+    res.status(500).json({ message: 'An error occurred while fetching entry from Dataplex.', details: error.message });
   }
 });
 
@@ -2102,6 +2163,7 @@ app.post('/api/v1/access-request', async (req, res) => {
 
     // Store the request
     accessRequestsStore.push(accessRequest);
+    await saveAccessRequests();
 
     // Send access request email (only if not auto-approved)
     if (!autoApprove) {
@@ -2247,6 +2309,7 @@ app.post('/api/v1/access-request/update', async (req, res) => {
     accessRequestsStore[requestIndex].status = status;
     accessRequestsStore[requestIndex].reviewedBy = reviewerEmail || 'unknown';
     accessRequestsStore[requestIndex].reviewedAt = new Date().toISOString();
+    await saveAccessRequests();
 
     return res.status(200).json({
       success: true,

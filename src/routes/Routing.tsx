@@ -26,6 +26,7 @@ import DataProductManager from '../component/DataProduct/DataProductManager';
 import PermissionsPanel from '../component/AdminPanel/PermissionsPanel';
 import AccessRequestsDashboard from '../component/AccessRequests/AccessRequestsDashboard';
 import Glossaries from '../component/Glossaries/Glossaries';
+import ChatPage from '../component/ConversationalAnalytics/ChatPage';
 
 const Routing = () => {
   // state to hold the user object
@@ -248,6 +249,21 @@ const Routing = () => {
               <>
                 <Navbar searchBar={true} />
                 <DataProductManager />
+              </>
+            </SessionExpirationWrapper>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/chat-analytics"
+        element={
+          <ProtectedRoute>
+            <SessionExpirationWrapper>
+              <>
+                {/* Navbar is optional on chat page, but good for navigation back */}
+                {/* <Navbar searchBar={true} /> */}
+                <ChatPage />
               </>
             </SessionExpirationWrapper>
           </ProtectedRoute>
