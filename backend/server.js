@@ -1904,12 +1904,11 @@ app.post('/api/v1/entry-data-quality', async (req, res) => {
     //     return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set.' });
     // }
 
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const dataplexDataScanClientv1 = new DataScanServiceClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     //const parent = `projects/${projectId}/locations/${location}`;
@@ -1958,12 +1957,11 @@ app.get('/api/v1/get-data-scan', async (req, res) => {
 
   try {
 
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const dataplexDataScanClientv1 = new DataScanServiceClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     const getScan = dataplexDataScanClientv1.getDataScan({ name: name, view: 'FULL' });
@@ -2000,12 +1998,11 @@ app.post('/api/v1/get-jobs-scan', async (req, res) => {
 
   try {
 
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const dataplexDataScanClientv1 = new DataScanServiceClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     const getScan = dataplexDataScanClientv1.getDataScan({ name: name, view: 'FULL' });
@@ -2036,12 +2033,11 @@ app.post('/api/batch-data-quality-scan-jobs', async (req, res) => {
   }
 
   try {
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const dataplexDataScanClientv1 = new DataScanServiceClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     console.log(`Fetching jobs for a batch of ${scanIds.length} data quality scans.`);
@@ -2074,12 +2070,11 @@ app.post('/api/v1/get-dataset-entries', async (req, res) => {
   }
 
   try {
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const dataplexCatalogClientv1 = new CatalogServiceClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     //const parent = `projects/${projectId}/locations/${location}/entryGroups/${entryGroupId}`;
