@@ -13,6 +13,7 @@
     "@google-cloud/bigquery": "^8.1.1",
     "@google-cloud/datacatalog": "^5.2.0",
     "@google-cloud/dataplex": "^4.1.0",
+    "@google-cloud/firestore": "^8.2.0",
     "@google-cloud/lineage": "^2.1.0",
     "@google-cloud/resource-manager": "^6.2.0",
     "@google-cloud/vertexai": "^1.1.0",

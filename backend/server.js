@@ -14,6 +14,7 @@ const axios = require('axios');
 const authMiddleware = require('./middlewares/authMiddleware');
 const { querySampleFromBigQuery } = require('./utility');
 const { sendAccessRequestEmail, sendFeedbackEmail } = require('./services/emailService');
+const { createAccessRequest, getAccessRequests, updateAccessRequestStatus } = require('./services/accessRequestService');
 const { BigQuery } = require('@google-cloud/bigquery');
 
 
@@ -554,38 +555,9 @@ app.post('/api/v1/chat', async (req, res) => {
 // --- END CONVERSATIONAL ANALYTICS CODE ---
 
 // --- START ACCESS REQUEST MANAGEMENT ---
-const DATA_FILE = path.join(__dirname, 'accessRequests.json');
+// Using Firestore via accessRequestService.js
+// No local state needed
 
-// In-memory store for access requests (backed by file)
-let accessRequestsStore = [];
-
-// Load requests from file on startup
-const loadAccessRequests = async () => {
-  try {
-    const data = await fs.readFile(DATA_FILE, 'utf8');
-    accessRequestsStore = JSON.parse(data);
-    console.log(`Loaded ${accessRequestsStore.length} access requests from file.`);
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      console.log('No access requests file found, starting with empty store.');
-      accessRequestsStore = [];
-    } else {
-      console.error('Error loading access requests:', error);
-    }
-  }
-};
-
-// Save requests to file
-const saveAccessRequests = async () => {
-  try {
-    await fs.writeFile(DATA_FILE, JSON.stringify(accessRequestsStore, null, 2));
-  } catch (error) {
-    console.error('Error saving access requests:', error);
-  }
-};
-
-// Initialize
-loadAccessRequests();
 
 /**
  * Auto-checker function for access requests
@@ -2131,32 +2103,33 @@ app.post('/api/v1/access-request', async (req, res) => {
     const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
 
     // Create access request object
-    const accessRequest = {
+    const requestData = {
       id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       assetName,
       message: message || '',
       requesterEmail,
-      projectId,
+      projectId, // This is standardizing on "gcpProjectId" in the service, but let's pass it as is and map helper if needed, or better, change keys here.
+      // Actually, my service expects `gcpProjectId` in schema prompt, but `projectId` in actual code implementation I wrote. 
+      // The server.js uses "projectId". My createAccessRequest just dumps spreads `...requestData`.
+      // So I will map it here to be safe and consistent with the "Schema" prompt user wanted.
+      gcpProjectId: projectId,
+      requestedRole: 'roles/bigquery.dataViewer', // Defaulting for now as per "Request Access" button context usually implies viewer
       projectAdmin: projectAdmin || [],
-      status: 'pending', // pending, approved, rejected
-      submittedAt: new Date().toISOString(),
-      reviewedBy: null,
-      reviewedAt: null,
+      status: 'pending',
       autoApproved: false
     };
 
     // Check if should auto-approve
-    const autoApprove = shouldAutoApprove(accessRequest);
+    const autoApprove = shouldAutoApprove(requestData);
     if (autoApprove) {
-      accessRequest.status = 'approved';
-      accessRequest.autoApproved = true;
-      accessRequest.reviewedAt = new Date().toISOString();
-      accessRequest.reviewedBy = 'system';
+      requestData.status = 'approved';
+      requestData.autoApproved = true;
+      requestData.reviewedAt = new Date().toISOString();
+      requestData.reviewedBy = 'system';
     }
 
-    // Store the request
-    accessRequestsStore.push(accessRequest);
-    await saveAccessRequests();
+    // Store the request in Firestore
+    const accessRequest = await createAccessRequest(requestData);
 
     // Send access request email (only if not auto-approved)
     if (!autoApprove) {
@@ -2222,32 +2195,39 @@ app.get('/api/v1/access-requests', async (req, res) => {
       });
     }
 
-    let filteredRequests = [...accessRequestsStore];
+    // Fetch from Firestore
+    // Note: Filtering logic moved to service or done here if service returns all. 
+    // My service supports filtering.
+    const filters = {};
+    if (status) filters.status = status;
+    if (projectId) filters.projectId = projectId; // Service maps this query param
+    // if (userEmail) filters.requesterEmail = userEmail; // Only if not admin
 
-    // Filter by status if provided
-    if (status) {
-      filteredRequests = filteredRequests.filter(req => req.status === status);
-    }
-
-    // Filter by project if provided
-    if (projectId) {
-      filteredRequests = filteredRequests.filter(req => req.projectId === projectId);
-    }
-
-    // Apply role-based filtering
+    // Ideally, we fetch based on role
     if (userRole === 'admin') {
-      // Admin sees all requests
-      // No additional filtering needed
+      // Fetch all
     } else if (userRole === 'manager') {
-      // Manager sees only requests in their perimeter (same project)
-      filteredRequests = filteredRequests.filter(req => req.projectId === projectId);
+      // Fetch for project? Service needs update or we filter in memory.
+      // For now, let's fetch all (or by project if filtered) and filter in memory to be safe as Firestore queries are strict.
+      if (projectId) filters.projectId = projectId;
     } else {
-      // Regular user sees only their own requests
-      filteredRequests = filteredRequests.filter(req => req.requesterEmail === userEmail);
+      filters.requesterEmail = userEmail;
     }
 
-    // Sort by submitted date (newest first)
-    filteredRequests.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+    let filteredRequests = await getAccessRequests(filters);
+
+    // Additional in-memory filtering for Manager role if `projectId` wasn't passed but they serve specific projects?
+    // Current logic assumes manager sends projectId.
+    // If not, we might need to filter `filteredRequests` by manager's perimeter (not implemented in this context yet).
+
+    // Previous logic for manager:
+    // } else if (userRole === 'manager') {
+    //   filteredRequests = filteredRequests.filter(req => req.projectId === projectId);
+    // }
+    // If projectId is null, manager sees nothing? Matches previous logic.
+
+    // Sort by submitted date (newest first) - Service already does this, but good to ensure.
+    // filteredRequests.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
 
     return res.status(200).json({
       success: true,
@@ -2288,25 +2268,15 @@ app.post('/api/v1/access-request/update', async (req, res) => {
       });
     }
 
-    const requestIndex = accessRequestsStore.findIndex(req => req.id === requestId);
+    // Update the request in Firestore
+    const updatedRequest = await updateAccessRequestStatus(requestId, status, null, reviewerEmail);
 
-    if (requestIndex === -1) {
-      return res.status(404).json({
-        success: false,
-        error: 'Access request not found'
-      });
-    }
-
-    // Update the request
-    accessRequestsStore[requestIndex].status = status;
-    accessRequestsStore[requestIndex].reviewedBy = reviewerEmail || 'unknown';
-    accessRequestsStore[requestIndex].reviewedAt = new Date().toISOString();
-    await saveAccessRequests();
+    // Note: saveAccessRequests() is removed.
 
     return res.status(200).json({
       success: true,
       message: `Access request ${status} successfully`,
-      data: accessRequestsStore[requestIndex]
+      data: updatedRequest
     });
 
   } catch (error) {

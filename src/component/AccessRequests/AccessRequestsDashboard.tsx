@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Box, 
-  Typography, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow, 
-  Paper, 
-  Chip, 
-  IconButton, 
-  CircularProgress, 
+import {
+  Box,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip,
+  IconButton,
+  CircularProgress,
   Alert,
   Select,
   MenuItem,
@@ -48,8 +48,8 @@ const AccessRequestsDashboard: React.FC = () => {
   const [projectFilter, setProjectFilter] = useState<string>('');
 
   // Determine user role (admin, manager, or user)
-  const userRole = user?.roles?.includes('admin') ? 'admin' : 
-                   user?.roles?.includes('manager') ? 'manager' : 'user';
+  const userRole = user?.roles?.includes('admin') ? 'admin' :
+    user?.roles?.includes('manager') ? 'manager' : 'user';
 
   useEffect(() => {
     fetchAccessRequests();
@@ -58,17 +58,17 @@ const AccessRequestsDashboard: React.FC = () => {
   const fetchAccessRequests = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const params: any = {
         userEmail: user?.email,
         userRole: userRole
       };
-      
+
       if (statusFilter !== 'all') {
         params.status = statusFilter;
       }
-      
+
       if (projectFilter) {
         params.projectId = projectFilter;
       }
@@ -148,8 +148,8 @@ const AccessRequestsDashboard: React.FC = () => {
   const uniqueProjects = Array.from(new Set(requests.map(r => r.projectId)));
 
   return (
-    <Box sx={{ 
-      backgroundColor: '#F8FAFD', 
+    <Box sx={{
+      backgroundColor: '#F8FAFD',
       minHeight: '100vh',
       padding: { xs: '0px 0.5rem', sm: '0px 1rem' }
     }}>
@@ -162,9 +162,9 @@ const AccessRequestsDashboard: React.FC = () => {
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
       }}>
         {/* Header */}
-        <Box sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        <Box sx={{
+          display: 'flex',
+          alignItems: 'center',
           gap: '8px',
           marginBottom: '24px'
         }}>
@@ -183,9 +183,9 @@ const AccessRequestsDashboard: React.FC = () => {
         </Box>
 
         {/* Filters */}
-        <Box sx={{ 
-          display: 'flex', 
-          gap: 2, 
+        <Box sx={{
+          display: 'flex',
+          gap: 2,
           marginBottom: 3,
           flexWrap: 'wrap'
         }}>
@@ -202,7 +202,7 @@ const AccessRequestsDashboard: React.FC = () => {
               <MenuItem value="rejected">Rejected</MenuItem>
             </Select>
           </FormControl>
-          
+
           {userRole === 'admin' && (
             <FormControl sx={{ minWidth: 200 }}>
               <InputLabel>Project</InputLabel>
@@ -246,6 +246,7 @@ const AccessRequestsDashboard: React.FC = () => {
                   <TableCell><strong>Asset Name</strong></TableCell>
                   <TableCell><strong>Requester</strong></TableCell>
                   <TableCell><strong>Project</strong></TableCell>
+                  <TableCell><strong>Role</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
                   <TableCell><strong>Submitted</strong></TableCell>
                   <TableCell><strong>Message</strong></TableCell>
@@ -257,49 +258,83 @@ const AccessRequestsDashboard: React.FC = () => {
               <TableBody>
                 {requests.map((request) => (
                   <TableRow key={request.id} hover>
-                    <TableCell>{request.assetName}</TableCell>
+                    <TableCell>
+                      <div style={{ fontWeight: 500 }}>{request.assetName}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#666' }}>{request.projectId}</div>
+                    </TableCell>
                     <TableCell>{request.requesterEmail}</TableCell>
                     <TableCell>{request.projectId}</TableCell>
                     <TableCell>
-                      <Chip 
-                        label={request.status} 
+                      <Chip
+                        label={request.requestedRole || 'roles/bigquery.dataViewer'}
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={request.status.toUpperCase()}
                         color={getStatusColor(request.status) as any}
                         size="small"
                         icon={request.autoApproved ? <CheckCircle /> : undefined}
                       />
                     </TableCell>
                     <TableCell>{formatDate(request.submittedAt)}</TableCell>
-                    <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {request.message || '-'}
                     </TableCell>
-                    {(userRole === 'admin' || userRole === 'manager') && request.status === 'pending' && (
+                    {(userRole === 'admin' || userRole === 'manager') && (
                       <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <IconButton
-                            size="small"
-                            color="success"
-                            onClick={() => handleUpdateStatus(request.id, 'approved')}
-                            title="Approve"
-                          >
-                            <CheckCircle />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => handleUpdateStatus(request.id, 'rejected')}
-                            title="Reject"
-                          >
-                            <Cancel />
-                          </IconButton>
-                        </Box>
-                      </TableCell>
-                    )}
-                    {request.status !== 'pending' && (
-                      <TableCell>
-                        <Typography variant="caption" color="text.secondary">
-                          {request.reviewedBy && `Reviewed by ${request.reviewedBy}`}
-                          {request.reviewedAt && ` on ${formatDate(request.reviewedAt)}`}
-                        </Typography>
+                        {request.status === 'pending' ? (
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            {/* Step 1: Open GCP Link */}
+                            {request.projectId && (
+                              <a
+                                href={`https://console.cloud.google.com/iam-admin/iam?project=${request.projectId}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{
+                                  fontSize: '0.75rem',
+                                  color: '#1976d2',
+                                  textDecoration: 'none',
+                                  fontWeight: 'bold',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                              >
+                                Open GCP Console ↗
+                              </a>
+                            )}
+
+                            {/* Step 2: Action Buttons */}
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                              <IconButton
+                                size="small"
+                                sx={{ backgroundColor: '#E6F4EA', color: '#137333', '&:hover': { backgroundColor: '#CEEAD6' } }}
+                                onClick={() => handleUpdateStatus(request.id, 'approved')}
+                                title="Approve"
+                              >
+                                <CheckCircle fontSize="small" />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                sx={{ backgroundColor: '#FCE8E6', color: '#C5221F', '&:hover': { backgroundColor: '#FAD2CF' } }}
+                                onClick={() => handleUpdateStatus(request.id, 'rejected')}
+                                title="Reject"
+                              >
+                                <Cancel fontSize="small" />
+                              </IconButton>
+                            </Box>
+                          </Box>
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">
+                            {request.status === 'approved' ? 'Access Granted' : 'Request Rejected'}
+                            <br />
+                            by {request.reviewedBy}
+                          </Typography>
+                        )}
                       </TableCell>
                     )}
                   </TableRow>
