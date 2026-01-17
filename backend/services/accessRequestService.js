@@ -90,7 +90,12 @@ const getAccessRequests = async (filters = {}) => {
 
         return requests;
     } catch (error) {
-        console.error('Error fetching access requests from Firestore:', error);
+        console.error('ERROR_FETCH_ACCESS_REQUESTS', JSON.stringify({
+            message: error.message,
+            code: error.code,
+            type: error.constructor.name,
+            stack: error.stack
+        }));
         throw error;
     }
 };
