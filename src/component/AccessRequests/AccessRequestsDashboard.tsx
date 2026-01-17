@@ -36,6 +36,7 @@ interface AccessRequest {
   reviewedBy: string | null;
   reviewedAt: string | null;
   autoApproved: boolean;
+  requestedRole?: string;
 }
 
 const AccessRequestsDashboard: React.FC = () => {
