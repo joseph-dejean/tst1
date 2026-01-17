@@ -1152,12 +1152,11 @@ app.get('/api/v1/lookup-entry', async (req, res) => {
   try {
 
     const entryName = req.query.entryName; // Get entryName from query parameters
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const dataplexClientv1 = new CatalogServiceClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     if (!entryName) {
@@ -1179,17 +1178,8 @@ app.get('/api/v1/get-sample-data', async (req, res) => {
   try {
 
     const fqn = req.query.fqn; // Get entryName from query parameters
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    if (!fqn) {
-      return res.status(500).json({ message: 'fqn is required' });
-    }
-
-    // const oauth2Client = new CustomGoogleAuth(accessToken);
-    const oauth2Client = new OAuth2Client();
-    oauth2Client.setCredentials({ access_token: accessToken });
+    // ADC Auth
     const bigquery = new BigQuery({
-      authClient: oauth2Client,
       projectId: fqn.split(':')[1].split('.')[0],
     });
 
@@ -1220,12 +1210,11 @@ app.post('/api/v1/lineage', async (req, res) => {
   }
 
   try {
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const dataplexLineageClientv1 = new LineageClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     //const parent = `projects/${projectId}/locations/us`;
@@ -1302,12 +1291,11 @@ app.post('/api/v1/lineage-downstream', async (req, res) => {
   }
 
   try {
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const dataplexLineageClientv1 = new LineageClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     //const parent = `projects/${projectId}/locations/us`;
@@ -1337,12 +1325,11 @@ app.post('/api/v1/lineage-upstream', async (req, res) => {
   }
 
   try {
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const dataplexLineageClientv1 = new LineageClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     //const parent = `projects/${projectId}/locations/us`;
@@ -1404,12 +1391,11 @@ app.post('/api/v1/get-process-and-job-details', async (req, res) => {
   }
 
   try {
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const dataplexLineageClientv1 = new LineageClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     // The searchLinks method returns an iterable. We'll collect all results.
@@ -1428,7 +1414,6 @@ app.post('/api/v1/get-process-and-job-details', async (req, res) => {
     const projectId = processDetails[0].origin.name.split(':')[0];
 
     const bigquery = new BigQuery({
-      authClient: oauth2Client,
       projectId: projectId,
     });
     const jobId = processDetails[0].attributes.bigquery_job_id.stringValue;
@@ -1446,12 +1431,11 @@ app.post('/api/v1/get-process-and-job-details', async (req, res) => {
 app.get('/api/v1/projects', async (req, res) => {
   try {
     console.log('Listing all accessible GCP projects.');
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const resourceManagerClient = new ProjectsClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     // The searchProjects method returns an iterable. We'll collect all results into an array.
@@ -1481,12 +1465,11 @@ app.get('/api/v1/tag-templates', async (req, res) => {
     // The parent for Data Catalog resources includes the project and location.
     const parent = `projects/${projectId}/locations/${location}`;
     console.log(`Listing tag templates for parent: ${parent}`);
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const dataCatalogClientv1 = new DataCatalogClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
 
@@ -1529,12 +1512,11 @@ app.post('/api/v1/get-aspect-detail', async (req, res) => {
   }
 
   try {
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const dataplexClientv1 = new CatalogServiceClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     const [aspectType] = await dataplexClientv1.getAspectType({ name: name });
@@ -1612,16 +1594,15 @@ app.get('/api/v1/app-configs', async (req, res) => {
   try {
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
     const location = process.env.GCP_LOCATION;
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const dataplexClientv1 = new CatalogServiceClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     const resourceManagerClientv1 = new ProjectsClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     if (!projectId || !location) {
@@ -1784,12 +1765,11 @@ app.get('/api/v1/get-projects', async (req, res) => {
   try {
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
     const location = process.env.GCP_LOCATION;
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const resourceManagerClientv1 = new ProjectsClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     if (!projectId || !location) {
@@ -1828,12 +1808,11 @@ app.get('/api/v1/data-scans', async (req, res) => {
     const parent = `projects/${projectId}/locations/-`;
     console.log(`Listing data scans for parent: ${parent}`);
 
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const dataplexDataScanClientv1 = new DataScanServiceClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     const [scans] = await dataplexDataScanClientv1.listDataScans({ parent });
@@ -1867,12 +1846,11 @@ app.get('/api/v1/data-quality-scan-jobs/:scanId', async (req, res) => {
     const parent = `projects/${projectId}/locations/${location}/dataScans/${scanId}`;
     console.log(`Listing data quality scan jobs for parent: ${parent}`);
 
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
     const dataplexDataScanClientv1 = new DataScanServiceClient({
-      auth: oauth2Client,
+      auth: auth,
     });
 
     // The listDataScanJobs method returns recent jobs. The result of each job contains the quality metrics.
