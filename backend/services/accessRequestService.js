@@ -3,9 +3,8 @@ const { Firestore } = require('@google-cloud/firestore');
 // Initialize Firestore
 // This automatically uses Application Default Credentials (ADC)
 const firestore = new Firestore({
-    // projectId is omitted so it will be auto-detected from the Cloud Run environment (ADC).
-    // This allows the code to run correctly in 'new-version-tst-54254020796'.
-    databaseId: 'admin-panel'
+    // projectId auto-detected from ADC
+    // databaseId: 'admin-panel' // Try default database first if named one fails
 });
 
 const COLLECTION_NAME = 'access-requests';
