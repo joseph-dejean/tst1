@@ -168,3 +168,4 @@ gcloud run services update-traffic [SERVICE_NAME] \
 - Artifact Registry: Pay per GB stored (first 0.5 GB free)
 
 
+

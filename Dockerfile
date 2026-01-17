@@ -35,6 +35,7 @@ COPY --from=builder /app/frontend/dist ./dist
 EXPOSE 8080
 
 COPY entrypoint.sh /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 # Start the server
 CMD ["/entrypoint.sh"]

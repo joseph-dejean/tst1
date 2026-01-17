@@ -166,70 +166,69 @@ const getOrCreateDataAgent = async (tableReferences, systemInstruction) => {
  */
 app.post('/api/v1/chat', async (req, res) => {
   try {
-    try {
-      const { message, context } = req.body;
-      // const accessToken = req.headers.authorization?.split(' ')[1]; // Ignored, using ADC
+    const { message, context } = req.body;
+    // const accessToken = req.headers.authorization?.split(' ')[1]; // Ignored, using ADC
 
-      if (!message || !context) {
-        return res.status(400).json({ error: 'Message and context are required.' });
+    if (!message || !context) {
+      return res.status(400).json({ error: 'Message and context are required.' });
+    }
+
+    // Debug Frontend Schema
+    if (context.schema) {
+      console.log('DEBUG_SCHEMA_PAYLOAD:', JSON.stringify(context.schema.slice(0, 3), null, 2)); // Log first 3 fields
+    } else {
+      console.log('DEBUG_SCHEMA_PAYLOAD: MISSING');
+    }
+
+    // Extract BigQuery table reference from fullyQualifiedName
+    // Format: bigquery://project.dataset.table or project:dataset.table
+    let projectId, datasetId, tableId;
+
+    if (context.fullyQualifiedName) {
+      let fqn = context.fullyQualifiedName;
+
+      // Handle "bigquery:" prefix (common in Dataplex FQNs)
+      if (fqn.startsWith('bigquery:')) {
+        fqn = fqn.substring(9); // Remove "bigquery:"
+        // Example now: dataplex-ui.coffee_shop.order_item
+      } else if (fqn.startsWith('bigquery://')) {
+        fqn = fqn.replace('bigquery://', '');
       }
 
-      // Debug Frontend Schema
-      if (context.schema) {
-        console.log('DEBUG_SCHEMA_PAYLOAD:', JSON.stringify(context.schema.slice(0, 3), null, 2)); // Log first 3 fields
-      } else {
-        console.log('DEBUG_SCHEMA_PAYLOAD: MISSING');
-      }
-
-      // Extract BigQuery table reference from fullyQualifiedName
-      // Format: bigquery://project.dataset.table or project:dataset.table
-      let projectId, datasetId, tableId;
-
-      if (context.fullyQualifiedName) {
-        let fqn = context.fullyQualifiedName;
-
-        // Handle "bigquery:" prefix (common in Dataplex FQNs)
-        if (fqn.startsWith('bigquery:')) {
-          fqn = fqn.substring(9); // Remove "bigquery:"
-          // Example now: dataplex-ui.coffee_shop.order_item
-        } else if (fqn.startsWith('bigquery://')) {
-          fqn = fqn.replace('bigquery://', '');
-        }
-
-        const parts = fqn.split('.');
-        if (parts.length >= 3) {
-          projectId = parts[0];
-          datasetId = parts[1];
-          tableId = parts[2];
-        } else if (fqn.includes(':') && !fqn.startsWith('bigquery:')) {
-          // Handle older format project:dataset.table if still used, but unlikely with new cleaning
-          const [project, rest] = fqn.split(':');
-          projectId = project;
-          const restParts = rest.split('.');
-          if (restParts.length >= 2) {
-            datasetId = restParts[0];
-            tableId = restParts[1];
-          }
+      const parts = fqn.split('.');
+      if (parts.length >= 3) {
+        projectId = parts[0];
+        datasetId = parts[1];
+        tableId = parts[2];
+      } else if (fqn.includes(':') && !fqn.startsWith('bigquery:')) {
+        // Handle older format project:dataset.table if still used, but unlikely with new cleaning
+        const [project, rest] = fqn.split(':');
+        projectId = project;
+        const restParts = rest.split('.');
+        if (restParts.length >= 2) {
+          datasetId = restParts[0];
+          tableId = restParts[1];
         }
       }
+    }
 
-      // Check if this is a Data Product
-      const isDataProduct = context.isDataProduct === true;
+    // Check if this is a Data Product
+    const isDataProduct = context.isDataProduct === true;
 
-      // If we can't extract BigQuery reference, fall back to metadata-only mode
-      if (!projectId || !datasetId || !tableId) {
-        // Fallback: Use Vertex AI for non-BigQuery tables or when FQN is not available
-        const vertex_ai = new VertexAI({
-          project: 'dataplex-ui', // Hardcoded project ID
-          location: process.env.GCP_LOCATION || 'us-central1'
-        });
-        const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
+    // If we can't extract BigQuery reference, fall back to metadata-only mode
+    if (!projectId || !datasetId || !tableId) {
+      // Fallback: Use Vertex AI for non-BigQuery tables or when FQN is not available
+      const vertex_ai = new VertexAI({
+        project: 'dataplex-ui', // Hardcoded project ID
+        location: process.env.GCP_LOCATION || 'us-central1'
+      });
+      const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
 
-        let prompt = '';
+      let prompt = '';
 
-        if (isDataProduct && context.tables && context.tables.length > 0) {
-          // For Data Products, include information about all tables
-          prompt = `
+      if (isDataProduct && context.tables && context.tables.length > 0) {
+        // For Data Products, include information about all tables
+        prompt = `
           You are a helpful Data Steward assistant for Dataplex.
           
           The user is asking about a Data Product: ${context.name}
@@ -246,9 +245,9 @@ app.post('/api/v1/chat', async (req, res) => {
           
           Answer the user's question about this Data Product and its tables. Keep it concise.
         `;
-        } else {
-          // For regular tables
-          prompt = `
+      } else {
+        // For regular tables
+        prompt = `
           You are a helpful Data Steward assistant for Dataplex.
           
           Here is the metadata for the dataset the user is looking at:
@@ -260,298 +259,298 @@ app.post('/api/v1/chat', async (req, res) => {
           
           Answer the user's question based strictly on the metadata provided above. Keep it concise.
         `;
-        }
-
-        const result = await generativeModel.generateContent(prompt);
-        const response = result.response;
-        const text = response.candidates[0].content.parts[0].text;
-
-        return res.json({ reply: text });
       }
 
-      // Use Conversational Analytics API with inline context for BigQuery tables
-      const projectId_env = 'dataplex-ui'; // Hardcoded project ID
-      const location = process.env.GCP_LOCATION || 'europe-west1';
-      const chatUrl = `https://geminidataanalytics.googleapis.com/v1beta/projects/${projectId_env}/locations/${location}:chat`;
+      const result = await generativeModel.generateContent(prompt);
+      const response = result.response;
+      const text = response.candidates[0].content.parts[0].text;
 
-      // Build BigQuery data source reference
-      // For Data Products, include all tables; for single tables, include just that table
-      let tableReferences = [];
+      return res.json({ reply: text });
+    }
 
-      if (isDataProduct && context.tables && context.tables.length > 0) {
-        // For Data Products, extract BigQuery references from all tables
-        context.tables.forEach((table) => {
-          if (table.fullyQualifiedName) {
-            const fqn = table.fullyQualifiedName;
-            let tProjectId, tDatasetId, tTableId;
+    // Use Conversational Analytics API with inline context for BigQuery tables
+    const projectId_env = 'dataplex-ui'; // Hardcoded project ID
+    const location = process.env.GCP_LOCATION || 'europe-west1';
+    const chatUrl = `https://geminidataanalytics.googleapis.com/v1beta/projects/${projectId_env}/locations/${location}:chat`;
 
-            if (fqn.startsWith('bigquery://')) {
-              const parts = fqn.replace('bigquery://', '').split('.');
-              if (parts.length >= 3) {
-                tProjectId = parts[0];
-                tDatasetId = parts[1];
-                tTableId = parts[2];
-              }
-            } else if (fqn.includes(':')) {
-              const [project, rest] = fqn.split(':');
-              tProjectId = project;
-              const parts = rest.split('.');
-              if (parts.length >= 2) {
-                tDatasetId = parts[0];
-                tTableId = parts[1];
-              }
+    // Build BigQuery data source reference
+    // For Data Products, include all tables; for single tables, include just that table
+    let tableReferences = [];
+
+    if (isDataProduct && context.tables && context.tables.length > 0) {
+      // For Data Products, extract BigQuery references from all tables
+      context.tables.forEach((table) => {
+        if (table.fullyQualifiedName) {
+          const fqn = table.fullyQualifiedName;
+          let tProjectId, tDatasetId, tTableId;
+
+          if (fqn.startsWith('bigquery://')) {
+            const parts = fqn.replace('bigquery://', '').split('.');
+            if (parts.length >= 3) {
+              tProjectId = parts[0];
+              tDatasetId = parts[1];
+              tTableId = parts[2];
             }
-
-            if (tProjectId && tDatasetId && tTableId) {
-              tableReferences.push({
-                projectId: tProjectId,
-                datasetId: tDatasetId,
-                tableId: tTableId,
-                schema: {
-                  description: table.description || '',
-                  fields: []
-                }
-              });
+          } else if (fqn.includes(':')) {
+            const [project, rest] = fqn.split(':');
+            tProjectId = project;
+            const parts = rest.split('.');
+            if (parts.length >= 2) {
+              tDatasetId = parts[0];
+              tTableId = parts[1];
             }
           }
-        });
-      } else {
-        // Single table
-        console.log(`DEBUG_EXTRACTED_REF: Project=${projectId}, Dataset=${datasetId}, Table=${tableId}, FQN=${context.fullyQualifiedName}`);
 
-        tableReferences = [{
-          projectId: projectId,
-          datasetId: datasetId,
-          tableId: tableId
-          // Removed manual schema/fields injection to let the API resolve it from BigQuery
-        }];
+          if (tProjectId && tDatasetId && tTableId) {
+            tableReferences.push({
+              projectId: tProjectId,
+              datasetId: tDatasetId,
+              tableId: tTableId,
+              schema: {
+                description: table.description || '',
+                fields: []
+              }
+            });
+          }
+        }
+      });
+    } else {
+      // Single table
+      console.log(`DEBUG_EXTRACTED_REF: Project=${projectId}, Dataset=${datasetId}, Table=${tableId}, FQN=${context.fullyQualifiedName}`);
+
+      tableReferences = [{
+        projectId: projectId,
+        datasetId: datasetId,
+        tableId: tableId
+        // Removed manual schema/fields injection to let the API resolve it from BigQuery
+      }];
+    }
+
+    console.log('DEBUG_TABLE_REFS_PAYLOAD:', JSON.stringify(tableReferences, null, 2));
+
+    // If no valid table references found, fall back to Vertex AI
+    if (tableReferences.length === 0) {
+      const vertex_ai = new VertexAI({
+        project: 'dataplex-ui', // Hardcoded project ID
+        location: process.env.GCP_LOCATION || 'us-central1'
+      });
+      const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
+
+      const prompt = isDataProduct
+        ? `You are a helpful Data Steward assistant for Dataplex. The user is asking about Data Product: ${context.name}. ${context.description}. User Question: ${message}`
+        : `You are a helpful Data Steward assistant for Dataplex. Name: ${context.name}. Description: ${context.description}. Schema: ${JSON.stringify(context.schema || [])}. User Question: ${message}`;
+
+      const result = await generativeModel.generateContent(prompt);
+      const response = result.response;
+      const text = response.candidates[0].content.parts[0].text;
+      return res.json({ reply: text });
+    }
+
+    const bigqueryDataSource = {
+      bq: {
+        tableReferences: tableReferences
       }
+    };
 
-      console.log('DEBUG_TABLE_REFS_PAYLOAD:', JSON.stringify(tableReferences, null, 2));
-
-      // If no valid table references found, fall back to Vertex AI
-      if (tableReferences.length === 0) {
-        const vertex_ai = new VertexAI({
-          project: 'dataplex-ui', // Hardcoded project ID
-          location: process.env.GCP_LOCATION || 'us-central1'
-        });
-        const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
-
-        const prompt = isDataProduct
-          ? `You are a helpful Data Steward assistant for Dataplex. The user is asking about Data Product: ${context.name}. ${context.description}. User Question: ${message}`
-          : `You are a helpful Data Steward assistant for Dataplex. Name: ${context.name}. Description: ${context.description}. Schema: ${JSON.stringify(context.schema || [])}. User Question: ${message}`;
-
-        const result = await generativeModel.generateContent(prompt);
-        const response = result.response;
-        const text = response.candidates[0].content.parts[0].text;
-        return res.json({ reply: text });
+    // Prepare messages array (include conversation history if provided)
+    const messages = [];
+    if (context.conversationHistory && Array.isArray(context.conversationHistory)) {
+      messages.push(...context.conversationHistory);
+    }
+    messages.push({
+      userMessage: {
+        parts: [
+          { text: message }
+        ]
       }
+    });
 
-      const bigqueryDataSource = {
-        bq: {
-          tableReferences: tableReferences
+    const systemInstruction = 'You are a helpful Data Steward assistant for Dataplex. Answer questions about the data tables based on their schema and metadata. Be concise and accurate.';
+
+    // Try to use Data Agent first (preferred), fall back to inline context if it fails
+    let chatPayload;
+
+    // Get ADC token for Chat API
+    const auth = new GoogleAuth({
+      scopes: 'https://www.googleapis.com/auth/cloud-platform'
+    });
+    const client = await auth.getClient();
+    const accessToken = (await client.getAccessToken()).token;
+
+    const agentName = await getOrCreateDataAgent(tableReferences, systemInstruction);
+
+    if (agentName) {
+      // Use data agent approach
+      chatPayload = {
+        parent: `projects/${projectId_env}/locations/${location}`,
+        messages: messages,
+        data_agent_context: {
+          data_agent: agentName
         }
       };
-
-      // Prepare messages array (include conversation history if provided)
-      const messages = [];
-      if (context.conversationHistory && Array.isArray(context.conversationHistory)) {
-        messages.push(...context.conversationHistory);
-      }
-      messages.push({
-        userMessage: {
-          parts: [
-            { text: message }
-          ]
-        }
-      });
-
-      const systemInstruction = 'You are a helpful Data Steward assistant for Dataplex. Answer questions about the data tables based on their schema and metadata. Be concise and accurate.';
-
-      // Try to use Data Agent first (preferred), fall back to inline context if it fails
-      let chatPayload;
-
-      // Get ADC token for Chat API
-      const auth = new GoogleAuth({
-        scopes: 'https://www.googleapis.com/auth/cloud-platform'
-      });
-      const client = await auth.getClient();
-      const accessToken = (await client.getAccessToken()).token;
-
-      const agentName = await getOrCreateDataAgent(tableReferences, systemInstruction);
-
-      if (agentName) {
-        // Use data agent approach
-        chatPayload = {
-          parent: `projects/${projectId_env}/locations/${location}`,
-          messages: messages,
-          data_agent_context: {
-            data_agent: agentName
+    } else {
+      // Fall back to inline context
+      chatPayload = {
+        parent: `projects/${projectId_env}/locations/${location}`,
+        messages: messages,
+        inlineContext: {
+          datasourceReferences: bigqueryDataSource,
+          systemInstruction: {
+            parts: [
+              { text: systemInstruction }
+            ]
           }
-        };
-      } else {
-        // Fall back to inline context
-        chatPayload = {
-          parent: `projects/${projectId_env}/locations/${location}`,
-          messages: messages,
-          inlineContext: {
-            datasourceReferences: bigqueryDataSource,
-            systemInstruction: {
-              parts: [
-                { text: systemInstruction }
-              ]
-            }
-          }
-        };
-      }
-
-      // Make request to Conversational Analytics API
-      const chatResponse = await axios.post(chatUrl, chatPayload, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'x-server-timeout': '300'
-        },
-        responseType: 'arraybuffer' // Fetch raw bytes to avoid stream encoding issues
-      });
-
-      let fullResponseText = '';
-      let finalChart = null;
-      let finalSql = null;
-      let accumulatedJson = chatResponse.data.toString('utf-8'); // Convert buffer to string properly
-
-      console.log('DEBUG_RAW_RESPONSE_LENGTH:', accumulatedJson.length);
-      console.log('DEBUG_FULL_RAW_RESPONSE:', accumulatedJson); // Log EVERYTHING to find hidden data
-
-      // Parse the full accumulated JSON
-      try {
-        let cleanBuffer = accumulatedJson.trim();
-        // Ensure it's a valid list if it does not start with [
-        if (cleanBuffer && !cleanBuffer.startsWith('[')) {
-          // It might be multiple JSON objects concatenated or separated by newlines
-          // Regex to join } { into },{
-          cleanBuffer = `[${cleanBuffer.replace(/\}\s*\{/g, '},{')}]`;
         }
-
-        // Handle trailing commas
-        if (cleanBuffer.endsWith(',]')) cleanBuffer = cleanBuffer.slice(0, -2) + ']';
-
-        const parsedMessages = JSON.parse(cleanBuffer);
-
-        if (Array.isArray(parsedMessages)) {
-          parsedMessages.forEach((msg, index) => {
-            if (msg.systemMessage) {
-              console.log(`DEBUG_MSG_${index}_KEYS:`, Object.keys(msg.systemMessage)); // Log what keys exist (e.g. text, chart, data?)
-
-              // 1. Text
-              if (msg.systemMessage.text) {
-                const t = msg.systemMessage.text;
-                if (t.textType === 'FINAL_RESPONSE') {
-                  fullResponseText += t.text || t.content || '';
-                } else if (t.textType === 'THOUGHT' && t.parts && t.parts[0]?.text) {
-                  fullResponseText += `\n*Thought: ${t.parts[0].text}*\n`;
-                }
-              }
-              // 2. Chart
-              if (msg.systemMessage.chart) {
-                finalChart = msg.systemMessage.chart;
-                // Add instruction text if present, but avoid duplication if it looks like a prompt
-                if (finalChart.query?.instructions && !fullResponseText.includes(finalChart.query.instructions)) {
-                  fullResponseText += `\n\n**Visual Analysis:** ${finalChart.query.instructions}`;
-                }
-              }
-
-              // 3. Data (Alternative location)
-              if (msg.systemMessage.data?.result) {
-                const result = msg.systemMessage.data.result;
-                console.log(`DEBUG_MSG_${index}_DATA_FOUND`, result);
-
-                // Format Data as Markdown Table
-                if (result.data && Array.isArray(result.data) && result.data.length > 0) {
-                  const rows = result.data;
-                  const columns = Object.keys(rows[0]);
-
-                  // Header
-                  let tableMd = `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
-
-                  // Rows (Limit to 5 to avoid spamming chat)
-                  rows.slice(0, 5).forEach(row => {
-                    tableMd += `| ${values = columns.map(col => row[col]).join(' | ')} |\n`;
-                  });
-                  // Fix variable name in map
-
-                  rows.slice(0, 5).forEach(row => {
-                    // Simple row rendering
-                    tableMd += `| ${columns.map(col => row[col]).join(' | ')} |\n`;
-                  });
-
-                  // Reset and do it cleanly
-                  tableMd = `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
-                  rows.slice(0, 5).forEach(row => {
-                    const vals = columns.map(c => row[c]);
-                    tableMd += `| ${vals.join(' | ')} |\n`;
-                  });
-
-                  if (rows.length > 5) {
-                    tableMd += `\n*(Showing top 5 of ${rows.length} rows)*\n`;
-                  }
-
-                  fullResponseText += tableMd;
-                }
-              }
-
-              // 4. SQL
-              if (msg.systemMessage.sqlQuery) {
-                finalSql = msg.systemMessage.sqlQuery;
-              }
-            }
-
-            if (msg.error) {
-              console.error('API Returned Error:', msg.error);
-              fullResponseText += `\nError: ${msg.error.message}`;
-            }
-          });
-        }
-      } catch (e) {
-        console.error('JSON Parse Error of Stream:', e);
-        console.log('Raw Buffer:', accumulatedJson);
-        // Fallback: simple text extraction
-        const matches = accumulatedJson.match(/"text":\s*"([^"]+)"/g);
-        if (matches) {
-          fullResponseText = matches.map(m => m.split(':')[1].replace(/"/g, '').trim()).join(' ');
-        } else {
-          fullResponseText = "Received response but failed to parse. Check server logs.";
-        }
-      }
-
-      // Send structured response
-      console.log('Sending response to frontend:', { replyLength: fullResponseText.length, hasChart: !!finalChart });
-      res.json({
-        reply: fullResponseText,
-        chart: finalChart,
-        sql: finalSql,
-        conversationHistory: [] // Future: maintain history
-      });
-
-    } catch (err) {
-      console.error("Conversational Analytics API Error:", err);
-
-      // Decode the actual API error message from buffer
-      if (err.response && err.response.data) {
-        try {
-          const errorMsg = Buffer.from(err.response.data).toString('utf8');
-          console.error("FULL API ERROR MESSAGE:", errorMsg);
-        } catch (decodeErr) {
-          console.error("Could not decode error buffer:", decodeErr);
-        }
-      }
-
-      res.status(500).json({
-        error: "Failed to generate response from Conversational Analytics API.",
-        details: err.message
-      });
+      };
     }
-  });
+
+    // Make request to Conversational Analytics API
+    const chatResponse = await axios.post(chatUrl, chatPayload, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'x-server-timeout': '300'
+      },
+      responseType: 'arraybuffer' // Fetch raw bytes to avoid stream encoding issues
+    });
+
+    let fullResponseText = '';
+    let finalChart = null;
+    let finalSql = null;
+    let accumulatedJson = chatResponse.data.toString('utf-8'); // Convert buffer to string properly
+
+    console.log('DEBUG_RAW_RESPONSE_LENGTH:', accumulatedJson.length);
+    console.log('DEBUG_FULL_RAW_RESPONSE:', accumulatedJson); // Log EVERYTHING to find hidden data
+
+    // Parse the full accumulated JSON
+    try {
+      let cleanBuffer = accumulatedJson.trim();
+      // Ensure it's a valid list if it does not start with [
+      if (cleanBuffer && !cleanBuffer.startsWith('[')) {
+        // It might be multiple JSON objects concatenated or separated by newlines
+        // Regex to join } { into },{
+        cleanBuffer = `[${cleanBuffer.replace(/\}\s*\{/g, '},{')}]`;
+      }
+
+      // Handle trailing commas
+      if (cleanBuffer.endsWith(',]')) cleanBuffer = cleanBuffer.slice(0, -2) + ']';
+
+      const parsedMessages = JSON.parse(cleanBuffer);
+
+      if (Array.isArray(parsedMessages)) {
+        parsedMessages.forEach((msg, index) => {
+          if (msg.systemMessage) {
+            console.log(`DEBUG_MSG_${index}_KEYS:`, Object.keys(msg.systemMessage)); // Log what keys exist (e.g. text, chart, data?)
+
+            // 1. Text
+            if (msg.systemMessage.text) {
+              const t = msg.systemMessage.text;
+              if (t.textType === 'FINAL_RESPONSE') {
+                fullResponseText += t.text || t.content || '';
+              } else if (t.textType === 'THOUGHT' && t.parts && t.parts[0]?.text) {
+                fullResponseText += `\n*Thought: ${t.parts[0].text}*\n`;
+              }
+            }
+            // 2. Chart
+            if (msg.systemMessage.chart) {
+              finalChart = msg.systemMessage.chart;
+              // Add instruction text if present, but avoid duplication if it looks like a prompt
+              if (finalChart.query?.instructions && !fullResponseText.includes(finalChart.query.instructions)) {
+                fullResponseText += `\n\n**Visual Analysis:** ${finalChart.query.instructions}`;
+              }
+            }
+
+            // 3. Data (Alternative location)
+            if (msg.systemMessage.data?.result) {
+              const result = msg.systemMessage.data.result;
+              console.log(`DEBUG_MSG_${index}_DATA_FOUND`, result);
+
+              // Format Data as Markdown Table
+              if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+                const rows = result.data;
+                const columns = Object.keys(rows[0]);
+
+                // Header
+                let tableMd = `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
+
+                // Rows (Limit to 5 to avoid spamming chat)
+                rows.slice(0, 5).forEach(row => {
+                  tableMd += `| ${values = columns.map(col => row[col]).join(' | ')} |\n`;
+                });
+                // Fix variable name in map
+
+                rows.slice(0, 5).forEach(row => {
+                  // Simple row rendering
+                  tableMd += `| ${columns.map(col => row[col]).join(' | ')} |\n`;
+                });
+
+                // Reset and do it cleanly
+                tableMd = `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
+                rows.slice(0, 5).forEach(row => {
+                  const vals = columns.map(c => row[c]);
+                  tableMd += `| ${vals.join(' | ')} |\n`;
+                });
+
+                if (rows.length > 5) {
+                  tableMd += `\n*(Showing top 5 of ${rows.length} rows)*\n`;
+                }
+
+                fullResponseText += tableMd;
+              }
+            }
+
+            // 4. SQL
+            if (msg.systemMessage.sqlQuery) {
+              finalSql = msg.systemMessage.sqlQuery;
+            }
+          }
+
+          if (msg.error) {
+            console.error('API Returned Error:', msg.error);
+            fullResponseText += `\nError: ${msg.error.message}`;
+          }
+        });
+      }
+    } catch (e) {
+      console.error('JSON Parse Error of Stream:', e);
+      console.log('Raw Buffer:', accumulatedJson);
+      // Fallback: simple text extraction
+      const matches = accumulatedJson.match(/"text":\s*"([^"]+)"/g);
+      if (matches) {
+        fullResponseText = matches.map(m => m.split(':')[1].replace(/"/g, '').trim()).join(' ');
+      } else {
+        fullResponseText = "Received response but failed to parse. Check server logs.";
+      }
+    }
+
+    // Send structured response
+    console.log('Sending response to frontend:', { replyLength: fullResponseText.length, hasChart: !!finalChart });
+    res.json({
+      reply: fullResponseText,
+      chart: finalChart,
+      sql: finalSql,
+      conversationHistory: [] // Future: maintain history
+    });
+
+  } catch (err) {
+    console.error("Conversational Analytics API Error:", err);
+
+    // Decode the actual API error message from buffer
+    if (err.response && err.response.data) {
+      try {
+        const errorMsg = Buffer.from(err.response.data).toString('utf8');
+        console.error("FULL API ERROR MESSAGE:", errorMsg);
+      } catch (decodeErr) {
+        console.error("Could not decode error buffer:", decodeErr);
+      }
+    }
+
+    res.status(500).json({
+      error: "Failed to generate response from Conversational Analytics API.",
+      details: err.message
+    });
+  }
+});
 // --- END CONVERSATIONAL ANALYTICS CODE ---
 
 // --- START ACCESS REQUEST MANAGEMENT ---
@@ -889,38 +888,36 @@ app.post('/api/v1/batch-aspects', async (req, res) => {
   // }
 
   try {
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
 
-    try {
-      // ADC Auth
-      const auth = new AdcGoogleAuth();
+    const dataplexClientv1 = new CatalogServiceClient({
+      auth: auth,
+    });
+    console.log(`Fetching aspects for a batch of ${entryNames.length} entries.`);
 
-      const dataplexClientv1 = new CatalogServiceClient({
-        auth: auth,
-      });
-      console.log(`Fetching aspects for a batch of ${entryNames.length} entries.`);
+    // Create an array of promises, where each promise fetches one entry
+    const promises = entryNames.map(n => {
+      //const request = { name, view: protos.google.cloud.dataplex.v1.EntryView.ALL };
+      return dataplexClientv1.getAspectType({ name: n });
+    });
 
-      // Create an array of promises, where each promise fetches one entry
-      const promises = entryNames.map(n => {
-        //const request = { name, view: protos.google.cloud.dataplex.v1.EntryView.ALL };
-        return dataplexClientv1.getAspectType({ name: n });
-      });
+    // Execute all promises concurrently
+    const results = await Promise.all(promises);
 
-      // Execute all promises concurrently
-      const results = await Promise.all(promises);
+    // Map the results to a more user-friendly format
+    let aspectsResponse = {};
+    results.forEach(([aspectType], index) => {
+      aspectsResponse[aspectType.displayName ?? entryNames[index]] = aspectType.metadataTemplate?.recordFields?.map(f => f.name);
+    });
 
-      // Map the results to a more user-friendly format
-      let aspectsResponse = {};
-      results.forEach(([aspectType], index) => {
-        aspectsResponse[aspectType.displayName ?? entryNames[index]] = aspectType.metadataTemplate?.recordFields?.map(f => f.name);
-      });
+    res.json(aspectsResponse);
 
-      res.json(aspectsResponse);
-
-    } catch (error) {
-      console.error('Error fetching aspects for batch:', error);
-      res.status(500).json({ message: 'An error occurred while fetching aspects for the batch.', details: error.message });
-    }
-  });
+  } catch (error) {
+    console.error('Error fetching aspects for batch:', error);
+    res.status(500).json({ message: 'An error occurred while fetching aspects for the batch.', details: error.message });
+  }
+});
 
 /**
  * GET /api/aspect-types
@@ -2380,7 +2377,7 @@ app.get('/*\w', (req, res) => {
 });
 
 // Start the server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server listening on port ${PORT}`);
   console.log('API Endpoints:');
   console.log(`  POST /api/v1/check-iam-role`);
