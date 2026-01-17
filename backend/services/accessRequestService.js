@@ -74,8 +74,8 @@ const getAccessRequests = async (filters = {}) => {
             query = query.where('requesterEmail', '==', filters.requesterEmail);
         }
 
-        // Get snapshot
-        const snapshot = await query.orderBy('submittedAt', 'desc').get();
+        // Get snapshot (without sorting at DB level to avoid composite index requirement)
+        const snapshot = await query.get();
 
         if (snapshot.empty) {
             return [];
@@ -85,6 +85,9 @@ const getAccessRequests = async (filters = {}) => {
         snapshot.forEach(doc => {
             requests.push(doc.data());
         });
+
+        // Sort in memory (newest first)
+        requests.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
 
         return requests;
     } catch (error) {
