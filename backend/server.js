@@ -2184,7 +2184,6 @@ app.post('/api/v1/access-request', async (req, res) => {
     if (!autoApprove) {
       console.log('About to send access request email...');
       const emailResult = await sendAccessRequestEmail(
-        accessToken,
         assetName,
         message || '',
         requesterEmail,

@@ -2,32 +2,27 @@ const { google } = require('googleapis');
 const { GoogleAuth, OAuth2Client } = require('google-auth-library');
 
 // Initialize Gmail API client
-let gmailClient = null; 
+let gmailClient = null;
 
-class CustomGoogleAuth extends GoogleAuth {
-    constructor(token) {
-      super();
-      this.token = token;
-    }
-  
-    async getClient() {
-      const client = new OAuth2Client();
-      client.setCredentials({ access_token: this.token });
-      return client;
-    }
-  
-    // Add getUniverseDomain() stub to fix gax compatibility
-    async getUniverseDomain() {
-      return 'googleapis.com'; // default public cloud domain
-    }
+// Use GoogleAuth for ADC
+class AdcGoogleAuth extends GoogleAuth {
+  constructor() {
+    super({
+      scopes: ['https://www.googleapis.com/auth/cloud-platform', 'https://www.googleapis.com/auth/gmail.send']
+    });
+  }
+
+  async getClient() {
+    return super.getClient();
+  }
 }
 
-const initializeGmailClient = async (accessToken) => {
+const initializeGmailClient = async () => {
   try {
-    const oauth2Client = new CustomGoogleAuth(accessToken);
-        
-    gmailClient = google.gmail({ version: 'v1', auth: oauth2Client });
-    
+    const auth = new AdcGoogleAuth();
+
+    gmailClient = google.gmail({ version: 'v1', auth: auth });
+
   } catch (error) {
     console.error('Failed to initialize Gmail API client:', error);
     throw error;
@@ -230,7 +225,7 @@ const createAccessRequestEmail = (assetName, message, requesterEmail, projectId)
 };
 
 // Email template for access request
-const createFeedbackEmail = ( message, requesterEmail, projectId) => {
+const createFeedbackEmail = (message, requesterEmail, projectId) => {
   const currentDate = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -430,14 +425,14 @@ const createGmailMessage = (to, subject, htmlContent, fromEmail) => {
 };
 
 // Send access request email using Gmail API
-const sendAccessRequestEmail = async (accessToken, assetName, message, requesterEmail, projectId, projectAdmin = []) => {
-    try {
-    
-    await initializeGmailClient(accessToken);
+const sendAccessRequestEmail = async (assetName, message, requesterEmail, projectId, projectAdmin = []) => {
+  try {
+
+    await initializeGmailClient();
 
     const emailContent = createAccessRequestEmail(assetName, message, requesterEmail, projectId);
     const fromEmail = requesterEmail
-    
+
     // Use projectAdmin emails if available, otherwise fall back to test email
     const toEmails = projectAdmin;
 
@@ -460,7 +455,7 @@ const sendAccessRequestEmail = async (accessToken, assetName, message, requester
 
     const responses = await Promise.all(emailPromises);
 
-    console.log('Access request emails sent successfully to', responses.length, 'recipients'); 
+    console.log('Access request emails sent successfully to', responses.length, 'recipients');
     return {
       success: true,
       messageIds: responses.map(r => r.data.id),
@@ -477,14 +472,14 @@ const sendAccessRequestEmail = async (accessToken, assetName, message, requester
 };
 
 // Send Feedback email using Gmail API
-const sendFeedbackEmail = async (accessToken, message, requesterEmail, projectId, projectAdmin = []) => {
-    try {
-    
-    await initializeGmailClient(accessToken);
+const sendFeedbackEmail = async (message, requesterEmail, projectId, projectAdmin = []) => {
+  try {
 
-    const emailContent = createFeedbackEmail( message, requesterEmail, projectId);
+    await initializeGmailClient();
+
+    const emailContent = createFeedbackEmail(message, requesterEmail, projectId);
     const fromEmail = requesterEmail
-    
+
     // Use projectAdmin emails if available, otherwise fall back to test email
     const toEmails = projectAdmin;
 
@@ -507,7 +502,7 @@ const sendFeedbackEmail = async (accessToken, message, requesterEmail, projectId
 
     const responses = await Promise.all(emailPromises);
 
-    console.log('Access request emails sent successfully to', responses.length, 'recipients'); 
+    console.log('Access request emails sent successfully to', responses.length, 'recipients');
     return {
       success: true,
       messageIds: responses.map(r => r.data.id),
