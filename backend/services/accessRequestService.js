@@ -3,9 +3,8 @@ const { Firestore } = require('@google-cloud/firestore');
 // Initialize Firestore
 // This automatically uses Application Default Credentials (ADC)
 const firestore = new Firestore({
-    projectId: 'dataplex-ui', // Hardcoded project ID as per server.js usage, but ideally configured in new AdcGoogleAuth if needed.
-    // However, for Firestore, if we leave it empty, it should auto-detect from ADC environment.
-    // Given the user told us the databaseId is 'admin-panel'
+    // projectId is omitted so it will be auto-detected from the Cloud Run environment (ADC).
+    // This allows the code to run correctly in 'new-version-tst-54254020796'.
     databaseId: 'admin-panel'
 });
 
