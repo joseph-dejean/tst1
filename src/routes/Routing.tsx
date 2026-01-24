@@ -28,6 +28,7 @@ import Glossaries from '../component/Glossaries/Glossaries';
 import ChatPage from '../component/ConversationalAnalytics/ChatPage';
 import DataProducts from '../component/DataProducts/DataProducts';
 import DataProductsDetailView from '../component/DataProducts/DataProductsDetailView';
+import AccessRequestsDashboard from '../component/AccessRequests/AccessRequestsDashboard';
 
 const Routing = () => {
   // state to hold the user object
@@ -126,6 +127,20 @@ const Routing = () => {
                 <Button variant="outlined" onClick={handleSignOut} style={{ color: "#333", background: "white", borderRadius: "20px" }}>SignOut</Button>
               </div>
             </>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/access-requests"
+        element={
+          <ProtectedRoute>
+            <SessionExpirationWrapper>
+              <Layout searchBar={true}>
+                <div style={{ padding: '20px', width: "90%", margin: "0 auto", maxWidth: "1400px" }}>
+                  <AccessRequestsDashboard />
+                </div>
+              </Layout>
+            </SessionExpirationWrapper>
           </ProtectedRoute>
         }
       />
