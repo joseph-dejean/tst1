@@ -8,7 +8,7 @@ interface RootState {
   };
 }
 import Login from '../component/Auth/Login/Login';
-import Navbar from '../component/Navbar/Navbar';
+import Layout from '../component/Layout/Layout';
 import Home from '../component/Home/Home';
 import { useSelector } from 'react-redux';
 import SearchPage from '../component/SearchPage/SearchPage';
@@ -24,9 +24,10 @@ import UserGuide from '../component/Guide/UserGuide';
 import DataProductPage from '../component/DataProduct/DataProductPage';
 import DataProductManager from '../component/DataProduct/DataProductManager';
 import PermissionsPanel from '../component/AdminPanel/PermissionsPanel';
-import AccessRequestsDashboard from '../component/AccessRequests/AccessRequestsDashboard';
 import Glossaries from '../component/Glossaries/Glossaries';
 import ChatPage from '../component/ConversationalAnalytics/ChatPage';
+import DataProducts from '../component/DataProducts/DataProducts';
+import DataProductsDetailView from '../component/DataProducts/DataProductsDetailView';
 
 const Routing = () => {
   // state to hold the user object
@@ -85,10 +86,9 @@ const Routing = () => {
         element={
           <ProtectedRoute>
             <SessionExpirationWrapper>
-              <>
-                <Navbar searchBar={false} />
+              <Layout searchBar={false}>
                 <Home />
-              </>
+              </Layout>
             </SessionExpirationWrapper>
           </ProtectedRoute>
         }
@@ -98,8 +98,7 @@ const Routing = () => {
         element={
           <ProtectedRoute>
             <SessionExpirationWrapper>
-              <>
-                <Navbar searchBar={true} searchNavigate={false} />
+              <Layout searchBar={true} searchNavigate={false}>
                 <div style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -108,7 +107,7 @@ const Routing = () => {
                 }}>
                   <SearchPage />
                 </div>
-              </>
+              </Layout>
             </SessionExpirationWrapper>
           </ProtectedRoute>
         }
@@ -135,12 +134,9 @@ const Routing = () => {
         element={
           <ProtectedRoute>
             <SessionExpirationWrapper>
-              <>
-                <div style={{ position: 'sticky', top: 0, zIndex: 1100, backgroundColor: '#F8FAFD' }}>
-                  <Navbar searchBar={true} />
-                </div>
+              <Layout searchBar={true}>
                 <ViewDetails />
-              </>
+              </Layout>
             </SessionExpirationWrapper>
           </ProtectedRoute>
         }
@@ -150,10 +146,9 @@ const Routing = () => {
         element={
           <ProtectedRoute>
             <SessionExpirationWrapper>
-              <>
-                <Navbar searchBar={true} />
+              <Layout searchBar={true}>
                 <PermissionsPanel />
-              </>
+              </Layout>
             </SessionExpirationWrapper>
           </ProtectedRoute>
         }
@@ -163,24 +158,9 @@ const Routing = () => {
         element={
           <ProtectedRoute>
             <SessionExpirationWrapper>
-              <>
-                <Navbar searchBar={true} />
+              <Layout searchBar={true}>
                 <AdminPanel />
-                {/* </ProtectedRoute><CircularProgress style={{position:"absolute", top:"50%", left:"50%", transform:"translate(-50%, -50%)"}} /> */}
-              </>
-            </SessionExpirationWrapper>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/access-requests"
-        element={
-          <ProtectedRoute>
-            <SessionExpirationWrapper>
-              <>
-                <Navbar searchBar={true} />
-                <AccessRequestsDashboard />
-              </>
+              </Layout>
             </SessionExpirationWrapper>
           </ProtectedRoute>
         }
@@ -190,8 +170,7 @@ const Routing = () => {
         element={
           <ProtectedRoute>
             <SessionExpirationWrapper>
-              <>
-                <Navbar searchBar={true} />
+              <Layout searchBar={true}>
                 <div style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -200,7 +179,7 @@ const Routing = () => {
                 }}>
                   <BrowseByAnnotation />
                 </div>
-              </>
+              </Layout>
             </SessionExpirationWrapper>
           </ProtectedRoute>
         }
@@ -210,10 +189,35 @@ const Routing = () => {
         element={
           <ProtectedRoute>
             <SessionExpirationWrapper>
-              <>
-                <Navbar searchBar={true} />
+              <Layout searchBar={true}>
                 <Glossaries />
-              </>
+              </Layout>
+            </SessionExpirationWrapper>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/data-products"
+        element={
+          <ProtectedRoute>
+            <SessionExpirationWrapper>
+              <Layout searchBar={true}>
+                <DataProducts />
+              </Layout>
+            </SessionExpirationWrapper>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/data-products-details"
+        element={
+          <ProtectedRoute>
+            <SessionExpirationWrapper>
+              <Layout searchBar={true}>
+                <DataProductsDetailView />
+              </Layout>
             </SessionExpirationWrapper>
           </ProtectedRoute>
         }
@@ -224,32 +228,33 @@ const Routing = () => {
         element={
           <ProtectedRoute>
             <SessionExpirationWrapper>
-              <Navbar searchBar={true} />
-              <>
+              <Layout searchBar={true}>
                 <div style={{
                   width: "90%",
                   maxWidth: "1400px",
-                  margin: "20px auto 0",
+                  margin: "0 auto",
+                  marginBottom: "16px",
+                  height: "calc(100vh - 80px)",
+                  overflow: "auto",
                   backgroundColor: "#FFF",
-                  borderRadius: "8px",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)"
+                  borderRadius: "24px",
+                  boxShadow: "none"
                 }}>
                   <UserGuide />
                 </div>
-              </>
+              </Layout>
             </SessionExpirationWrapper>
           </ProtectedRoute>
         }
       />
       <Route
-        path="/data-products"
+        path="/data-products-manager" // Renamed from /data-products to avoid conflict with DataProducts route
         element={
           <ProtectedRoute>
             <SessionExpirationWrapper>
-              <>
-                <Navbar searchBar={true} />
+              <Layout searchBar={true}>
                 <DataProductManager />
-              </>
+              </Layout>
             </SessionExpirationWrapper>
           </ProtectedRoute>
         }
@@ -260,11 +265,9 @@ const Routing = () => {
         element={
           <ProtectedRoute>
             <SessionExpirationWrapper>
-              <>
-                {/* Navbar is optional on chat page, but good for navigation back */}
-                {/* <Navbar searchBar={true} /> */}
+              <Layout searchBar={true}>
                 <ChatPage />
-              </>
+              </Layout>
             </SessionExpirationWrapper>
           </ProtectedRoute>
         }
@@ -274,10 +277,9 @@ const Routing = () => {
         element={
           <ProtectedRoute>
             <SessionExpirationWrapper>
-              <>
-                <Navbar searchBar={true} />
+              <Layout searchBar={true}>
                 <DataProductPage />
-              </>
+              </Layout>
             </SessionExpirationWrapper>
           </ProtectedRoute>
         }
@@ -287,14 +289,13 @@ const Routing = () => {
         element={
           <ProtectedRoute>
             <SessionExpirationWrapper>
-              <Navbar searchBar={true} />
-              <>
+              <Layout searchBar={true}>
                 <div style={{ padding: '20px', width: "1000px", margin: "100px auto 0", }}>
                   <div className="logo-container">
                     <img src="/assets/svg/catalog-studio-logo-figma-585de1.svg" alt="CS Studio Logo" className="navbar-logo-img" />
-                    <label style={{ fontSize: "24px", fontWeight: 800, color: "#0E4DCA" }}>France Practice</label>
+                    <label style={{ fontSize: "24px", fontWeight: 800, color: "#0E4DCA" }}>Dataplex</label>
                     <label style={{ fontSize: "24px", fontWeight: 600, color: "#0E4DCA", margin: "0px 3px 0px" }}>|</label>
-                    <label style={{ fontSize: "22px", fontWeight: 600, color: "#0E4DCA", margin: "0px 3px 0px" }}>Data Catalog</label>
+                    <label style={{ fontSize: "22px", fontWeight: 600, color: "#0E4DCA", margin: "0px 3px 0px" }}>Buisness Interface</label>
                   </div>
                   <h1>For help contact over these email</h1>
                   <div style={{ borderBottom: "1px solid #DADCE0", padding: '0.875rem 0', gap: '0.25rem' }}>
@@ -314,7 +315,7 @@ const Routing = () => {
                     </div>
                   </div>
                 </div>
-              </>
+              </Layout>
             </SessionExpirationWrapper>
           </ProtectedRoute>
         }

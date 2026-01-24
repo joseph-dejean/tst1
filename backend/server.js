@@ -14,7 +14,6 @@ const axios = require('axios');
 const authMiddleware = require('./middlewares/authMiddleware');
 const { querySampleFromBigQuery } = require('./utility');
 const { sendAccessRequestEmail, sendFeedbackEmail } = require('./services/emailService');
-const { createAccessRequest, getAccessRequests, updateAccessRequestStatus } = require('./services/accessRequestService');
 const { BigQuery } = require('@google-cloud/bigquery');
 
 
@@ -554,32 +553,7 @@ app.post('/api/v1/chat', async (req, res) => {
 });
 // --- END CONVERSATIONAL ANALYTICS CODE ---
 
-// --- START ACCESS REQUEST MANAGEMENT ---
-// Using Firestore via accessRequestService.js
-// No local state needed
 
-
-/**
- * Auto-checker function for access requests
- * Returns true if access should be automatically granted
- */
-const shouldAutoApprove = (request) => {
-  // Auto-approve if:
-  // 1. Requester is already a project admin
-  // 2. Request is for a public dataset
-  // 3. Requester has viewer role on the project
-
-  // For now, we'll implement a simple rule: auto-approve if the asset name contains "public"
-  // if (request.assetName && request.assetName.toLowerCase().includes('public')) {
-  //   return true;
-  // }
-
-  return false;
-
-  return false;
-};
-
-// --- END ACCESS REQUEST MANAGEMENT ---
 
 const PORT = process.env.PORT || 8080;
 
@@ -2102,62 +2076,34 @@ app.post('/api/v1/access-request', async (req, res) => {
 
     const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
 
-    // Create access request object
-    const requestData = {
-      id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    // Send access request email
+    console.log('About to send access request email...');
+    const emailResult = await sendAccessRequestEmail(
       assetName,
-      message: message || '',
+      message || '',
       requesterEmail,
-      projectId, // This is standardizing on "gcpProjectId" in the service, but let's pass it as is and map helper if needed, or better, change keys here.
-      // Actually, my service expects `gcpProjectId` in schema prompt, but `projectId` in actual code implementation I wrote. 
-      // The server.js uses "projectId". My createAccessRequest just dumps spreads `...requestData`.
-      // So I will map it here to be safe and consistent with the "Schema" prompt user wanted.
-      gcpProjectId: projectId,
-      requestedRole: 'roles/bigquery.dataViewer', // Defaulting for now as per "Request Access" button context usually implies viewer
-      projectAdmin: projectAdmin || [],
-      status: 'pending',
-      autoApproved: false
-    };
+      projectId,
+      projectAdmin || []
+    );
 
-    // Check if should auto-approve
-    const autoApprove = shouldAutoApprove(requestData);
-    if (autoApprove) {
-      requestData.status = 'approved';
-      requestData.autoApproved = true;
-      requestData.reviewedAt = new Date().toISOString();
-      requestData.reviewedBy = 'system';
-    }
+    console.log('Email result:', emailResult);
 
-    // Store the request in Firestore
-    const accessRequest = await createAccessRequest(requestData);
-
-    // Send access request email (only if not auto-approved)
-    if (!autoApprove) {
-      console.log('About to send access request email...');
-      const emailResult = await sendAccessRequestEmail(
-        assetName,
-        message || '',
-        requesterEmail,
-        projectId,
-        projectAdmin || [] // Pass projectAdmin emails
-      );
-
-      console.log('Email result:', emailResult);
-
-      if (!emailResult.success) {
-        console.error('Failed to send access request email:', emailResult.error);
-      }
-    } else {
-      console.log('Access request auto-approved:', accessRequest.id);
+    if (!emailResult.success) {
+      console.error('Failed to send access request email:', emailResult.error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to send email',
+        details: emailResult.error
+      });
     }
 
     // Return success response
     return res.status(200).json({
       success: true,
-      message: autoApprove ? 'Access request approved automatically' : 'Access request submitted successfully',
+      message: 'Access request submitted successfully',
       data: {
-        ...accessRequest,
-        messageId: autoApprove ? null : 'email_sent'
+        id: `email_${Date.now()}`,
+        status: 'submitted'
       }
     });
 
@@ -2175,120 +2121,7 @@ app.post('/api/v1/access-request', async (req, res) => {
   }
 });
 
-/**
- * GET /api/v1/access-requests
- * Get all access requests with filtering based on user role
- * - Admin: sees all requests
- * - Manager: sees only requests in their perimeter
- */
-app.get('/api/v1/access-requests', async (req, res) => {
-  try {
-    const userEmail = req.query.userEmail || req.headers['x-user-email'];
-    const userRole = req.query.userRole || req.headers['x-user-role'] || 'user'; // admin, manager, user
-    const status = req.query.status; // optional filter: pending, approved, rejected
-    const projectId = req.query.projectId; // optional filter by project
 
-    if (!userEmail) {
-      return res.status(400).json({
-        success: false,
-        error: 'User email is required'
-      });
-    }
-
-    // Fetch from Firestore
-    // Note: Filtering logic moved to service or done here if service returns all. 
-    // My service supports filtering.
-    const filters = {};
-    if (status) filters.status = status;
-    if (projectId) filters.projectId = projectId; // Service maps this query param
-    // if (userEmail) filters.requesterEmail = userEmail; // Only if not admin
-
-    // Ideally, we fetch based on role
-    if (userRole === 'admin') {
-      // Fetch all
-    } else if (userRole === 'manager') {
-      // Fetch for project? Service needs update or we filter in memory.
-      // For now, let's fetch all (or by project if filtered) and filter in memory to be safe as Firestore queries are strict.
-      if (projectId) filters.projectId = projectId;
-    } else {
-      filters.requesterEmail = userEmail;
-    }
-
-    let filteredRequests = await getAccessRequests(filters);
-
-    // Additional in-memory filtering for Manager role if `projectId` wasn't passed but they serve specific projects?
-    // Current logic assumes manager sends projectId.
-    // If not, we might need to filter `filteredRequests` by manager's perimeter (not implemented in this context yet).
-
-    // Previous logic for manager:
-    // } else if (userRole === 'manager') {
-    //   filteredRequests = filteredRequests.filter(req => req.projectId === projectId);
-    // }
-    // If projectId is null, manager sees nothing? Matches previous logic.
-
-    // Sort by submitted date (newest first) - Service already does this, but good to ensure.
-    // filteredRequests.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
-
-    return res.status(200).json({
-      success: true,
-      data: filteredRequests,
-      count: filteredRequests.length
-    });
-
-  } catch (error) {
-    console.error('Error fetching access requests:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Internal server error',
-      message: 'Failed to fetch access requests',
-      details: error.message
-    });
-  }
-});
-
-/**
- * POST /api/v1/access-request/update
- * Update an access request status (approve/reject)
- */
-app.post('/api/v1/access-request/update', async (req, res) => {
-  try {
-    const { requestId, status, reviewerEmail } = req.body;
-
-    if (!requestId || !status) {
-      return res.status(400).json({
-        success: false,
-        error: 'Request ID and status are required'
-      });
-    }
-
-    if (!['approved', 'rejected'].includes(status)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Status must be either "approved" or "rejected"'
-      });
-    }
-
-    // Update the request in Firestore
-    const updatedRequest = await updateAccessRequestStatus(requestId, status, null, reviewerEmail);
-
-    // Note: saveAccessRequests() is removed.
-
-    return res.status(200).json({
-      success: true,
-      message: `Access request ${status} successfully`,
-      data: updatedRequest
-    });
-
-  } catch (error) {
-    console.error('Error updating access request:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Internal server error',
-      message: 'Failed to update access request',
-      details: error.message
-    });
-  }
-});
 
 /**
  * GET /api/access-request/health

@@ -12,7 +12,7 @@ import Avatar from '@mui/material/Avatar';
 import Tooltip from '@mui/material/Tooltip';
 import MenuItem from '@mui/material/MenuItem';
 import './Navbar.css'
-import { HelpOutline, MenuBook, Home, Person, AccountCircle, Logout, Menu as MenuIcon, Security, Storage, AdminPanelSettings } from '@mui/icons-material';
+import { HelpOutline, MenuBook, Home, Person, AccountCircle, Logout, Menu as MenuIcon, AdminPanelSettings } from '@mui/icons-material';
 import SearchBar from '../SearchBar/SearchBar';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch } from '../../app/store';
@@ -106,9 +106,13 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch<AppDispatch>();
+  const isGlossaryPage = ['/glossaries'].includes(location.pathname);
+  const isBrowsePage = ['/browse-by-annotation'].includes(location.pathname);
+  const isSearchOrDetailPage = ['/search', '/view-details'].includes(location.pathname);
+  const isGuidePage = ['/guide'].includes(location.pathname);
+  const isDataProductsPage = location.pathname.startsWith('/data-product');
   const [anchorElNav, setAnchorElNav] = React.useState<null | HTMLElement>(null);
   const [anchorElUser, setAnchorElUser] = React.useState<null | HTMLElement>(null);
-  //const [anchorElHelp, setAnchorElHelp] = React.useState<null | HTMLElement>(null);
   const [openFeedback, setOpenFeedback] = React.useState<boolean>(false);
   const searchTerm = useSelector((state: any) => state.search.searchTerm);
   const searchFilters = useSelector((state: any) => state.search.searchFilters);
@@ -120,13 +124,13 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
   const handleLogoClick = () => {
     if (user) {
       const userData = {
-        name: user.name,
-        email: user.email,
-        picture: user.picture,
-        token: user.token,
-        hasRole: user.hasRole,
-        roles: user.roles,
-        permissions: user.permissions,
+        name: user.name ?? "",
+        email: user.email ?? "",
+        picture: user.picture ?? "",
+        token: user.token ?? "",
+        hasRole: user.hasRole ?? false,
+        roles: user.roles ?? [],
+        permissions: user.permissions ?? [],
         appConfig: {}
       };
       updateUser(user.token, userData);
@@ -153,28 +157,9 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
     setAnchorElUser(null);
   };
 
-  // const handleOpenHelpMenu = (event: React.MouseEvent<HTMLElement>) => {
-  //   setAnchorElHelp(event.currentTarget);
-  // };
   const handleOpenFeedback = () => {
     setOpenFeedback(true);
   };
-
-  // const handleCloseHelpMenu = () => {
-  //   setAnchorElHelp(null);
-  // };
-
-  // This handler closes the new help menu, the main mobile menu (if open),
-  // and navigates if a path is provided.
-  // const handleHelpMenuAction = (path: string | null) => {
-  //   if (path) {
-  //     navigate(path);
-  //   }
-  //   handleCloseHelpMenu();
-  //   if (anchorElNav) { // Check if the mobile nav menu is open
-  //     handleCloseNavMenu();
-  //   }
-  // };
 
   const handleCloseFeedback = () => {
     setOpenFeedback(false);
@@ -206,355 +191,287 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
     searchNavigate && navigate('/search');
   }
 
-  return (<>
-    <AppBar position="static" sx={{
-      background: "#F8FAFD",
-      boxShadow: "none",
-      height: "4rem", // 64px
-      flex: "0 0 auto"
-    }}>
-      <Container maxWidth="xl" sx={{
-        padding: 0,
-        margin: 0,
-        flex: "1 1 auto",
-        width: "100%",
-        maxWidth: "none !important",
-        height: "100%"
+  return (
+    <>
+      <AppBar position="static" sx={{
+        background: "#F8FAFD",
+        boxShadow: "none",
+        height: "4rem", // 64px
+        flex: "0 0 auto",
       }}>
-        <Toolbar disableGutters sx={{
-          display: "flex",
-          alignItems: "center",
-          // justifyContent: "space-between",
+        <Container maxWidth="xl" sx={{
+          padding: 0,
+          margin: 0,
           flex: "1 1 auto",
-          minHeight: "4rem",
-          height: "100%",
-          padding: "0.5rem 0rem", // 8px 20px
-          gap: 0,
+          width: "100%",
+          maxWidth: "none !important",
+          height: "100%"
         }}>
-          {/* Left Section - Logo */}
-          <Box onClick={handleLogoClick} sx={{
-            display: { xs: 'none', md: 'flex' },
-            flex: "0 0 auto",
-            width: "11.75rem",
-            height: "2.875rem", // 46px
-            marginLeft: "-0.5rem", // Shift 0.75rem left
-            cursor: "pointer",
-          }}>
-            <div className="logo-container" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <img src="/assets/svg/catalog-studio-logo-figma-585de1.svg" alt="CS Studio Logo" className="navbar-logo-img" />
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', cursor: "pointer", }}>
-                <label style={{ fontSize: "19px", fontWeight: 700, color: "#0B57D0", lineHeight: 1, cursor: "pointer", }}>France Practice</label>
-                <label style={{ fontSize: "12px", fontWeight: 700, color: "#0B57D0", lineHeight: 1, cursor: "pointer", }}>Data Catalog</label>
-              </div>
-            </div>
-          </Box>
-
-          {/* Center Section - Search Bar */}
-          {
-            searchBar && location.pathname !== '/admin-panel' ?
-              (
-                <Box sx={{
-                  display: { lg: 'flex' },
-                  flex: "1 1 41rem",
-                  alignItems: "center",
-                  height: "3rem",
-                  margin: "0",
-                }}>
-                  <div style={{ width: '100%', marginLeft: '1.5rem' }}>
-                    <SearchBar
-                      handleSearchSubmit={handleNavSearch}
-                      dataSearch={[
-                        { name: 'BigQuery' },
-                        { name: 'Data Warehouse' },
-                        { name: 'Data Lake' },
-                        { name: 'Data Pipeline' },
-                        { name: 'GCS' }
-                      ]}
-                      variant="navbar"
-                    />
-                  </div>
-                </Box>
-              ) : (
-                <Box sx={{ flex: "1 1 auto" }} />
-              )
-          }
-
-          {/* Mobile Navigation */}
-          <Box sx={{
-            flex: "0 0 auto",
-            display: { xs: 'flex', md: 'none' },
-            alignItems: "center",
-            gap: "1rem"
-          }}>
-            <IconButton
-              size="large"
-              aria-label="account of current user"
-              aria-controls="menu-appbar"
-              aria-haspopup="true"
-              onClick={handleOpenNavMenu}
-              sx={{
-                color: "#5F6367",
-                p: "0.25rem"
-              }}
-            >
-              <MenuIcon />
-            </IconButton>
-            <Menu
-              id="menu-appbar"
-              anchorEl={anchorElNav}
-              anchorOrigin={{
-                vertical: 'bottom',
-                horizontal: 'left',
-              }}
-              keepMounted
-              transformOrigin={{
-                vertical: 'top',
-                horizontal: 'left',
-              }}
-              open={Boolean(anchorElNav)}
-              onClose={handleCloseNavMenu}
-              sx={{ display: { xs: 'block', md: 'none' } }}
-            >
-              {/* <MenuItem onClick={() => { handleCloseNavMenu(); navigate('/admin-panel'); }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: "0.5rem" }}>
-                  <AdminPanelSettings sx={{ fontSize: "1.25rem", color: "#5F6367" }} />
-                  <Typography sx={{ fontSize: "0.875rem", fontWeight: 500 }}>Admin Panel</Typography>
-                </Box>
-              </MenuItem> */}
-              <MenuItem onClick={() => { handleCloseNavMenu(); navigate('/data-products'); }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: "0.5rem" }}>
-                  <Storage sx={{ fontSize: "1.25rem", color: "#5F6367" }} />
-                  <Typography sx={{ fontSize: "0.875rem", fontWeight: 500 }}>Data Products</Typography>
-                </Box>
-              </MenuItem>
-              <MenuItem onClick={() => { handleCloseNavMenu(); navigate('/guide') }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: "0.5rem" }}>
-                  <MenuBook sx={{ fontSize: "1.25rem", color: "#5F6367" }} />
-                  <Typography sx={{ fontSize: "0.875rem", fontWeight: 500 }}>Guide</Typography>
-                </Box>
-              </MenuItem>
-              {/* <MenuItem onClick={handleCloseNavMenu}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: "0.5rem" }}>
-                  <NotificationsNone sx={{ fontSize: "1.25rem", color: "#5F6367" }} />
-                  <Typography sx={{ fontSize: "0.875rem", fontWeight: 500 }}>Notifications</Typography>
-                </Box>
-              </MenuItem> */}
-              <MenuItem onClick={handleOpenFeedback}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: "0.5rem" }}>
-                  <HelpOutline sx={{ fontSize: "1.25rem", color: "#5F6367" }} />
-                  <Typography sx={{ fontSize: "0.875rem", fontWeight: 500 }}>Help</Typography>
-                </Box>
-              </MenuItem>
-            </Menu>
-          </Box>
-
-          {/* Mobile Logo */}
-          <Box onClick={handleLogoClick} sx={{
-            display: { xs: 'flex', md: 'none' },
-            flex: "1 1 auto",
-            justifyContent: "center",
-            alignItems: "center",
-            height: "2rem"
-          }}>
-            <div className="logo-container" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <img src="/assets/svg/catalog-studio-logo-figma-585de1.svg" alt="CS Studio Logo" className="navbar-logo-img" />
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', cursor: "pointer", }}>
-                <label style={{ fontSize: "19px", fontWeight: 700, color: "#0B57D0", lineHeight: 1, cursor: "pointer", }}>France Practice</label>
-                <label style={{ fontSize: "12px", fontWeight: 700, color: "#0B57D0", lineHeight: 1, cursor: "pointer", }}>Data Catalog</label>
-              </div>
-            </div>
-          </Box>
-          {/* Right Section - Icons and Avatar */}
-          <Box sx={{
-            flex: "1 1 auto",
+          <Toolbar disableGutters sx={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "flex-end",
-            gap: "1.25rem", // 20px
-            padding: "0.375rem 0" // 6px vertical padding
+            flex: "1 1 auto",
+            minHeight: "4rem",
+            height: "100%",
+            padding: "0.5rem 0rem", // 8px 20px
+            gap: 0,
           }}>
-            {/* Icon Button Area */}
+            {/* Left Section - Logo (only on home page) */}
+            {location.pathname === '/home' && (
+              <Box onClick={handleLogoClick} sx={{
+                display: { xs: 'none', md: 'flex' },
+                flex: "0 0 auto",
+                width: "157px",
+                height: "46px",
+                marginLeft: "-0.5rem",
+                cursor: "pointer",
+              }}>
+                <img
+                  src="/assets/svg/dataplex-universal-catalog-logo.svg"
+                  alt="Dataplex Universal Catalog"
+                  style={{ width: '157px', height: '46px' }}
+                />
+              </Box>
+            )}
+
+            {/* Center Section - Search Bar */}
+            {
+              searchBar && location.pathname !== '/admin-panel' ?
+                (
+                  <Box sx={{
+                    display: { lg: 'flex' },
+                    flex: "1 1 41rem",
+                    alignItems: "center",
+                    justifyContent: "flex-start",
+                    height: "3rem",
+                    margin: "0",
+                    ...(isGlossaryPage && {
+                      marginLeft: "calc(250px)", // Logo width + padding
+                    }),
+                    ...(isBrowsePage && {
+                      marginLeft: "202px",
+                    }),
+                    ...(isSearchOrDetailPage && {
+                      marginLeft: "202px",
+                    }),
+                    ...(isGuidePage && {
+                      marginLeft: "calc(250px)",
+                    }),
+                    ...(isDataProductsPage && {
+                      marginLeft: "calc(250px)",
+                    })
+                  }}>
+                    <div style={{ width: 'calc(100% - 10.2%)', marginLeft: '0' }}>
+                      <SearchBar
+                        handleSearchSubmit={handleNavSearch}
+                        dataSearch={[
+                          { name: 'BigQuery' },
+                          { name: 'Data Warehouse' },
+                          { name: 'Data Lake' },
+                          { name: 'Data Pipeline' },
+                          { name: 'GCS' }
+                        ]}
+                        variant="navbar"
+                      />
+                    </div>
+                  </Box>
+                ) : (
+                  <Box sx={{ flex: "1 1 auto" }} />
+                )
+            }
+
+            {/* Mobile Navigation */}
             <Box sx={{
-              display: "flex",
+              flex: "0 0 auto",
+              display: { xs: 'flex', md: 'none' },
               alignItems: "center",
-              gap: "1.25rem", // 20px
-              height: "2.125rem" // 34px
+              gap: "1rem"
             }}>
-              <Tooltip title="Data Products">
-                <IconButton
-                  onClick={() => navigate('/data-products')}
-                  sx={{
-                    p: 0,
-                    width: "1.5rem", // 24px
-                    height: "1.5rem" // 24px
-                  }}
-                >
-                  <Storage sx={{
-                    fontSize: "1.5rem",
-                    color: "#5F6368"
-                  }} />
-                </IconButton>
-              </Tooltip>
-
-              <Tooltip title="Access Requests">
-                <IconButton
-                  onClick={() => navigate('/access-requests')}
-                  sx={{
-                    p: 0,
-                    width: "1.5rem", // 24px
-                    height: "1.5rem" // 24px
-                  }}
-                >
-                  <Security sx={{
-                    fontSize: "1.5rem",
-                    color: "#5F6368"
-                  }} />
-                </IconButton>
-              </Tooltip>
-
-              <Tooltip title="Admin Panel">
-                <IconButton
-                  onClick={() => navigate('/admin-panel')}
-                  sx={{
-                    p: 0,
-                    width: "1.5rem", // 24px
-                    height: "1.5rem" // 24px
-                  }}
-                >
-                  <AdminPanelSettings sx={{
-                    fontSize: "1.5rem",
-                    color: "#5F6368"
-                  }} />
-                </IconButton>
-              </Tooltip>
-
-              <Tooltip title="Guide">
-                <IconButton sx={{
-                  p: 0,
-                  width: "1.5rem", // 24px
-                  height: "1.5rem" // 24px
+              <IconButton
+                size="large"
+                aria-label="account of current user"
+                aria-controls="menu-appbar"
+                aria-haspopup="true"
+                onClick={handleOpenNavMenu}
+                sx={{
+                  color: "#5F6367",
+                  p: "0.25rem"
                 }}
-                  onClick={() => { navigate('/guide') }}
-                >
-                  <MenuBook sx={{
-                    fontSize: "1.5rem",
-                    color: "#5F6368"
-                  }} />
-                </IconButton>
-              </Tooltip>
-              {/* <Tooltip title="Notification">
-                <IconButton sx={{ 
-                  p: 0, 
-                  width: "1.5rem", // 24px
-                  height: "1.5rem" // 24px
-                }}>
-                  <NotificationsNone sx={{ 
-                    fontSize: "1.5rem", 
-                    color: "#5F6367" 
-                  }} />
-                </IconButton>
-              </Tooltip> */}
-              <Tooltip title="Help">
-                <IconButton sx={{
-                  p: 0,
-                  width: "1.5rem", // 24px
-                  height: "1.5rem" // 24px
+              >
+                <MenuIcon />
+              </IconButton>
+              <Menu
+                id="menu-appbar"
+                anchorEl={anchorElNav}
+                anchorOrigin={{
+                  vertical: 'bottom',
+                  horizontal: 'left',
                 }}
-                  onClick={handleOpenFeedback}
-                >
-                  <HelpOutline sx={{
-                    fontSize: "1.5rem",
-                    color: "#5F6368"
-                  }} />
-                </IconButton>
-              </Tooltip>
+                keepMounted
+                transformOrigin={{
+                  vertical: 'top',
+                  horizontal: 'left',
+                }}
+                open={Boolean(anchorElNav)}
+                onClose={handleCloseNavMenu}
+                sx={{ display: { xs: 'block', md: 'none' } }}
+              >
+                <MenuItem onClick={() => { handleCloseNavMenu(); navigate('/guide') }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: "0.5rem" }}>
+                    <MenuBook sx={{ fontSize: "1.25rem", color: "#5F6367" }} />
+                    <Typography sx={{ fontSize: "0.875rem", fontWeight: 500 }}>Guide</Typography>
+                  </Box>
+                </MenuItem>
+                <MenuItem onClick={handleOpenFeedback}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: "0.5rem" }}>
+                    <HelpOutline sx={{ fontSize: "1.25rem", color: "#5F6367" }} />
+                    <Typography sx={{ fontSize: "0.875rem", fontWeight: 500 }}>Help</Typography>
+                  </Box>
+                </MenuItem>
+              </Menu>
             </Box>
 
-            {/* Avatar */}
-            <Tooltip title="Open settings">
-              <IconButton onClick={handleOpenUserMenu} sx={{ p: 0 }}>
-                <Avatar
-                  alt={name ?? ""}
-                  src={picture ?? ""}
-                  sx={{
-                    width: "2rem", // 32px
-                    height: "2rem", // 32px
-                    borderRadius: "50%"
+            {/* Mobile Logo */}
+            <Box onClick={handleLogoClick} sx={{
+              display: { xs: 'flex', md: 'none' },
+              flex: "1 1 auto",
+              justifyContent: "center",
+              alignItems: "center",
+              height: "2rem"
+            }}>
+              <div className="logo-container" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <img src="/assets/svg/dataplex-logo-icon.svg" alt="Dataplex Icon" style={{ width: 24, height: 24 }} />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', cursor: "pointer", }}>
+                  <label style={{ fontSize: "19px", fontWeight: 700, color: "#0B57D0", lineHeight: 1, cursor: "pointer", }}>Dataplex</label>
+                  <label style={{ fontSize: "12px", fontWeight: 700, color: "#0B57D0", lineHeight: 1, cursor: "pointer", }}>Universal Catalog</label>
+                </div>
+              </div>
+            </Box>
+
+            {/* Right Section - Icons and Avatar */}
+            <Box sx={{
+              flex: "1 1 auto",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: "1.25rem", // 20px
+              padding: "0.375rem 0" // 6px vertical padding
+            }}>
+              <Box sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: "1.25rem", // 20px
+                height: "2.125rem" // 34px
+              }}>
+                <Tooltip title="Guide">
+                  <IconButton sx={{
+                    p: 0,
+                    width: "1.5rem", // 24px
+                    height: "1.5rem" // 24px
                   }}
-                />
-              </IconButton>
-            </Tooltip>
-            <Menu
-              sx={{ mt: "2.8125rem" }} // 45px
-              id="menu-appbar"
-              anchorEl={anchorElUser}
-              anchorOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-              }}
-              keepMounted
-              transformOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-              }}
-              open={Boolean(anchorElUser)}
-              onClose={handleCloseUserMenu}
-            >
-              {settings.map((setting) => (
-                <MenuItem key={setting} onClick={handleCloseUserMenu}>
+                    onClick={() => { navigate('/guide') }}
+                  >
+                    <MenuBook sx={{
+                      fontSize: "1.5rem",
+                      color: "#5F6368"
+                    }} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Help">
+                  <IconButton sx={{
+                    p: 0,
+                    width: "1.5rem", // 24px
+                    height: "1.5rem" // 24px
+                  }}
+                    onClick={handleOpenFeedback}
+                  >
+                    <HelpOutline sx={{
+                      fontSize: "1.5rem",
+                      color: "#5F6368"
+                    }} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+
+              {/* Avatar */}
+              <Tooltip title="Open settings">
+                <IconButton onClick={handleOpenUserMenu} sx={{ p: 0 }}>
+                  <Avatar
+                    alt={name ?? ""}
+                    src={picture ?? ""}
+                    sx={{
+                      width: "2rem", // 32px
+                      height: "2rem", // 32px
+                      borderRadius: "50%"
+                    }}
+                  />
+                </IconButton>
+              </Tooltip>
+              <Menu
+                sx={{ mt: "2.8125rem" }} // 45px
+                id="menu-appbar"
+                anchorEl={anchorElUser}
+                anchorOrigin={{
+                  vertical: 'top',
+                  horizontal: 'right',
+                }}
+                keepMounted
+                transformOrigin={{
+                  vertical: 'top',
+                  horizontal: 'right',
+                }}
+                open={Boolean(anchorElUser)}
+                onClose={handleCloseUserMenu}
+              >
+                {settings.map((setting) => (
+                  <MenuItem key={setting} onClick={() => { handleCloseUserMenu(); navigate(getNavPath(setting)); }}>
+                    <Box sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: "0.25rem"
+                    }}>
+                      {getMenuIcon(setting)}
+                      <Typography sx={{
+                        textAlign: 'center',
+                        fontSize: "0.875rem", // 14px
+                        fontWeight: 500,
+                        lineHeight: 1.43
+                      }}>
+                        {setting}
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                ))}
+
+                {/* Admin Panel Link */}
+                <MenuItem key="Admin" onClick={() => { handleCloseUserMenu(); navigate('/admin-panel'); }}>
                   <Box sx={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: "0.25rem"
-                  }}
-                    onClick={() => { navigate(getNavPath(setting)) }}
-                  >
-                    {getMenuIcon(setting)}
+                  }}>
+                    <AdminPanelSettings sx={{ fontSize: "1.25rem", color: "#5F6367" }} />
                     <Typography sx={{
                       textAlign: 'center',
                       fontSize: "0.875rem", // 14px
                       fontWeight: 500,
                       lineHeight: 1.43
                     }}>
-                      {setting}
+                      Admin Panel
                     </Typography>
                   </Box>
                 </MenuItem>
-              ))}
-              <MenuItem key="DataProducts" onClick={() => {
-                handleCloseUserMenu();
-                navigate('/data-products');
-              }}>
-                <Box sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: "0.25rem"
-                }}>
-                  <Storage sx={{
-                    fontSize: "1.25rem", // 20px
-                    color: "#5F6367"
-                  }} />
-                  <Typography sx={{
-                    textAlign: 'center',
-                    fontSize: "0.875rem", // 14px
-                    fontWeight: 500,
-                    lineHeight: 1.43
-                  }}>
-                    Data Products
-                  </Typography>
-                </Box>
-              </MenuItem>
-              {(user?.hasRole || user?.roles?.includes('admin') || user?.roles?.includes('manager')) && (
-                <MenuItem key="AccessRequests" onClick={() => {
-                  handleCloseUserMenu();
-                  navigate('/access-requests');
+
+                <MenuItem key="SignOut" onClick={() => {
+                  sessionStorage.removeItem('welcomeShown');
+                  logout();
                 }}>
                   <Box sx={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: "0.25rem"
                   }}>
-                    <Security sx={{
+                    <Logout sx={{
                       fontSize: "1.25rem", // 20px
                       color: "#5F6367"
                     }} />
@@ -564,116 +481,31 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
                       fontWeight: 500,
                       lineHeight: 1.43
                     }}>
-                      Access Requests
+                      SignOut
                     </Typography>
                   </Box>
                 </MenuItem>
-              )}
-              <MenuItem key="SignOut" onClick={() => {
-                sessionStorage.removeItem('welcomeShown');
-                logout();
-              }}>
-                <Box sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: "0.25rem"
-                }}>
-                  <Logout sx={{
-                    fontSize: "1.25rem", // 20px
-                    color: "#5F6367"
-                  }} />
-                  <Typography sx={{
-                    textAlign: 'center',
-                    fontSize: "0.875rem", // 14px
-                    fontWeight: 500,
-                    lineHeight: 1.43
-                  }}>
-                    SignOut
-                  </Typography>
-                </Box>
-              </MenuItem>
-            </Menu>
-            {/* Help Menu */}
-            {/* <Menu
-              sx={{ mt: "2.8125rem" }} // 45px
-              id="menu-help"
-              anchorEl={anchorElHelp}
-              anchorOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-              }}
-              keepMounted
-              transformOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-              }}
-              open={Boolean(anchorElHelp)}
-              onClose={handleCloseHelpMenu} // Just close this menu
-            > */}
-            {/* Help Item */}
-            {/* <MenuItem onClick={() => handleHelpMenuAction('/help')}>
-                <Box sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: "0.25rem" 
-                }}>
-                  <HelpOutline sx={{ 
-                    fontSize: "1.25rem", // 20px
-                    color: "#5F6367"
-                  }} />
-                  <Typography sx={{ 
-                    textAlign: 'center',
-                    fontSize: "0.875rem", // 14px
-                    fontWeight: 500,
-                    lineHeight: 1.43
-                  }}>
-                    Help
-                  </Typography>
-                </Box>
-              </MenuItem> */}
-            {/* Give Feedback Item (Placeholder) */}
-            {/* <MenuItem onClick={() => handleHelpMenuAction(null)}>
-                <Box sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: "0.25rem" 
-                }}>
-                  <Feedback sx={{ 
-                    fontSize: "1.25rem", // 20px
-                    color: "#5F6367"
-                  }} />
-                  <Typography sx={{ 
-                    textAlign: 'center',
-                    fontSize: "0.875rem", // 14px
-                    fontWeight: 500,
-                    lineHeight: 1.43
-                  }}>
-                    Give Feedback
-                  </Typography>
-                </Box>
-              </MenuItem> */}
-            {/* </Menu> */}
-          </Box>
-        </Toolbar>
-      </Container>
-    </AppBar >
+              </Menu>
+            </Box>
+          </Toolbar>
+        </Container>
+      </AppBar>
 
-    {/* Send Feedback Panel */}
-    < SendFeedback
-      isOpen={openFeedback}
-      onClose={handleCloseFeedback}
-      onSubmitSuccess={handleSendFeedbackSuccess}
-    />
+      {/* Send Feedback Panel */}
+      <SendFeedback
+        isOpen={openFeedback}
+        onClose={handleCloseFeedback}
+        onSubmitSuccess={handleSendFeedbackSuccess}
+      />
 
-    {/* Notification Bar */}
-    < NotificationBar
-      isVisible={isNotificationVisible}
-      onClose={handleCloseNotification}
-      onUndo={handleUndoNotification}
-      message={notificationMessage}
-    />
-  </>
-
+      {/* Notification Bar */}
+      <NotificationBar
+        isVisible={isNotificationVisible}
+        onClose={handleCloseNotification}
+        onUndo={handleUndoNotification}
+        message={notificationMessage}
+      />
+    </>
   );
 }
 export default Navbar;
