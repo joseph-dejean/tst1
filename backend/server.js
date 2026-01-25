@@ -1276,7 +1276,7 @@ app.post('/api/v1/lineage-processes', async (req, res) => {
   try {
     const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
 
-    const oauth2Client = new CustomGoogleAuth(accessToken);
+    const oauth2Client = new AdcGoogleAuth();
 
     const dataplexLineageClientv1 = new LineageClient({
       auth: oauth2Client,
