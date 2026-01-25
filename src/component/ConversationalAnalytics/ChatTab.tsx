@@ -7,6 +7,7 @@ import { useAuth } from '../../auth/AuthProvider';
 
 interface ChatTabProps {
   entry: any;
+  tables?: any[]; // Optional list of tables for Data Products/Datasets
 }
 
 interface Message {
@@ -15,7 +16,7 @@ interface Message {
   timestamp: Date;
 }
 
-const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
+const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
   const { user } = useAuth();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -47,31 +48,36 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry }) => {
     setMessages(prev => [...prev, userMsg]);
 
     try {
-      // Check if this is a Data Product
-      const isDataProduct = entry._isDataProduct || entry.entryType === 'DATA_PRODUCT';
-      const dataProduct = entry._dataProduct;
+      // Check if this is a Data Product (explicit flag or Dataset with tables)
+      const isDataProduct = entry._isDataProduct || entry.entryType === 'DATA_PRODUCT' || (tables && tables.length > 0);
 
       let contextData: any;
 
-      if (isDataProduct && dataProduct) {
-        // For Data Products, prepare context for all tables in the product
-        const tablesContext = dataProduct.tables && dataProduct.tables.length > 0
-          ? dataProduct.tables.map((table: any) => ({
-            name: table.displayName || table.entryName || 'Unknown Table',
-            fullyQualifiedName: table.fullyQualifiedName || table.entryName || '',
-            type: table.type || 'Table',
-            description: table.description || ''
-          }))
-          : [];
+      if (isDataProduct) {
+        // Prepare context for all tables
+        // If we have the 'tables' prop (from EntryList scan), use that. 
+        // Otherwise check internal dataProduct object.
+        const tableList = tables || (entry._dataProduct?.tables) || [];
+
+        const tablesContext = tableList.map((t: any) => {
+          // Handle structure from resourcesEntryList (dataplexEntry) or direct table object
+          const tableObj = t.dataplexEntry || t;
+          return {
+            name: tableObj.displayName || tableObj.entryName || tableObj.name?.split('/').pop() || 'Unknown Table',
+            fullyQualifiedName: tableObj.fullyQualifiedName || tableObj.name || '',
+            // If it's from resourcesEntryList, it might be nested
+            type: tableObj.type || 'Table',
+            description: tableObj.entrySource?.description || tableObj.description || ''
+          };
+        });
 
         contextData = {
-          name: dataProduct.displayName || dataProduct.name || 'Unknown Data Product',
-          description: dataProduct.description || "No description available.",
+          name: entry.entrySource?.displayName || entry.displayName || entry.name?.split('/').pop() || 'Unknown Data Product',
+          description: entry.entrySource?.description || entry.description || "No description available.",
           isDataProduct: true,
-          dataProductId: dataProduct.id,
-          tables: tablesContext, // Array of tables in this Data Product
-          fullyQualifiedName: `data-products://${dataProduct.id}`,
-          entryType: 'DATA_PRODUCT',
+          tables: tablesContext,
+          fullyQualifiedName: entry.fullyQualifiedName || entry.name || '',
+          entryType: 'DATA_PRODUCT', // Force type to trigger multi-table logic backend
           conversationHistory: conversationHistory
         };
       } else {

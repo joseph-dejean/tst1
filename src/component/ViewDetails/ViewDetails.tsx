@@ -22,6 +22,7 @@ import { fetchAllDataScans, selectAllScans, selectAllScansStatus } from '../../f
 import { useAuth } from '../../auth/AuthProvider'
 import { getName, getEntryType, generateBigQueryLink, hasValidAnnotationData, generateLookerStudioLink } from '../../utils/resourceUtils'
 import { findItem } from '../../utils/glossaryUtils';
+import { fetchEntriesByParent } from '../../features/resources/resourcesSlice';
 import {
   fetchViewDetailsTermRelationships,
   fetchViewDetailsEntryDetails,
@@ -74,6 +75,7 @@ const ViewDetails = () => {
   const id_token = user?.token || '';
   const allScans = useSelector(selectAllScans);
   const allScansStatus = useSelector(selectAllScansStatus);
+  const resourcesEntryList = useSelector((state: any) => state.resources.entryListData);
   const [tabValue, setTabValue] = React.useState(0);
   const [sampleTableData, setSampleTableData] = React.useState<any>();
   const [filteredEntry, setFilteredEntry] = useState<any>(null);
@@ -320,6 +322,11 @@ const ViewDetails = () => {
     // Only fetch if we have a token and haven't fetched yet
     if (id_token && displayEntry?.entrySource?.resource) {
       dispatch(fetchAllDataScans({ id_token: id_token, projectId: displayEntry.entrySource.resource.split('/')[1] || '' }));
+    }
+
+    // Fetch child entries for Datasets (to support Chat with related tables)
+    if (id_token && displayEntry?.name && getEntryType(displayEntry.name, '/') === 'Datasets') {
+      dispatch(fetchEntriesByParent({ parent: displayEntry.name, id_token: id_token }));
     }
   }, [dispatch, id_token, displayEntry]);
 
@@ -793,7 +800,7 @@ const ViewDetails = () => {
                       minHeight: '500px',
                       marginTop: '1.25rem'
                     }}>
-                      <ChatTab entry={displayEntry} />
+                      <ChatTab entry={displayEntry} tables={resourcesEntryList} />
                     </Box>
                   </CustomTabPanel>
                 </>
