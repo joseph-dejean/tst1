@@ -12,7 +12,7 @@ import Avatar from '@mui/material/Avatar';
 import Tooltip from '@mui/material/Tooltip';
 import MenuItem from '@mui/material/MenuItem';
 import './Navbar.css'
-import { HelpOutline, MenuBook, Home, Person, AccountCircle, Logout, Menu as MenuIcon, AdminPanelSettings } from '@mui/icons-material';
+import { HelpOutline, MenuBook, Home, Person, AccountCircle, Logout, Menu as MenuIcon, AdminPanelSettings, Security } from '@mui/icons-material';
 import SearchBar from '../SearchBar/SearchBar';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch } from '../../app/store';
@@ -21,6 +21,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthProvider';
 import SendFeedback from './SendFeedback';
 import NotificationBar from '../SearchPage/NotificationBar';
+import NotificationCenter from './NotificationCenter';
 
 /**
  * @file Navbar.tsx
@@ -391,6 +392,7 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
                     }} />
                   </IconButton>
                 </Tooltip>
+                <NotificationCenter />
               </Box>
 
               {/* Avatar */}
@@ -458,6 +460,25 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
                       lineHeight: 1.43
                     }}>
                       Admin Panel
+                    </Typography>
+                  </Box>
+                </MenuItem>
+
+                {/* Access Management Link */}
+                <MenuItem key="AccessManagement" onClick={() => { handleCloseUserMenu(); navigate('/admin-access'); }}>
+                  <Box sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: "0.25rem"
+                  }}>
+                    <Security sx={{ fontSize: "1.25rem", color: "#5F6367" }} />
+                    <Typography sx={{
+                      textAlign: 'center',
+                      fontSize: "0.875rem", // 14px
+                      fontWeight: 500,
+                      lineHeight: 1.43
+                    }}>
+                      Access Management
                     </Typography>
                   </Box>
                 </MenuItem>

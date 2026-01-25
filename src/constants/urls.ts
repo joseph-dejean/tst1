@@ -26,4 +26,23 @@ export const URLS = {
     UPDATE_ACCESS_REQUEST: '/access-request/update',
     GET_ASPECT_TYPES: '/aspect-types',
     LINEAGE_SEARCH_COLUMN_LEVEL: '/lineage-column-level',
+
+    // Admin Role Management
+    ADMIN_CHECK: '/admin/check',
+    ADMIN_ROLES: '/admin/roles',
+    ADMIN_PROJECT_ADMINS: '/admin/project-admins',
+
+    // Access Management
+    GRANTED_ACCESSES: '/access/granted',
+    ACCESS_BY_ASSET: '/access/asset',
+    REVOKE_ACCESS: '/access/revoke',
+    BULK_APPROVE: '/access/bulk-approve',
+    BULK_REJECT: '/access/bulk-reject',
+    ACCESS_STATS: '/access/stats',
+
+    // Notifications
+    NOTIFICATIONS: '/notifications',
+    NOTIFICATIONS_UNREAD_COUNT: '/notifications/unread-count',
+    NOTIFICATIONS_MARK_READ: '/notifications/mark-read',
+    NOTIFICATIONS_MARK_ALL_READ: '/notifications/mark-all-read',
 }

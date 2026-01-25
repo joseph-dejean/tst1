@@ -29,6 +29,7 @@ import ChatPage from '../component/ConversationalAnalytics/ChatPage';
 import DataProducts from '../component/DataProducts/DataProducts';
 import DataProductsDetailView from '../component/DataProducts/DataProductsDetailView';
 import AccessRequestsDashboard from '../component/AccessRequests/AccessRequestsDashboard';
+import AdminAccessManagement from '../component/AdminPanel/AdminAccessManagement';
 
 const Routing = () => {
   // state to hold the user object
@@ -175,6 +176,18 @@ const Routing = () => {
             <SessionExpirationWrapper>
               <Layout searchBar={true}>
                 <AdminPanel />
+              </Layout>
+            </SessionExpirationWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin-access"
+        element={
+          <ProtectedRoute>
+            <SessionExpirationWrapper>
+              <Layout searchBar={true}>
+                <AdminAccessManagement />
               </Layout>
             </SessionExpirationWrapper>
           </ProtectedRoute>

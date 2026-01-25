@@ -15,7 +15,10 @@ const authMiddleware = require('./middlewares/authMiddleware');
 const { querySampleFromBigQuery } = require('./utility');
 const { sendAccessRequestEmail, sendFeedbackEmail } = require('./services/emailService');
 const { createAccessRequest, getAccessRequests, updateAccessRequestStatus, getAccessRequestById } = require('./services/accessRequestService');
-const { grantIamAccess } = require('./services/gcpIamService');
+const { grantIamAccess, revokeIamAccess, getIamBindings, verifyUserAccess } = require('./services/gcpIamService');
+const adminService = require('./services/adminService');
+const grantedAccessService = require('./services/grantedAccessService');
+const notificationService = require('./services/notificationService');
 const { BigQuery } = require('@google-cloud/bigquery');
 
 
@@ -2159,7 +2162,7 @@ app.get('/api/v1/access-requests', async (req, res) => {
  */
 app.post('/api/v1/access-request/update', async (req, res) => {
   try {
-    const { requestId, status, reviewerEmail } = req.body;
+    const { requestId, status, reviewerEmail, adminNote } = req.body;
 
     if (!requestId || !status) {
       return res.status(400).json({ success: false, error: 'Request ID and status are required' });
@@ -2169,65 +2172,97 @@ app.post('/api/v1/access-request/update', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Status must be either "approved" or "rejected"' });
     }
 
-    // Update the request in Firestore
-    const updatedRequest = await updateAccessRequestStatus(requestId, status, null, reviewerEmail);
+    // Get the full request first
+    const fullRequest = await getAccessRequestById(requestId);
+    if (!fullRequest) {
+      return res.status(404).json({ success: false, error: 'Access request not found' });
+    }
+
+    // Check if reviewer is admin for this project
+    const isAdmin = await adminService.isProjectAdmin(reviewerEmail, fullRequest.gcpProjectId);
+    if (!isAdmin) {
+      // For backwards compatibility, also check the old role system
+      const userRole = req.headers['x-user-role'] || 'user';
+      if (userRole !== 'admin' && userRole !== 'manager') {
+        return res.status(403).json({ success: false, error: 'Not authorized to approve/reject this request' });
+      }
+    }
+
+    let grantedAccess = null;
 
     // [AI Feature]: Automated Provisioning
     if (status === 'approved') {
       try {
         console.log(`Request ${requestId} approved. Starting automated provisioning...`);
-        const fullRequest = await getAccessRequestById(requestId);
+        const { gcpProjectId, requesterEmail, assetName, requestedRole } = fullRequest;
 
-        if (fullRequest) {
-          const { gcpProjectId, requesterEmail, assetName, requestedRole } = fullRequest;
+        // 1. Grant BigQuery Role via IAM
+        const role = requestedRole || 'roles/bigquery.dataViewer';
+        await grantIamAccess(gcpProjectId, requesterEmail, role);
+        console.log(`Granted ${role} to ${requesterEmail} on project ${gcpProjectId}`);
 
-          // 1. Grant BigQuery Role
-          await grantIamAccess(gcpProjectId, requesterEmail, requestedRole || 'roles/bigquery.dataViewer');
-          console.log(`Granted ${requestedRole} to ${requesterEmail} on project ${gcpProjectId}`);
+        // 2. Create granted access record
+        grantedAccess = await grantedAccessService.createGrantedAccess({
+          userEmail: requesterEmail,
+          assetName: assetName,
+          gcpProjectId: gcpProjectId,
+          role: role,
+          grantedBy: reviewerEmail,
+          originalRequestId: requestId
+        });
+        console.log(`Created granted access record: ${grantedAccess.id}`);
 
-          // 2. Ensure Data Agent exists & Grant Agent Role
-          // Parse assetName to get table details
-          // Expected format: projects/ids/datasets/d/tables/t or similar
-          // Simplistic parsing for BigQuery FQNs
-          let items = assetName.split('/tables/');
-          if (items.length > 1) {
-            const tableId = items[1];
-            const datasetPart = items[0].split('/datasets/')[1];
-            const projectPart = items[0].split('/projects/')[1].split('/')[0];
+        // 3. Ensure Data Agent exists & Grant Agent Role
+        let items = assetName.split('/tables/');
+        if (items.length > 1) {
+          const tableId = items[1];
+          const datasetPart = items[0].split('/datasets/')[1];
+          const projectPart = items[0].split('/projects/')[1].split('/')[0];
 
-            if (projectPart && datasetPart && tableId) {
-              const tableRef = [{
-                projectId: projectPart,
-                datasetId: datasetPart,
-                tableId: tableId
-              }];
-              const systemInstruction = 'You are a helpful Data Steward assistant for Dataplex. Answer questions about the data tables based on their schema and metadata. Be concise and accurate.';
+          if (projectPart && datasetPart && tableId) {
+            const tableRef = [{
+              projectId: projectPart,
+              datasetId: datasetPart,
+              tableId: tableId
+            }];
+            const systemInstruction = 'You are a helpful Data Steward assistant for Dataplex. Answer questions about the data tables based on their schema and metadata. Be concise and accurate.';
 
-              // Get/Create Agent
-              const agentName = await getOrCreateDataAgent(tableRef, systemInstruction);
+            const agentName = await getOrCreateDataAgent(tableRef, systemInstruction);
 
-              if (agentName) {
-                // Grant Agent User Role
-                // Agent name format: projects/{project}/locations/{location}/dataAgents/{agentId}
-                // IAM role needed on the PROJECT where the agent lives (usually dataplex-ui project in this demo setup)
-                // The `grantIamAccess` grants on PROJECT level.
-                const uiProjectId = 'dataplex-ui'; // Hardcoded as per server.js config
-                await grantIamAccess(uiProjectId, requesterEmail, 'roles/dataanalytics.agentUser');
-                console.log(`Granted roles/dataanalytics.agentUser to ${requesterEmail} on ${uiProjectId}`);
-              }
+            if (agentName) {
+              const uiProjectId = 'dataplex-ui';
+              await grantIamAccess(uiProjectId, requesterEmail, 'roles/dataanalytics.agentUser');
+              console.log(`Granted roles/dataanalytics.agentUser to ${requesterEmail} on ${uiProjectId}`);
             }
           }
         }
+
+        // 4. Send in-app notification to requester
+        await notificationService.notifyAccessApproved(fullRequest, reviewerEmail);
+        console.log(`Sent approval notification to ${requesterEmail}`);
+
       } catch (provError) {
         console.error('Automated provisioning failed:', provError);
-        // We log but don't fail the request status update itself, or maybe we should note it.
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to grant IAM access',
+          details: provError.message
+        });
       }
+    } else if (status === 'rejected') {
+      // Send rejection notification
+      await notificationService.notifyAccessRejected(fullRequest, reviewerEmail, adminNote);
+      console.log(`Sent rejection notification to ${fullRequest.requesterEmail}`);
     }
+
+    // Update the request in Firestore
+    const updatedRequest = await updateAccessRequestStatus(requestId, status, adminNote, reviewerEmail);
 
     return res.status(200).json({
       success: true,
       message: `Access request ${status} successfully`,
-      data: updatedRequest
+      data: updatedRequest,
+      grantedAccess: grantedAccess
     });
 
   } catch (error) {
@@ -2242,6 +2277,550 @@ app.post('/api/v1/access-request/update', async (req, res) => {
 });
 
 
+
+// ============================================
+// ADMIN ROLE MANAGEMENT ENDPOINTS
+// ============================================
+
+/**
+ * GET /api/v1/admin/check
+ * Check if current user is an admin and get their role
+ */
+app.get('/api/v1/admin/check', async (req, res) => {
+  try {
+    const userEmail = req.query.email || req.headers['x-user-email'];
+
+    if (!userEmail) {
+      return res.status(400).json({ success: false, error: 'User email is required' });
+    }
+
+    const adminRole = await adminService.getAdminRole(userEmail);
+
+    return res.status(200).json({
+      success: true,
+      isAdmin: adminRole !== null,
+      role: adminRole
+    });
+  } catch (error) {
+    console.error('Error checking admin status:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/admin/roles
+ * List all admin roles (super-admin only)
+ */
+app.get('/api/v1/admin/roles', async (req, res) => {
+  try {
+    const userEmail = req.headers['x-user-email'];
+
+    // Check if requester is super-admin
+    const isSuperAdmin = await adminService.isSuperAdmin(userEmail);
+    if (!isSuperAdmin) {
+      return res.status(403).json({ success: false, error: 'Only super-admins can list all admin roles' });
+    }
+
+    const admins = await adminService.getAllAdmins();
+
+    return res.status(200).json({
+      success: true,
+      data: admins,
+      count: admins.length
+    });
+  } catch (error) {
+    console.error('Error listing admin roles:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/v1/admin/roles
+ * Create or update an admin role (super-admin only)
+ */
+app.post('/api/v1/admin/roles', async (req, res) => {
+  try {
+    const { email, role, assignedProjects } = req.body;
+    const creatorEmail = req.headers['x-user-email'];
+
+    if (!email || !role) {
+      return res.status(400).json({ success: false, error: 'Email and role are required' });
+    }
+
+    if (!['super-admin', 'project-admin'].includes(role)) {
+      return res.status(400).json({ success: false, error: 'Role must be "super-admin" or "project-admin"' });
+    }
+
+    // Check if requester is super-admin
+    const isSuperAdmin = await adminService.isSuperAdmin(creatorEmail);
+    if (!isSuperAdmin) {
+      return res.status(403).json({ success: false, error: 'Only super-admins can manage admin roles' });
+    }
+
+    const adminRole = await adminService.setAdminRole(email, role, assignedProjects || [], creatorEmail);
+
+    return res.status(200).json({
+      success: true,
+      message: `Admin role ${role} assigned to ${email}`,
+      data: adminRole
+    });
+  } catch (error) {
+    console.error('Error setting admin role:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/v1/admin/roles/:email
+ * Remove an admin role (super-admin only)
+ */
+app.delete('/api/v1/admin/roles/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const requesterEmail = req.headers['x-user-email'];
+
+    // Check if requester is super-admin
+    const isSuperAdmin = await adminService.isSuperAdmin(requesterEmail);
+    if (!isSuperAdmin) {
+      return res.status(403).json({ success: false, error: 'Only super-admins can remove admin roles' });
+    }
+
+    // Prevent removing own role
+    if (email === requesterEmail) {
+      return res.status(400).json({ success: false, error: 'Cannot remove your own admin role' });
+    }
+
+    const success = await adminService.deleteAdminRole(email);
+
+    return res.status(200).json({
+      success: true,
+      message: success ? `Admin role removed from ${email}` : `No admin role found for ${email}`
+    });
+  } catch (error) {
+    console.error('Error deleting admin role:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/admin/project-admins/:projectId
+ * Get all admins for a specific project
+ */
+app.get('/api/v1/admin/project-admins/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+
+    const admins = await adminService.getProjectAdmins(projectId);
+
+    return res.status(200).json({
+      success: true,
+      data: admins,
+      count: admins.length
+    });
+  } catch (error) {
+    console.error('Error getting project admins:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// ACCESS MANAGEMENT ENDPOINTS
+// ============================================
+
+/**
+ * GET /api/v1/access/granted
+ * List all granted accesses with filters
+ */
+app.get('/api/v1/access/granted', async (req, res) => {
+  try {
+    const userEmail = req.headers['x-user-email'];
+    const { status, projectId, userEmail: filterEmail } = req.query;
+
+    // Check if requester is admin
+    const adminRole = await adminService.getAdminRole(userEmail);
+
+    const filters = {};
+    if (status) filters.status = status;
+
+    if (adminRole) {
+      // Admins can filter by project
+      if (projectId) filters.projectId = projectId;
+      if (filterEmail) filters.userEmail = filterEmail;
+
+      // Project-admins can only see their assigned projects
+      if (adminRole.role === 'project-admin' && !projectId) {
+        // Return accesses for all assigned projects
+        const allAccesses = [];
+        for (const proj of adminRole.assignedProjects) {
+          const accesses = await grantedAccessService.getGrantedAccesses({ ...filters, projectId: proj });
+          allAccesses.push(...accesses);
+        }
+        return res.status(200).json({ success: true, data: allAccesses, count: allAccesses.length });
+      }
+    } else {
+      // Non-admins can only see their own accesses
+      filters.userEmail = userEmail;
+    }
+
+    const accesses = await grantedAccessService.getGrantedAccesses(filters);
+
+    return res.status(200).json({
+      success: true,
+      data: accesses,
+      count: accesses.length
+    });
+  } catch (error) {
+    console.error('Error fetching granted accesses:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/access/asset/:assetName
+ * Get all users with access to a specific asset
+ */
+app.get('/api/v1/access/asset/:assetName(*)', async (req, res) => {
+  try {
+    const assetName = req.params.assetName;
+
+    const accesses = await grantedAccessService.getAccessesByAsset(assetName);
+
+    return res.status(200).json({
+      success: true,
+      data: accesses,
+      count: accesses.length
+    });
+  } catch (error) {
+    console.error('Error fetching accesses for asset:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/v1/access/revoke
+ * Revoke access from a user
+ */
+app.post('/api/v1/access/revoke', async (req, res) => {
+  try {
+    const { grantId } = req.body;
+    const revokerEmail = req.headers['x-user-email'];
+
+    if (!grantId) {
+      return res.status(400).json({ success: false, error: 'Grant ID is required' });
+    }
+
+    // Get the grant to check project
+    const grant = await grantedAccessService.getGrantedAccessById(grantId);
+    if (!grant) {
+      return res.status(404).json({ success: false, error: 'Grant not found' });
+    }
+
+    if (grant.status === 'REVOKED') {
+      return res.status(400).json({ success: false, error: 'Access already revoked' });
+    }
+
+    // Check if revoker is admin for this project
+    const isAdmin = await adminService.isProjectAdmin(revokerEmail, grant.gcpProjectId);
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, error: 'Not authorized to revoke access for this project' });
+    }
+
+    // 1. Revoke IAM access
+    await revokeIamAccess(grant.gcpProjectId, grant.userEmail, grant.role);
+    console.log(`Revoked IAM role ${grant.role} from ${grant.userEmail} on ${grant.gcpProjectId}`);
+
+    // 2. Update grant record
+    const revokedGrant = await grantedAccessService.revokeAccess(grantId, revokerEmail);
+
+    // 3. Send notification
+    await notificationService.notifyAccessRevoked(grant, revokerEmail);
+    console.log(`Sent revocation notification to ${grant.userEmail}`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Access revoked successfully',
+      data: revokedGrant
+    });
+  } catch (error) {
+    console.error('Error revoking access:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/v1/access/bulk-approve
+ * Bulk approve multiple access requests
+ */
+app.post('/api/v1/access/bulk-approve', async (req, res) => {
+  try {
+    const { requestIds } = req.body;
+    const reviewerEmail = req.headers['x-user-email'];
+
+    if (!requestIds || !Array.isArray(requestIds) || requestIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'Request IDs array is required' });
+    }
+
+    const results = {
+      successful: [],
+      failed: []
+    };
+
+    for (const requestId of requestIds) {
+      try {
+        const fullRequest = await getAccessRequestById(requestId);
+        if (!fullRequest) {
+          results.failed.push({ requestId, error: 'Request not found' });
+          continue;
+        }
+
+        // Check admin permission
+        const isAdmin = await adminService.isProjectAdmin(reviewerEmail, fullRequest.gcpProjectId);
+        if (!isAdmin) {
+          results.failed.push({ requestId, error: 'Not authorized' });
+          continue;
+        }
+
+        // Grant IAM access
+        const role = fullRequest.requestedRole || 'roles/bigquery.dataViewer';
+        await grantIamAccess(fullRequest.gcpProjectId, fullRequest.requesterEmail, role);
+
+        // Create granted access record
+        const grantedAccess = await grantedAccessService.createGrantedAccess({
+          userEmail: fullRequest.requesterEmail,
+          assetName: fullRequest.assetName,
+          gcpProjectId: fullRequest.gcpProjectId,
+          role: role,
+          grantedBy: reviewerEmail,
+          originalRequestId: requestId
+        });
+
+        // Update request status
+        await updateAccessRequestStatus(requestId, 'approved', null, reviewerEmail);
+
+        // Send notification
+        await notificationService.notifyAccessApproved(fullRequest, reviewerEmail);
+
+        results.successful.push({ requestId, grantedAccessId: grantedAccess.id });
+      } catch (err) {
+        results.failed.push({ requestId, error: err.message });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Processed ${requestIds.length} requests`,
+      results
+    });
+  } catch (error) {
+    console.error('Error bulk approving:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/v1/access/bulk-reject
+ * Bulk reject multiple access requests
+ */
+app.post('/api/v1/access/bulk-reject', async (req, res) => {
+  try {
+    const { requestIds, reason } = req.body;
+    const reviewerEmail = req.headers['x-user-email'];
+
+    if (!requestIds || !Array.isArray(requestIds) || requestIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'Request IDs array is required' });
+    }
+
+    const results = {
+      successful: [],
+      failed: []
+    };
+
+    for (const requestId of requestIds) {
+      try {
+        const fullRequest = await getAccessRequestById(requestId);
+        if (!fullRequest) {
+          results.failed.push({ requestId, error: 'Request not found' });
+          continue;
+        }
+
+        // Check admin permission
+        const isAdmin = await adminService.isProjectAdmin(reviewerEmail, fullRequest.gcpProjectId);
+        if (!isAdmin) {
+          results.failed.push({ requestId, error: 'Not authorized' });
+          continue;
+        }
+
+        // Update request status
+        await updateAccessRequestStatus(requestId, 'rejected', reason, reviewerEmail);
+
+        // Send notification
+        await notificationService.notifyAccessRejected(fullRequest, reviewerEmail, reason);
+
+        results.successful.push({ requestId });
+      } catch (err) {
+        results.failed.push({ requestId, error: err.message });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Processed ${requestIds.length} requests`,
+      results
+    });
+  } catch (error) {
+    console.error('Error bulk rejecting:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/access/stats/:projectId
+ * Get access statistics for a project
+ */
+app.get('/api/v1/access/stats/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+
+    const stats = await grantedAccessService.getAccessStats(projectId);
+
+    return res.status(200).json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error('Error getting access stats:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// NOTIFICATION ENDPOINTS
+// ============================================
+
+/**
+ * GET /api/v1/notifications
+ * Get notifications for current user
+ */
+app.get('/api/v1/notifications', async (req, res) => {
+  try {
+    const userEmail = req.headers['x-user-email'];
+    const { limit } = req.query;
+
+    if (!userEmail) {
+      return res.status(400).json({ success: false, error: 'User email is required' });
+    }
+
+    const filters = {};
+    if (limit) filters.limit = parseInt(limit, 10);
+
+    const notifications = await notificationService.getNotifications(userEmail, filters);
+
+    return res.status(200).json({
+      success: true,
+      data: notifications,
+      count: notifications.length
+    });
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/v1/notifications/unread-count
+ * Get unread notification count for current user
+ */
+app.get('/api/v1/notifications/unread-count', async (req, res) => {
+  try {
+    const userEmail = req.headers['x-user-email'];
+
+    if (!userEmail) {
+      return res.status(400).json({ success: false, error: 'User email is required' });
+    }
+
+    const count = await notificationService.getUnreadCount(userEmail);
+
+    return res.status(200).json({
+      success: true,
+      count
+    });
+  } catch (error) {
+    console.error('Error getting unread count:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/v1/notifications/mark-read
+ * Mark notifications as read
+ */
+app.post('/api/v1/notifications/mark-read', async (req, res) => {
+  try {
+    const { notificationIds } = req.body;
+
+    if (!notificationIds || !Array.isArray(notificationIds)) {
+      return res.status(400).json({ success: false, error: 'Notification IDs array is required' });
+    }
+
+    const count = await notificationService.markAsRead(notificationIds);
+
+    return res.status(200).json({
+      success: true,
+      message: `Marked ${count} notifications as read`
+    });
+  } catch (error) {
+    console.error('Error marking notifications as read:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/v1/notifications/mark-all-read
+ * Mark all notifications as read for current user
+ */
+app.post('/api/v1/notifications/mark-all-read', async (req, res) => {
+  try {
+    const userEmail = req.headers['x-user-email'];
+
+    if (!userEmail) {
+      return res.status(400).json({ success: false, error: 'User email is required' });
+    }
+
+    const count = await notificationService.markAllAsRead(userEmail);
+
+    return res.status(200).json({
+      success: true,
+      message: `Marked ${count} notifications as read`
+    });
+  } catch (error) {
+    console.error('Error marking all as read:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/v1/notifications/:id
+ * Delete a specific notification
+ */
+app.delete('/api/v1/notifications/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const success = await notificationService.deleteNotification(id);
+
+    return res.status(200).json({
+      success: true,
+      message: success ? 'Notification deleted' : 'Notification not found'
+    });
+  } catch (error) {
+    console.error('Error deleting notification:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// HEALTH CHECK ENDPOINTS
+// ============================================
 
 /**
  * GET /api/access-request/health
