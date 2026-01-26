@@ -1,12 +1,12 @@
 const { Firestore } = require('@google-cloud/firestore');
 
 // Lazy Firestore initialization to avoid blocking server startup
-// This automatically uses Application Default Credentials (ADC)
+// Uses GOOGLE_CLOUD_PROJECT_ID from Cloud Run environment
 let firestore = null;
 const getFirestore = () => {
     if (!firestore) {
         firestore = new Firestore({
-            // projectId auto-detected from ADC
+            projectId: process.env.GOOGLE_CLOUD_PROJECT_ID
         });
     }
     return firestore;

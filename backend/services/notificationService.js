@@ -1,10 +1,13 @@
 const { Firestore } = require('@google-cloud/firestore');
 
 // Lazy Firestore initialization to avoid blocking server startup
+// Uses GOOGLE_CLOUD_PROJECT_ID from Cloud Run environment
 let firestore = null;
 const getFirestore = () => {
     if (!firestore) {
-        firestore = new Firestore();
+        firestore = new Firestore({
+            projectId: process.env.GOOGLE_CLOUD_PROJECT_ID
+        });
     }
     return firestore;
 };
