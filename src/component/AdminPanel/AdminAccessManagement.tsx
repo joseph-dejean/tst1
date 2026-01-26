@@ -35,7 +35,6 @@ import {
   Cancel,
   Delete,
   PersonAdd,
-  PersonAdd,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthProvider';
@@ -50,7 +49,6 @@ import {
   setAdminRole,
   removeAdminRole,
   type AccessRequest,
-  type GrantedAccess,
   type GrantedAccess,
 } from '../../features/admin/adminSlice';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -147,7 +145,6 @@ const AdminAccessManagement = () => {
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
     setSelectedRequests([]);
-    setSelectedAccesses([]);
   };
 
   const handleSelectAllRequests = (checked: boolean) => {
