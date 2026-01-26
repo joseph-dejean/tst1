@@ -1,9 +1,12 @@
 // server.js
+console.log('[STARTUP] Starting server initialization...');
+console.log('[STARTUP] Loading core modules...');
 const { VertexAI } = require('@google-cloud/vertexai');
 const express = require('express');
 const fs = require('fs').promises;
 const { GoogleAuth, OAuth2Client } = require('google-auth-library');
 const { google } = require('googleapis');
+console.log('[STARTUP] Loading Google Cloud clients...');
 const { CatalogServiceClient, DataScanServiceClient, protos, DataplexServiceClient } = require('@google-cloud/dataplex');
 const { LineageClient } = require('@google-cloud/lineage');
 const { ProjectsClient } = require('@google-cloud/resource-manager');
@@ -11,6 +14,7 @@ const { DataCatalogClient } = require('@google-cloud/datacatalog');
 const path = require('path');
 const cors = require('cors');
 const axios = require('axios');
+console.log('[STARTUP] Loading custom modules...');
 const authMiddleware = require('./middlewares/authMiddleware');
 const { querySampleFromBigQuery } = require('./utility');
 const { sendAccessRequestEmail, sendFeedbackEmail } = require('./services/emailService');
@@ -20,6 +24,7 @@ const adminService = require('./services/adminService');
 const grantedAccessService = require('./services/grantedAccessService');
 const notificationService = require('./services/notificationService');
 const { BigQuery } = require('@google-cloud/bigquery');
+console.log('[STARTUP] All modules loaded successfully');
 
 
 // Use GoogleAuth for ADC
@@ -2479,9 +2484,10 @@ app.get('/api/v1/access/granted', async (req, res) => {
  * GET /api/v1/access/asset/:assetName
  * Get all users with access to a specific asset
  */
-app.get('/api/v1/access/asset/:assetName(*)', async (req, res) => {
+app.get('/api/v1/access/asset/*', async (req, res) => {
   try {
-    const assetName = req.params.assetName;
+    // Express 5: wildcard params are in req.params[0]
+    const assetName = req.params[0];
 
     const accesses = await grantedAccessService.getAccessesByAsset(assetName);
 
@@ -2846,7 +2852,7 @@ app.get('/', (req, res) => {
 });
 
 // For any other routes, serve the React index.html
-app.get('/*\w', (req, res) => {
+app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
