@@ -120,7 +120,7 @@ app.post('/api/v1/chat', async (req, res) => {
     if (!projectId || !datasetId || !tableId) {
       // Fallback: Use Vertex AI for non-BigQuery tables or when FQN is not available
       const vertex_ai = new VertexAI({
-        project: 'dataplex-ui', // Hardcoded project ID
+        project: process.env.GOOGLE_CLOUD_PROJECT_ID,
         location: process.env.GCP_LOCATION || 'us-central1'
       });
       const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
@@ -170,7 +170,7 @@ app.post('/api/v1/chat', async (req, res) => {
     }
 
     // Use Conversational Analytics API with inline context for BigQuery tables
-    const projectId_env = 'dataplex-ui'; // Hardcoded project ID
+    const projectId_env = process.env.GOOGLE_CLOUD_PROJECT_ID;
     const location = process.env.GCP_LOCATION || 'europe-west1';
     const chatUrl = `https://geminidataanalytics.googleapis.com/v1beta/projects/${projectId_env}/locations/${location}:chat`;
 
@@ -232,7 +232,7 @@ app.post('/api/v1/chat', async (req, res) => {
     // If no valid table references found, fall back to Vertex AI
     if (tableReferences.length === 0) {
       const vertex_ai = new VertexAI({
-        project: 'dataplex-ui', // Hardcoded project ID
+        project: process.env.GOOGLE_CLOUD_PROJECT_ID,
         location: process.env.GCP_LOCATION || 'us-central1'
       });
       const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
@@ -2230,7 +2230,7 @@ app.post('/api/v1/access-request/update', async (req, res) => {
             const agentName = await getOrCreateDataAgent(tableRef, systemInstruction);
 
             if (agentName) {
-              const uiProjectId = 'dataplex-ui';
+              const uiProjectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
               await grantIamAccess(uiProjectId, requesterEmail, 'roles/dataanalytics.agentUser');
               console.log(`Granted roles/dataanalytics.agentUser to ${requesterEmail} on ${uiProjectId}`);
             }

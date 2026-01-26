@@ -28,7 +28,7 @@ const getOrCreateDataAgent = async (tableReferences, systemInstruction) => {
             return dataAgentCache.get(tableId);
         }
 
-        const projectId_env = 'dataplex-ui'; // Hardcoded project ID as per original server.js
+        const projectId_env = process.env.GOOGLE_CLOUD_PROJECT_ID;
         const location = process.env.GCP_LOCATION || 'europe-west1';
         const agentId = `agent_${tableId.substring(0, 40)}`;
 
