@@ -1,7 +1,13 @@
 const { Firestore } = require('@google-cloud/firestore');
 
-// Initialize Firestore with ADC
-const firestore = new Firestore();
+// Lazy Firestore initialization to avoid blocking server startup
+let firestore = null;
+const getFirestore = () => {
+    if (!firestore) {
+        firestore = new Firestore();
+    }
+    return firestore;
+};
 
 const COLLECTION_NAME = 'admin-roles';
 
@@ -26,7 +32,7 @@ const COLLECTION_NAME = 'admin-roles';
  */
 const getAdminRole = async (email) => {
     try {
-        const docRef = firestore.collection(COLLECTION_NAME).doc(email);
+        const docRef = getFirestore().collection(COLLECTION_NAME).doc(email);
         const doc = await docRef.get();
 
         if (!doc.exists) {
@@ -51,7 +57,7 @@ const getAdminRole = async (email) => {
  */
 const setAdminRole = async (email, role, assignedProjects = [], createdBy) => {
     try {
-        const docRef = firestore.collection(COLLECTION_NAME).doc(email);
+        const docRef = getFirestore().collection(COLLECTION_NAME).doc(email);
         const existingDoc = await docRef.get();
 
         const now = new Date().toISOString();
@@ -89,7 +95,7 @@ const setAdminRole = async (email, role, assignedProjects = [], createdBy) => {
  */
 const deleteAdminRole = async (email) => {
     try {
-        const docRef = firestore.collection(COLLECTION_NAME).doc(email);
+        const docRef = getFirestore().collection(COLLECTION_NAME).doc(email);
         const doc = await docRef.get();
 
         if (!doc.exists) {
@@ -153,7 +159,7 @@ const isProjectAdmin = async (email, projectId) => {
  */
 const getAllAdmins = async () => {
     try {
-        const snapshot = await firestore
+        const snapshot = await getFirestore()
             .collection(COLLECTION_NAME)
             .where('isActive', '==', true)
             .get();
@@ -214,7 +220,7 @@ const addProjectToAdmin = async (email, projectId) => {
         if (!role.assignedProjects.includes(projectId)) {
             role.assignedProjects.push(projectId);
 
-            const docRef = firestore.collection(COLLECTION_NAME).doc(email);
+            const docRef = getFirestore().collection(COLLECTION_NAME).doc(email);
             await docRef.update({
                 assignedProjects: role.assignedProjects,
                 updatedAt: new Date().toISOString()
@@ -248,7 +254,7 @@ const removeProjectFromAdmin = async (email, projectId) => {
 
         role.assignedProjects = role.assignedProjects.filter(p => p !== projectId);
 
-        const docRef = firestore.collection(COLLECTION_NAME).doc(email);
+        const docRef = getFirestore().collection(COLLECTION_NAME).doc(email);
         await docRef.update({
             assignedProjects: role.assignedProjects,
             updatedAt: new Date().toISOString()

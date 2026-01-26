@@ -1,7 +1,13 @@
 const { Firestore } = require('@google-cloud/firestore');
 
-// Initialize Firestore with ADC
-const firestore = new Firestore();
+// Lazy Firestore initialization to avoid blocking server startup
+let firestore = null;
+const getFirestore = () => {
+    if (!firestore) {
+        firestore = new Firestore();
+    }
+    return firestore;
+};
 
 const COLLECTION_NAME = 'notifications';
 
@@ -70,7 +76,7 @@ const createNotification = async (data) => {
             expiresAt: expiresAt.toISOString()
         };
 
-        const docRef = firestore.collection(COLLECTION_NAME).doc(id);
+        const docRef = getFirestore().collection(COLLECTION_NAME).doc(id);
         await docRef.set(notification);
 
         return notification;
@@ -88,7 +94,7 @@ const createNotification = async (data) => {
  */
 const getNotifications = async (recipientEmail, filters = {}) => {
     try {
-        let query = firestore
+        let query = getFirestore()
             .collection(COLLECTION_NAME)
             .where('recipientEmail', '==', recipientEmail);
 
@@ -135,7 +141,7 @@ const getNotifications = async (recipientEmail, filters = {}) => {
  */
 const getUnreadCount = async (recipientEmail) => {
     try {
-        const snapshot = await firestore
+        const snapshot = await getFirestore()
             .collection(COLLECTION_NAME)
             .where('recipientEmail', '==', recipientEmail)
             .where('read', '==', false)
@@ -164,11 +170,12 @@ const getUnreadCount = async (recipientEmail) => {
  */
 const markAsRead = async (notificationIds) => {
     try {
-        const batch = firestore.batch();
+        const db = getFirestore();
+        const batch = db.batch();
         let count = 0;
 
         for (const id of notificationIds) {
-            const docRef = firestore.collection(COLLECTION_NAME).doc(id);
+            const docRef = db.collection(COLLECTION_NAME).doc(id);
             batch.update(docRef, { read: true });
             count++;
         }
@@ -188,7 +195,8 @@ const markAsRead = async (notificationIds) => {
  */
 const markAllAsRead = async (recipientEmail) => {
     try {
-        const snapshot = await firestore
+        const db = getFirestore();
+        const snapshot = await db
             .collection(COLLECTION_NAME)
             .where('recipientEmail', '==', recipientEmail)
             .where('read', '==', false)
@@ -198,7 +206,7 @@ const markAllAsRead = async (recipientEmail) => {
             return 0;
         }
 
-        const batch = firestore.batch();
+        const batch = db.batch();
         snapshot.forEach(doc => {
             batch.update(doc.ref, { read: true });
         });
@@ -218,7 +226,7 @@ const markAllAsRead = async (recipientEmail) => {
  */
 const deleteNotification = async (id) => {
     try {
-        await firestore.collection(COLLECTION_NAME).doc(id).delete();
+        await getFirestore().collection(COLLECTION_NAME).doc(id).delete();
         return true;
     } catch (error) {
         console.error(`Error deleting notification ${id}:`, error);
@@ -232,8 +240,9 @@ const deleteNotification = async (id) => {
  */
 const cleanupExpiredNotifications = async () => {
     try {
+        const db = getFirestore();
         const now = new Date().toISOString();
-        const snapshot = await firestore
+        const snapshot = await db
             .collection(COLLECTION_NAME)
             .where('expiresAt', '<', now)
             .get();
@@ -242,7 +251,7 @@ const cleanupExpiredNotifications = async () => {
             return 0;
         }
 
-        const batch = firestore.batch();
+        const batch = db.batch();
         snapshot.forEach(doc => {
             batch.delete(doc.ref);
         });

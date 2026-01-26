@@ -1,11 +1,16 @@
 const { Firestore } = require('@google-cloud/firestore');
 
-// Initialize Firestore
+// Lazy Firestore initialization to avoid blocking server startup
 // This automatically uses Application Default Credentials (ADC)
-const firestore = new Firestore({
-    // projectId auto-detected from ADC
-    // databaseId: 'admin-panel' // Try default database first if named one fails
-});
+let firestore = null;
+const getFirestore = () => {
+    if (!firestore) {
+        firestore = new Firestore({
+            // projectId auto-detected from ADC
+        });
+    }
+    return firestore;
+};
 
 const COLLECTION_NAME = 'access-requests';
 
@@ -33,7 +38,7 @@ const COLLECTION_NAME = 'access-requests';
  */
 const createAccessRequest = async (requestData) => {
     try {
-        const docRef = firestore.collection(COLLECTION_NAME).doc(requestData.id);
+        const docRef = getFirestore().collection(COLLECTION_NAME).doc(requestData.id);
 
         // Ensure standard fields
         const newRequest = {
@@ -60,7 +65,7 @@ const createAccessRequest = async (requestData) => {
  */
 const getAccessRequests = async (filters = {}) => {
     try {
-        let query = firestore.collection(COLLECTION_NAME);
+        let query = getFirestore().collection(COLLECTION_NAME);
 
         // Apply filters if provided
         if (filters.status) {
@@ -105,7 +110,7 @@ const getAccessRequests = async (filters = {}) => {
  */
 const getAccessRequestById = async (id) => {
     try {
-        const docRef = firestore.collection(COLLECTION_NAME).doc(id);
+        const docRef = getFirestore().collection(COLLECTION_NAME).doc(id);
         const doc = await docRef.get();
         if (!doc.exists) {
             return null;
@@ -122,7 +127,7 @@ const getAccessRequestById = async (id) => {
  */
 const updateAccessRequestStatus = async (id, status, adminNote, reviewerEmail) => {
     try {
-        const docRef = firestore.collection(COLLECTION_NAME).doc(id);
+        const docRef = getFirestore().collection(COLLECTION_NAME).doc(id);
 
         const updateData = {
             status: status,

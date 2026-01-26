@@ -1,7 +1,13 @@
 const { Firestore } = require('@google-cloud/firestore');
 
-// Initialize Firestore with ADC
-const firestore = new Firestore();
+// Lazy Firestore initialization to avoid blocking server startup
+let firestore = null;
+const getFirestore = () => {
+    if (!firestore) {
+        firestore = new Firestore();
+    }
+    return firestore;
+};
 
 const COLLECTION_NAME = 'granted-accesses';
 
@@ -56,7 +62,7 @@ const createGrantedAccess = async (data) => {
             revokedBy: null
         };
 
-        const docRef = firestore.collection(COLLECTION_NAME).doc(id);
+        const docRef = getFirestore().collection(COLLECTION_NAME).doc(id);
         await docRef.set(grantedAccess);
 
         return grantedAccess;
@@ -73,7 +79,7 @@ const createGrantedAccess = async (data) => {
  */
 const getGrantedAccesses = async (filters = {}) => {
     try {
-        let query = firestore.collection(COLLECTION_NAME);
+        let query = getFirestore().collection(COLLECTION_NAME);
 
         if (filters.status) {
             query = query.where('status', '==', filters.status);
@@ -113,7 +119,7 @@ const getGrantedAccesses = async (filters = {}) => {
  */
 const getGrantedAccessById = async (id) => {
     try {
-        const docRef = firestore.collection(COLLECTION_NAME).doc(id);
+        const docRef = getFirestore().collection(COLLECTION_NAME).doc(id);
         const doc = await docRef.get();
 
         if (!doc.exists) {
@@ -143,7 +149,7 @@ const getAccessesByProject = async (projectId) => {
  */
 const getAccessesByAsset = async (assetName) => {
     try {
-        const snapshot = await firestore
+        const snapshot = await getFirestore()
             .collection(COLLECTION_NAME)
             .where('assetName', '==', assetName)
             .where('status', '==', 'ACTIVE')
@@ -182,7 +188,7 @@ const getAccessesByUser = async (email) => {
  */
 const revokeAccess = async (grantId, revokedBy) => {
     try {
-        const docRef = firestore.collection(COLLECTION_NAME).doc(grantId);
+        const docRef = getFirestore().collection(COLLECTION_NAME).doc(grantId);
         const doc = await docRef.get();
 
         if (!doc.exists) {
@@ -214,7 +220,7 @@ const revokeAccess = async (grantId, revokedBy) => {
  */
 const findExistingAccess = async (userEmail, assetName, role) => {
     try {
-        const snapshot = await firestore
+        const snapshot = await getFirestore()
             .collection(COLLECTION_NAME)
             .where('userEmail', '==', userEmail)
             .where('assetName', '==', assetName)
@@ -246,13 +252,13 @@ const findExistingAccess = async (userEmail, assetName, role) => {
  */
 const getAccessStats = async (projectId) => {
     try {
-        const activeSnapshot = await firestore
+        const activeSnapshot = await getFirestore()
             .collection(COLLECTION_NAME)
             .where('gcpProjectId', '==', projectId)
             .where('status', '==', 'ACTIVE')
             .get();
 
-        const revokedSnapshot = await firestore
+        const revokedSnapshot = await getFirestore()
             .collection(COLLECTION_NAME)
             .where('gcpProjectId', '==', projectId)
             .where('status', '==', 'REVOKED')
