@@ -35,7 +35,7 @@ import {
   Cancel,
   Delete,
   PersonAdd,
-  FilterList,
+  PersonAdd,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthProvider';
@@ -51,7 +51,7 @@ import {
   removeAdminRole,
   type AccessRequest,
   type GrantedAccess,
-  type AdminRole,
+  type GrantedAccess,
 } from '../../features/admin/adminSlice';
 import { useNotification } from '../../contexts/NotificationContext';
 import axios from 'axios';
@@ -86,9 +86,8 @@ const AdminAccessManagement = () => {
   const [loading, setLoading] = useState(true);
   const [pendingRequests, setPendingRequests] = useState<AccessRequest[]>([]);
   const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
-  const [selectedAccesses, setSelectedAccesses] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('pending');
-  const [projectFilter, setProjectFilter] = useState<string>('');
+  const [projectFilter] = useState<string>('');
 
   // Dialog states
   const [revokeDialogOpen, setRevokeDialogOpen] = useState(false);
@@ -541,8 +540,8 @@ const AdminAccessManagement = () => {
                           {admin.assignedProjects?.length > 0
                             ? admin.assignedProjects.join(', ')
                             : admin.role === 'super-admin'
-                            ? 'All Projects'
-                            : '-'}
+                              ? 'All Projects'
+                              : '-'}
                         </TableCell>
                         <TableCell>{admin.createdBy}</TableCell>
                         <TableCell>{formatDate(admin.createdAt)}</TableCell>
