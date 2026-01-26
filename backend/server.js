@@ -2484,10 +2484,10 @@ app.get('/api/v1/access/granted', async (req, res) => {
  * GET /api/v1/access/asset/:assetName
  * Get all users with access to a specific asset
  */
-app.get('/api/v1/access/asset/*', async (req, res) => {
+app.get('/api/v1/access/asset/{*assetPath}', async (req, res) => {
   try {
-    // Express 5: wildcard params are in req.params[0]
-    const assetName = req.params[0];
+    // Express 5: named wildcard params
+    const assetName = req.params.assetPath;
 
     const accesses = await grantedAccessService.getAccessesByAsset(assetName);
 
@@ -2852,7 +2852,7 @@ app.get('/', (req, res) => {
 });
 
 // For any other routes, serve the React index.html
-app.get('*', (req, res) => {
+app.get('{*path}', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
