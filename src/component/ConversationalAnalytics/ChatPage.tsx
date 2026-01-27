@@ -16,7 +16,6 @@ import StorageIcon from '@mui/icons-material/Storage';
 import CloseIcon from '@mui/icons-material/Close';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import AddIcon from '@mui/icons-material/Add';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
 // Table selector component when no entry is provided
@@ -56,7 +55,7 @@ const TableSelector: React.FC<{ onSelect: (entry: any) => void; user: any }> = (
                 const tables = (response.data || []).filter((item: any) => {
                     const entryType = item.entryType || item.type || '';
                     return entryType.includes('TABLE') || entryType.includes('VIEW') ||
-                           item.fullyQualifiedName?.includes('bigquery');
+                        item.fullyQualifiedName?.includes('bigquery');
                 });
                 setSearchResults(tables);
             }
@@ -162,9 +161,9 @@ const TableSelector: React.FC<{ onSelect: (entry: any) => void; user: any }> = (
                     <List sx={{ maxHeight: 400, overflow: 'auto' }}>
                         {searchResults.map((result, index) => {
                             const displayName = result.entrySource?.displayName ||
-                                               result.displayName ||
-                                               result.name?.split('/').pop() ||
-                                               'Unknown';
+                                result.displayName ||
+                                result.name?.split('/').pop() ||
+                                'Unknown';
                             const fqn = result.fullyQualifiedName || '';
                             const entryType = result.entryType || result.type || 'TABLE';
                             const isView = entryType.includes('VIEW');
