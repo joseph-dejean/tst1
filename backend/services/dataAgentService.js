@@ -44,11 +44,7 @@ const getOrCreateDataAgent = async (tableReferences, systemInstruction) => {
             data_analytics_agent: {
                 published_context: {
                     datasourceReferences: bigqueryDataSource,
-                    systemInstruction: {
-                        parts: [
-                            { text: systemInstruction }
-                        ]
-                    }
+                    systemInstruction: systemInstruction
                 }
             }
         };

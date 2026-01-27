@@ -2,12 +2,30 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios, { AxiosError } from 'axios';
 
 const getProjectNumber = (projectId: string) => {
-  let session = localStorage.getItem('sessionUserData');
-  let appConfig = session ? JSON.parse(session)?.appConfig : null;
-  
-  let projects:any[] = appConfig.projects;
-  let projectName:string = projects.find((p) => p.projectId === projectId)?.name || '';
-  return projectName.split('/').length > 0 ? projectName.split('/')[1] : '';
+  try {
+    let session = localStorage.getItem('sessionUserData');
+    let appConfig = session ? JSON.parse(session)?.appConfig : null;
+
+    if (!appConfig?.projects) {
+      console.warn('No projects found in appConfig, using projectId as fallback');
+      return projectId;
+    }
+
+    let projects: any[] = appConfig.projects;
+    let project = projects.find((p) => p.projectId === projectId);
+
+    if (!project?.name) {
+      console.warn(`Project ${projectId} not found in appConfig, using projectId as fallback`);
+      return projectId;
+    }
+
+    let projectName: string = project.name;
+    const parts = projectName.split('/');
+    return parts.length > 1 ? parts[1] : projectId;
+  } catch (error) {
+    console.error('Error getting project number:', error);
+    return projectId;
+  }
 }
 
 // createAsyncThunk is used for asynchronous actions.
@@ -45,28 +63,60 @@ export const getDataProductDetails = createAsyncThunk('dataProducts/getDataProdu
   }
 
   try {
-    // fetching data products from API endpoint 
+    // fetching data products from API endpoint
     axios.defaults.headers.common['Authorization'] = requestData.id_token ? `Bearer ${requestData.id_token}` : '';
-    
-    const project = requestData.dataProductId.split('/')[1];
-    const location = requestData.dataProductId.split('/')[3];
-    const finalEntryName = `projects/${project}/locations/${location}/entryGroups/@dataplex/entries/projects/${getProjectNumber(project)}/locations/${location}/dataProducts/${requestData.dataProductId.split('/')[5]}`;
+
+    const parts = requestData.dataProductId.split('/');
+    const project = parts[1];
+    const location = parts[3];
+    const dataProductName = parts[5] || parts.pop();
+
+    // First, try to get the data product directly from the Dataplex API
+    try {
+      const directResponse = await axios.get(
+        `https://dataplex.googleapis.com/v1/projects/${project}/locations/${location}/dataProducts/${dataProductName}`
+      );
+
+      if (directResponse.status === 200) {
+        console.log("Direct API response", directResponse.data);
+        // Transform to match expected entry format
+        return {
+          name: directResponse.data.name,
+          entrySource: {
+            displayName: directResponse.data.displayName,
+            description: directResponse.data.description
+          },
+          fullyQualifiedName: directResponse.data.name,
+          aspects: directResponse.data.aspects || {},
+          ...directResponse.data
+        };
+      }
+    } catch (directError) {
+      console.log("Direct API failed, trying lookupEntry...", directError);
+    }
+
+    // Fallback: Try the lookupEntry API
+    const projectNumber = getProjectNumber(project);
+    const finalEntryName = `projects/${project}/locations/${location}/entryGroups/@dataplex/entries/projects/${projectNumber}/locations/${location}/dataProducts/${dataProductName}`;
     const lookupUrl = `https://dataplex.googleapis.com/v1/projects/${project}/locations/${location}:lookupEntry`;
 
+    console.log("Lookup URL:", lookupUrl);
+    console.log("Entry name:", finalEntryName);
+
     const response = await axios.get(lookupUrl, {
-    params: {
+      params: {
         entry: finalEntryName,
         view: 'ALL'
-    }
+      }
     });
 
-    console.log("API response", response);
+    console.log("Lookup API response", response);
     return response.status === 200 || response.status !== 401 ? response.data
-    : rejectWithValue('Token expired');
-    //return mockSearchData; // For testing, we return mock data
+      : rejectWithValue('Token expired');
 
   } catch (error) {
     if (error instanceof AxiosError) {
+      console.error("Error fetching data product details:", error.response?.data || error.message);
       return rejectWithValue(error.response?.data || error.message);
     }
     return rejectWithValue('An unknown error occurred');

@@ -7,6 +7,7 @@ export const URLS = {
     ADMIN_CONFIGURE: '/admin/configure',
     CHECK_IAM_ROLE: '/check-iam-role',
     SEARCH: '/search',
+    AI_SEARCH: '/ai-search',
     GET_ENTRY: '/get-entry',
     GET_ENTRY_BY_FQN: '/get-entry-by-fqn',
     GET_SAMPLE_DATA: '/get-sample-data',
@@ -25,6 +26,7 @@ export const URLS = {
     GET_ACCESS_REQUESTS: '/access-requests',
     UPDATE_ACCESS_REQUEST: '/access-request/update',
     GET_ASPECT_TYPES: '/aspect-types',
+    UPDATE_ENTRY_ASPECTS: '/update-entry-aspects',
     LINEAGE_SEARCH_COLUMN_LEVEL: '/lineage-column-level',
 
     // Admin Role Management
@@ -39,6 +41,11 @@ export const URLS = {
     BULK_APPROVE: '/access/bulk-approve',
     BULK_REJECT: '/access/bulk-reject',
     ACCESS_STATS: '/access/stats',
+
+    // Data Products
+    CREATE_DATA_PRODUCT: '/data-products',
+    ADD_DATA_PRODUCT_ASSETS: '/data-products/assets',
+    ENTRIES_BY_LOCATION: '/entries-by-location',
 
     // Notifications
     NOTIFICATIONS: '/notifications',

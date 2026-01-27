@@ -6,6 +6,8 @@ import { useAuth } from '../../auth/AuthProvider';
 import { useDispatch } from 'react-redux';
 import { browseResourcesByAspects } from '../../features/resources/resourcesSlice';
 import type { AppDispatch } from '../../app/store';
+import axios from 'axios';
+import { URLS } from '../../constants/urls';
 
 /**
  * @file BrowseByAnnotation.tsx
@@ -107,17 +109,16 @@ const BrowseByAnnotation = () => {
   }, [selectedItem, selectedSubItem, dispatch, id_token]);
 
   useEffect(() => {
-    if (user?.appConfig && user?.appConfig?.browseByAspectTypes) {
-      let fullAspectList = user?.appConfig?.aspects || [];
-      let aspectList: any = user?.appConfig?.browseByAspectTypes;
-      let generatedData: any[] = [];
-      if (!aspectList || Object.keys(aspectList).length === 0) {
-        console.log('No aspect types configured for browsing.');
-        setDynamicAnnotationsData([]);
-      } else {
+    const loadAspectTypes = async () => {
+      // First, try to use configured aspect types from appConfig
+      if (user?.appConfig?.browseByAspectTypes && Object.keys(user.appConfig.browseByAspectTypes).length > 0) {
+        const fullAspectList = user?.appConfig?.aspects || [];
+        const aspectList: any = user.appConfig.browseByAspectTypes;
+        const generatedData: any[] = [];
+
         Object.keys(aspectList).forEach((a: string) => {
-          let aspectInfo = fullAspectList.find((fa: any) => fa.dataplexEntry.name === a);
-          let subItems = aspectList[a].map((f: string) => {
+          const aspectInfo = fullAspectList.find((fa: any) => fa.dataplexEntry.name === a);
+          const subItems = aspectList[a].map((f: string) => {
             return { title: f, fieldValues: 0, assets: 0 };
           });
           generatedData.push({
@@ -126,36 +127,68 @@ const BrowseByAnnotation = () => {
             assets: 0,
             name: a,
             subItems: subItems
-          })
+          });
         });
         setDynamicAnnotationsData(generatedData);
+        setLoader(false);
+        return;
+      }
+
+      // If no configured aspects, fetch dynamically from Dataplex API
+      if (id_token) {
+        try {
+          console.log('Fetching aspect types dynamically from Dataplex...');
+          const response = await axios.get(`${URLS.API_URL}${URLS.GET_ASPECT_TYPES}`, {
+            headers: { Authorization: `Bearer ${id_token}` }
+          });
+
+          const aspectTypes = response.data || [];
+          console.log('Fetched aspect types:', aspectTypes);
+
+          // Transform aspect types into browse-friendly format
+          const generatedData = aspectTypes
+            .filter((aspect: any) => {
+              // Filter out system aspects if desired (optional)
+              const name = aspect.name || '';
+              return !name.includes('dataplex-types.global'); // Exclude global system types
+            })
+            .map((aspect: any) => {
+              const displayName = aspect.displayName || aspect.name?.split('/').pop() || 'Unknown Aspect';
+              // Extract fields from the aspect type schema if available
+              const fields = aspect.authorization?.alternateUsePermission ? [] :
+                           (aspect.metadataTemplate?.recordFields || []);
+              const subItems = fields.map((field: any) => ({
+                title: field.name || field.displayName || 'Unknown Field',
+                fieldValues: 0,
+                assets: 0
+              }));
+
+              return {
+                title: displayName,
+                fieldValues: subItems.length || 0,
+                assets: 0,
+                name: aspect.name,
+                subItems: subItems.length > 0 ? subItems : [{ title: 'All', fieldValues: 0, assets: 0 }]
+              };
+            });
+
+          if (generatedData.length > 0) {
+            setDynamicAnnotationsData(generatedData);
+          } else {
+            console.log('No custom aspect types found in project.');
+            setDynamicAnnotationsData([]);
+          }
+        } catch (error) {
+          console.error('Error fetching aspect types:', error);
+          setDynamicAnnotationsData([]);
+        }
       }
 
       setLoader(false);
+    };
 
-      // setBrowseByAspectType(annotationsData);
-
-      // let q = `name=${n.join('|')}`;
-
-      // axios.post(URLS.API_URL+ URLS.BATCH_ASPECTS, {
-      //     entryNames: n
-      //   },
-      //   {
-      //     headers: {
-      //       Authorization: `Bearer ${id_token}`,
-      //       'Content-Type': 'application/json',
-      //     },
-      //   }
-      // ).then(response => {
-      //   console.log('name options:', response.data);
-      //   setaspectTypeEditOptions(response.data);//.map((aspect:any) => (aspect.entry.entrySource.displayName));
-      //   setloading(false);
-      // }).catch(error => {
-      //   console.error('Error saving configuration:', error);
-      // });
-
-    }
-  }, [user?.appConfig]);
+    loadAspectTypes();
+  }, [user?.appConfig, id_token]);
 
   const handleItemClick = (item: any) => {
     setSelectedItem(item);

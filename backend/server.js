@@ -1,4 +1,5 @@
 // server.js
+require('dotenv').config(); // Load .env file
 console.log('[STARTUP] Starting server initialization...');
 console.log('[STARTUP] Loading core modules...');
 const { VertexAI } = require('@google-cloud/vertexai');
@@ -265,9 +266,7 @@ app.post('/api/v1/chat', async (req, res) => {
     }
     messages.push({
       userMessage: {
-        parts: [
-          { text: message }
-        ]
+        text: message
       }
     });
 
@@ -316,11 +315,12 @@ Do not explain. Output only the SQL query. Do not use markdown backticks.`;
 
         if (rows.length > 0) {
           const columns = Object.keys(rows[0]);
+          const displayLimit = 10;
           fullResponseText += `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
-          rows.slice(0, 5).forEach(row => {
+          rows.slice(0, displayLimit).forEach(row => {
             fullResponseText += `| ${columns.map(c => row[c]).join(' | ')} |\n`;
           });
-          if (rows.length > 5) fullResponseText += `\n*(Showing top 5 of ${rows.length} rows)*`;
+          if (rows.length > displayLimit) fullResponseText += `\n*(Showing top ${displayLimit} of ${rows.length} rows)*`;
         } else {
           fullResponseText += `\n\nNo results found.`;
         }
@@ -369,11 +369,7 @@ Do not explain. Output only the SQL query. Do not use markdown backticks.`;
         messages: messages,
         inlineContext: {
           datasourceReferences: bigqueryDataSource,
-          systemInstruction: {
-            parts: [
-              { text: systemInstruction }
-            ]
-          }
+          systemInstruction: systemInstruction
         }
       };
     }
@@ -443,30 +439,19 @@ Do not explain. Output only the SQL query. Do not use markdown backticks.`;
               if (result.data && Array.isArray(result.data) && result.data.length > 0) {
                 const rows = result.data;
                 const columns = Object.keys(rows[0]);
+                const displayLimit = 10;
 
                 // Header
                 let tableMd = `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
 
-                // Rows (Limit to 5 to avoid spamming chat)
-                rows.slice(0, 5).forEach(row => {
-                  tableMd += `| ${values = columns.map(col => row[col]).join(' | ')} |\n`;
-                });
-                // Fix variable name in map
-
-                rows.slice(0, 5).forEach(row => {
-                  // Simple row rendering
-                  tableMd += `| ${columns.map(col => row[col]).join(' | ')} |\n`;
-                });
-
-                // Reset and do it cleanly
-                tableMd = `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
-                rows.slice(0, 5).forEach(row => {
+                // Rows
+                rows.slice(0, displayLimit).forEach(row => {
                   const vals = columns.map(c => row[c]);
                   tableMd += `| ${vals.join(' | ')} |\n`;
                 });
 
-                if (rows.length > 5) {
-                  tableMd += `\n*(Showing top 5 of ${rows.length} rows)*\n`;
+                if (rows.length > displayLimit) {
+                  tableMd += `\n*(Showing top ${displayLimit} of ${rows.length} rows)*\n`;
                 }
 
                 fullResponseText += tableMd;
@@ -539,6 +524,156 @@ app.use(express.static(path.join(__dirname, 'dist')));
 // --- File Path for Local Data ---
 const dataFilePath = path.join(__dirname, 'configData.json');
 
+
+/**
+ * POST /api/v1/ai-search
+ * AI-powered natural language search for tables and assets using Vertex AI
+ *
+ * Request Body:
+ * {
+ *   "query": "Natural language query like 'tables about customer orders' or 'sales data'"
+ *   "type": "table" | "asset" | "all" (optional, defaults to "all")
+ * }
+ */
+app.post('/api/v1/ai-search', async (req, res) => {
+  try {
+    const { query, type = 'all' } = req.body;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const location = process.env.GCP_LOCATION || 'europe-west1';
+
+    if (!query || query.trim().length < 2) {
+      return res.status(400).json({ error: 'Query is required and must be at least 2 characters.' });
+    }
+
+    // Step 1: Use Gemini to understand the query and generate search terms
+    const vertex_ai = new VertexAI({
+      project: projectId,
+      location: process.env.GCP_LOCATION || 'us-central1'
+    });
+    const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
+
+    const aiPrompt = `You are a data catalog search assistant. Given a user's natural language query, extract the key search terms and concepts that would help find relevant database tables or datasets.
+
+User Query: "${query}"
+
+Analyze the query and return a JSON object with:
+1. "searchTerms": array of individual keywords to search for (lowercase, no special characters)
+2. "dataplexQuery": a search query string optimized for Dataplex/Data Catalog search
+3. "intent": what the user is looking for (e.g., "customer data", "sales metrics", "order history")
+4. "suggestedFilters": any filters to apply (e.g., entryType, system)
+
+Return ONLY valid JSON, no markdown or explanations.
+Example output: {"searchTerms":["customer","orders","purchase"],"dataplexQuery":"customer orders purchase","intent":"customer order data","suggestedFilters":{}}`;
+
+    const aiResult = await generativeModel.generateContent(aiPrompt);
+    const aiResponseText = aiResult.response.candidates[0].content.parts[0].text.trim();
+
+    let searchConfig;
+    try {
+      // Clean markdown if present
+      let cleanJson = aiResponseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      searchConfig = JSON.parse(cleanJson);
+    } catch (parseError) {
+      console.error('AI response parse error:', parseError, 'Response:', aiResponseText);
+      // Fallback to simple search
+      searchConfig = {
+        searchTerms: query.toLowerCase().split(/\s+/).filter(t => t.length > 2),
+        dataplexQuery: query,
+        intent: query,
+        suggestedFilters: {}
+      };
+    }
+
+    console.log('AI Search Config:', searchConfig);
+
+    // Step 2: Search Dataplex with the AI-generated query
+    const auth = new AdcGoogleAuth();
+    const dataplexClient = new CatalogServiceClient({ auth });
+
+    // Build search query based on type
+    let searchQuery = searchConfig.dataplexQuery || query;
+    if (type === 'table') {
+      searchQuery += ' AND (type="bigquery_table" OR type="TABLE")';
+    } else if (type === 'asset') {
+      searchQuery += ' AND NOT type="data_product"';
+    }
+
+    const searchRequest = {
+      name: `projects/${projectId}/locations/global`,
+      query: searchQuery,
+      pageSize: 20
+    };
+
+    console.log('Dataplex Search Request:', searchRequest);
+
+    const [searchResponse] = await dataplexClient.searchEntries(searchRequest);
+    let results = searchResponse.results || [];
+
+    // Step 3: If we have results, use Gemini to rank them by relevance
+    if (results.length > 0) {
+      const rankPrompt = `Given the user's search intent: "${searchConfig.intent}"
+
+Rank these data entries by relevance (most relevant first). Return a JSON array of indices in order of relevance.
+
+Entries:
+${results.slice(0, 15).map((r, i) => {
+  const entry = r.dataplexEntry || r;
+  return `${i}. Name: ${entry.entrySource?.displayName || entry.name?.split('/').pop() || 'Unknown'}
+     Description: ${entry.entrySource?.description || 'No description'}
+     Type: ${entry.entryType || 'Unknown'}`;
+}).join('\n')}
+
+Return ONLY a JSON array of indices like [2,0,5,1,3,4,...], no explanation.`;
+
+      try {
+        const rankResult = await generativeModel.generateContent(rankPrompt);
+        const rankText = rankResult.response.candidates[0].content.parts[0].text.trim();
+        const cleanRankJson = rankText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const rankedIndices = JSON.parse(cleanRankJson);
+
+        if (Array.isArray(rankedIndices)) {
+          const rankedResults = rankedIndices
+            .filter(i => i >= 0 && i < results.length)
+            .map(i => results[i]);
+          // Add any results that weren't ranked
+          const unrankedResults = results.filter((_, i) => !rankedIndices.includes(i));
+          results = [...rankedResults, ...unrankedResults];
+        }
+      } catch (rankError) {
+        console.log('Ranking failed, using original order:', rankError.message);
+      }
+    }
+
+    // Step 4: Format response
+    const formattedResults = results.map(r => {
+      const entry = r.dataplexEntry || r;
+      return {
+        name: entry.name,
+        displayName: entry.entrySource?.displayName || entry.name?.split('/').pop() || 'Unknown',
+        description: entry.entrySource?.description || '',
+        fullyQualifiedName: entry.fullyQualifiedName || '',
+        entryType: entry.entryType || 'Unknown',
+        system: entry.entrySource?.system || '',
+        location: entry.name?.split('/locations/')[1]?.split('/')[0] || ''
+      };
+    });
+
+    res.json({
+      query: query,
+      intent: searchConfig.intent,
+      searchTerms: searchConfig.searchTerms,
+      results: formattedResults,
+      totalResults: formattedResults.length
+    });
+
+  } catch (error) {
+    console.error('AI Search error:', error);
+    res.status(500).json({
+      error: 'An error occurred during AI-powered search.',
+      details: error.message
+    });
+  }
+});
 
 /**
  * POST /check-iam-role
@@ -791,6 +926,256 @@ app.post('/api/v1/get-entry', async (req, res) => {
   } catch (error) {
     console.error(`Error fetching entry ${entryName}:`, error);
     res.status(500).json({ message: 'An error occurred while fetching entry from Dataplex.', details: error.message });
+  }
+});
+
+/**
+ * POST /api/v1/update-entry-aspects
+ * Update aspects on a Dataplex entry (e.g., contacts, custom aspects)
+ * Body: { entryName: string, aspects: { [aspectKey]: aspectData }, updateMask: string[] }
+ */
+app.post('/api/v1/update-entry-aspects', async (req, res) => {
+  try {
+    const { entryName, aspects, updateMask } = req.body;
+
+    if (!entryName) {
+      return res.status(400).json({ message: 'Bad Request: entryName is required.' });
+    }
+
+    if (!aspects || Object.keys(aspects).length === 0) {
+      return res.status(400).json({ message: 'Bad Request: aspects object is required.' });
+    }
+
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
+    const dataplexClientv1 = new CatalogServiceClient({ auth });
+
+    // Build the update request
+    const request = {
+      entry: {
+        name: entryName,
+        aspects: aspects
+      },
+      updateMask: {
+        paths: updateMask || Object.keys(aspects).map(key => `aspects.${key}`)
+      }
+    };
+
+    console.log('Updating entry aspects:', JSON.stringify(request, null, 2));
+
+    const [updatedEntry] = await dataplexClientv1.updateEntry(request);
+
+    res.json({
+      success: true,
+      message: 'Entry aspects updated successfully',
+      entry: updatedEntry
+    });
+
+  } catch (error) {
+    console.error('Error updating entry aspects:', error);
+    res.status(500).json({
+      message: 'An error occurred while updating entry aspects.',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/v1/data-products
+ * Create a new Data Product in Dataplex
+ * Body: { name, displayName, description, location, entryGroupId }
+ */
+app.post('/api/v1/data-products', async (req, res) => {
+  try {
+    const { displayName, description, location, entryGroupId } = req.body;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+
+    if (!displayName) {
+      return res.status(400).json({ message: 'Bad Request: displayName is required.' });
+    }
+
+    // Use provided location or default from env
+    const loc = location || process.env.GCP_LOCATION || 'europe-west1';
+    const entryGroup = entryGroupId || '@dataplex';
+
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
+    const dataplexClient = new CatalogServiceClient({ auth });
+
+    // Generate entry ID from display name (sanitize for Dataplex)
+    const entryId = displayName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').substring(0, 63);
+
+    const parent = `projects/${projectId}/locations/${loc}/entryGroups/${entryGroup}`;
+
+    const request = {
+      parent,
+      entryId,
+      entry: {
+        entryType: `projects/${projectId}/locations/${loc}/entryTypes/data-product`,
+        entrySource: {
+          displayName: displayName,
+          description: description || '',
+          system: 'CUSTOM',
+          createTime: new Date().toISOString(),
+          updateTime: new Date().toISOString()
+        },
+        aspects: {}
+      }
+    };
+
+    console.log('Creating Data Product:', JSON.stringify(request, null, 2));
+
+    const [dataProduct] = await dataplexClient.createEntry(request);
+
+    res.json({
+      success: true,
+      message: 'Data Product created successfully',
+      dataProduct,
+      location: loc
+    });
+
+  } catch (error) {
+    console.error('Error creating data product:', error);
+    res.status(500).json({
+      message: 'An error occurred while creating the data product.',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/v1/data-products/assets
+ * Add assets to a Data Product
+ * Body: { dataProductName, assets: [{ entryName, displayName }] }
+ */
+app.post('/api/v1/data-products/assets', async (req, res) => {
+  try {
+    const { dataProductName, assets } = req.body;
+
+    if (!dataProductName) {
+      return res.status(400).json({ message: 'Bad Request: dataProductName is required.' });
+    }
+
+    if (!assets || !Array.isArray(assets) || assets.length === 0) {
+      return res.status(400).json({ message: 'Bad Request: assets array is required.' });
+    }
+
+    // ADC Auth
+    const auth = new AdcGoogleAuth();
+    const dataplexClient = new CatalogServiceClient({ auth });
+
+    // First, get the current data product to check its location
+    const [dataProduct] = await dataplexClient.getEntry({
+      name: dataProductName,
+      view: protos.google.cloud.dataplex.v1.EntryView.ALL
+    });
+
+    // Extract location from data product name
+    const dpLocation = dataProductName.split('/locations/')[1]?.split('/')[0];
+
+    // Validate all assets are in the same region
+    const invalidAssets = assets.filter(asset => {
+      const assetLocation = asset.entryName?.split('/locations/')[1]?.split('/')[0];
+      return assetLocation && assetLocation !== dpLocation;
+    });
+
+    if (invalidAssets.length > 0) {
+      return res.status(400).json({
+        message: `Assets must be in the same region as the Data Product (${dpLocation})`,
+        invalidAssets: invalidAssets.map(a => ({
+          name: a.displayName || a.entryName,
+          location: a.entryName?.split('/locations/')[1]?.split('/')[0]
+        }))
+      });
+    }
+
+    // Update the data product with asset references
+    // The exact structure depends on your data product aspect schema
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const aspectKey = `${projectId}.${dpLocation}.data-product-assets`;
+
+    const assetReferences = assets.map(asset => ({
+      entryReference: asset.entryName,
+      displayName: asset.displayName || asset.entryName.split('/').pop()
+    }));
+
+    // Get existing assets if any
+    const existingAssets = dataProduct.aspects?.[aspectKey]?.data?.assets || [];
+    const mergedAssets = [...existingAssets, ...assetReferences];
+
+    const updateRequest = {
+      entry: {
+        name: dataProductName,
+        aspects: {
+          [aspectKey]: {
+            data: {
+              assets: mergedAssets
+            }
+          }
+        }
+      },
+      updateMask: {
+        paths: [`aspects.${aspectKey}`]
+      }
+    };
+
+    const [updatedDataProduct] = await dataplexClient.updateEntry(updateRequest);
+
+    res.json({
+      success: true,
+      message: `Added ${assets.length} asset(s) to data product`,
+      dataProduct: updatedDataProduct
+    });
+
+  } catch (error) {
+    console.error('Error adding assets to data product:', error);
+    res.status(500).json({
+      message: 'An error occurred while adding assets to the data product.',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/v1/entries-by-location
+ * Get all entries in a specific location (for filtering assets by region)
+ */
+app.get('/api/v1/entries-by-location', async (req, res) => {
+  try {
+    const location = req.query.location || process.env.GCP_LOCATION;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const entryType = req.query.entryType; // Optional: filter by entry type (TABLE, VIEW, etc.)
+
+    const auth = new AdcGoogleAuth();
+    const dataplexClient = new CatalogServiceClient({ auth });
+
+    // Search for entries in the specific location
+    const parent = `projects/${projectId}/locations/${location}`;
+
+    let query = `location=${location}`;
+    if (entryType) {
+      query += ` entryType=${entryType}`;
+    }
+
+    const request = {
+      name: parent,
+      query: query,
+      pageSize: 100
+    };
+
+    const [response] = await dataplexClient.searchEntries(request);
+
+    res.json({
+      entries: response.results || [],
+      location: location
+    });
+
+  } catch (error) {
+    console.error('Error fetching entries by location:', error);
+    res.status(500).json({
+      message: 'An error occurred while fetching entries.',
+      details: error.message
+    });
   }
 });
 

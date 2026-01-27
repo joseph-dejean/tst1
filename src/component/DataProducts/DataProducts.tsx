@@ -1,15 +1,17 @@
 import React, { useState, useEffect} from 'react';
-import { 
-  Box, Typography, Paper, Grid, 
+import {
+  Box, Typography, Paper, Grid,
   Tooltip, Menu, MenuItem,
   TextField,
-  Skeleton
+  Skeleton,
+  Button
 } from '@mui/material';
 
-import { 
+import {
   Search, AccessTime,
   KeyboardArrowDown,
-  LocationOnOutlined
+  LocationOnOutlined,
+  Add
 } from '@mui/icons-material';
 import { useDispatch, useSelector } from 'react-redux';
 import { type AppDispatch } from '../../app/store';
@@ -20,6 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import Tag from '../Tags/Tag';
 import axios from 'axios';
 import { getMimeType } from '../../utils/resourceUtils';
+import CreateDataProductDialog from './CreateDataProductDialog';
 
 const DataProducts = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -34,6 +37,7 @@ const DataProducts = () => {
   const [sortAnchorEl, setSortAnchorEl] = useState<null | HTMLElement>(null);
   const [dataProductsList, setDataProductsList] = useState<any>([]);
   const [searchLoader, setSearchLoader] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
 
 
@@ -157,10 +161,26 @@ const DataProducts = () => {
       >
         <Box 
         >
-            <Box sx={{ display: 'flex', alignItems: 'center', position: 'relative', top: '20px', left: '20px' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', top: '20px', px: '20px' }}>
                 <Typography variant="h5" sx={{ fontFamily: '"Google Sans", sans-serif', fontWeight: 400, fontSize: '24px', lineHeight: '24px', color: '#1F1F1F' }}>
                     Data Products
                 </Typography>
+                <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={() => setCreateDialogOpen(true)}
+                    sx={{
+                        backgroundColor: '#0E4DCA',
+                        borderRadius: '20px',
+                        textTransform: 'none',
+                        fontFamily: '"Google Sans", sans-serif',
+                        fontWeight: 500,
+                        px: 2,
+                        '&:hover': { backgroundColor: '#0B3D9E' }
+                    }}
+                >
+                    Create Data Product
+                </Button>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.1, position: 'relative', top: '40px', left: '20px' }}>
                 <TextField
@@ -446,6 +466,19 @@ const DataProducts = () => {
             </Box>
         </Box>
         </Paper>
+
+        {/* Create Data Product Dialog */}
+        <CreateDataProductDialog
+            open={createDialogOpen}
+            onClose={() => setCreateDialogOpen(false)}
+            onCreated={(newDataProduct) => {
+                // Refresh the data products list
+                if (user?.token) {
+                    dispatch(fetchDataProductsList({ id_token: user.token }));
+                }
+            }}
+            userToken={user?.token || ''}
+        />
     </Box>
   );
 };

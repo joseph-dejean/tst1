@@ -37,6 +37,10 @@ stats.html
 .npm
 .gemini
 .codeoss
-node_modulesvenv
-EOF
+# Python
+venv
+
+# Backend env
+backend/.env
+backend/.env.*
 

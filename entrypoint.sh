@@ -1,9 +1,15 @@
 #!/bin/sh
+set -e
+
+echo "[ENTRYPOINT] Starting..."
 
 ASSETS_DIR=/app/dist/assets
 
-find $ASSETS_DIR -type f -name "*.js" -print0 | while IFS= read -r -d $'\0' file; do
-  echo "Processing $file ..."
+echo "[ENTRYPOINT] Replacing environment variables in JS files..."
+
+# Use a simpler find syntax that works in Alpine ash
+for file in $(find $ASSETS_DIR -type f -name "*.js"); do
+  echo "[ENTRYPOINT] Processing $file"
   # Replace placeholders with actual environment variable values
   sed -i "s|__VITE_API_URL__|${VITE_API_URL}|g" "$file"
   sed -i "s|__VITE_API_VERSION__|${VITE_API_VERSION}|g" "$file"
@@ -14,6 +20,9 @@ find $ASSETS_DIR -type f -name "*.js" -print0 | while IFS= read -r -d $'\0' file
   sed -i "s|__VITE_GOOGLE_REDIRECT_URI__|${VITE_GOOGLE_REDIRECT_URI}|g" "$file"
 done
 
-# Start the Nginx web server
-echo "env setup done and run npm"
-npm start
+echo "[ENTRYPOINT] Environment setup done, starting server..."
+echo "[ENTRYPOINT] PORT=${PORT:-8080}"
+echo "[ENTRYPOINT] GOOGLE_CLOUD_PROJECT_ID=${GOOGLE_CLOUD_PROJECT_ID}"
+
+# Start the Node.js server
+exec npm start

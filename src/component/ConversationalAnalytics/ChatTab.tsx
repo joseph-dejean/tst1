@@ -2,8 +2,58 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Box, TextField, Button, Paper, Typography, CircularProgress, Alert } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import axios from 'axios';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { URLS } from '../../constants/urls';
 import { useAuth } from '../../auth/AuthProvider';
+
+// Markdown styles for tables and code blocks
+const markdownStyles = {
+  '& table': {
+    borderCollapse: 'collapse',
+    width: '100%',
+    marginTop: '12px',
+    marginBottom: '12px',
+    fontSize: '14px',
+  },
+  '& th, & td': {
+    border: '1px solid #DADCE0',
+    padding: '8px 12px',
+    textAlign: 'left',
+  },
+  '& th': {
+    backgroundColor: '#F1F3F4',
+    fontWeight: 600,
+  },
+  '& tr:nth-of-type(even)': {
+    backgroundColor: '#F8F9FA',
+  },
+  '& code': {
+    backgroundColor: '#F1F3F4',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    fontFamily: 'monospace',
+    fontSize: '13px',
+  },
+  '& pre': {
+    backgroundColor: '#1E1E1E',
+    color: '#D4D4D4',
+    padding: '12px',
+    borderRadius: '8px',
+    overflowX: 'auto',
+    '& code': {
+      backgroundColor: 'transparent',
+      padding: 0,
+      color: 'inherit',
+    },
+  },
+  '& p': {
+    margin: '8px 0',
+  },
+  '& ul, & ol': {
+    paddingLeft: '20px',
+  },
+};
 
 interface ChatTabProps {
   entry: any;
@@ -48,36 +98,41 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
     setMessages(prev => [...prev, userMsg]);
 
     try {
-      // Check if this is a Data Product (explicit flag or Dataset with tables)
-      const isDataProduct = entry._isDataProduct || entry.entryType === 'DATA_PRODUCT' || (tables && tables.length > 0);
+      // Check if this is a Data Product or if multiple tables are selected
+      const hasMultipleTables = tables && tables.length > 1;
+      const isDataProduct = entry._isDataProduct || entry.entryType === 'DATA_PRODUCT' || hasMultipleTables;
 
       let contextData: any;
 
-      if (isDataProduct) {
+      if (isDataProduct || hasMultipleTables) {
         // Prepare context for all tables
-        // If we have the 'tables' prop (from EntryList scan), use that. 
+        // If we have the 'tables' prop (related tables selected), use that.
         // Otherwise check internal dataProduct object.
-        const tableList = tables || (entry._dataProduct?.tables) || [];
+        const tableList = tables || (entry._dataProduct?.tables) || [entry];
 
         const tablesContext = tableList.map((t: any) => {
           // Handle structure from resourcesEntryList (dataplexEntry) or direct table object
           const tableObj = t.dataplexEntry || t;
           return {
-            name: tableObj.displayName || tableObj.entryName || tableObj.name?.split('/').pop() || 'Unknown Table',
+            name: tableObj.entrySource?.displayName || tableObj.displayName || tableObj.entryName || tableObj.name?.split('/').pop() || 'Unknown Table',
             fullyQualifiedName: tableObj.fullyQualifiedName || tableObj.name || '',
             // If it's from resourcesEntryList, it might be nested
-            type: tableObj.type || 'Table',
+            type: tableObj.entryType || tableObj.type || 'Table',
             description: tableObj.entrySource?.description || tableObj.description || ''
           };
         });
 
+        // For multi-table chat, use the first table as the primary context
+        const primaryTable = tableList[0];
+        const primaryName = primaryTable.entrySource?.displayName || primaryTable.displayName || primaryTable.name?.split('/').pop() || 'Selected Tables';
+
         contextData = {
-          name: entry.entrySource?.displayName || entry.displayName || entry.name?.split('/').pop() || 'Unknown Data Product',
-          description: entry.entrySource?.description || entry.description || "No description available.",
-          isDataProduct: true,
+          name: hasMultipleTables ? `${primaryName} + ${tableList.length - 1} related tables` : primaryName,
+          description: entry.entrySource?.description || entry.description || "Multi-table conversation",
+          isDataProduct: true, // Enable multi-table handling in backend
           tables: tablesContext,
           fullyQualifiedName: entry.fullyQualifiedName || entry.name || '',
-          entryType: 'DATA_PRODUCT', // Force type to trigger multi-table logic backend
+          entryType: isDataProduct ? 'DATA_PRODUCT' : 'MULTI_TABLE',
           conversationHistory: conversationHistory
         };
       } else {
@@ -177,7 +232,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
           Conversational Analytics
         </Typography>
         <Typography variant="body2" sx={{ color: '#575757' }}>
-          Ask natural language questions about this table's data. Powered by Google Cloud Conversational Analytics API.
+          {tables && tables.length > 1
+            ? `Ask natural language questions about ${tables.length} tables. The AI can query across all selected tables.`
+            : 'Ask natural language questions about this table\'s data. Powered by Google Cloud Conversational Analytics API.'}
         </Typography>
       </Box>
 
@@ -199,10 +256,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
         {messages.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 8, color: '#575757' }}>
             <Typography variant="body1" sx={{ mb: 1 }}>
-              Start a conversation by asking a question about this table.
+              {tables && tables.length > 1
+                ? 'Start a conversation by asking a question about your selected tables.'
+                : 'Start a conversation by asking a question about this table.'}
             </Typography>
             <Typography variant="body2" sx={{ color: '#9AA0A6' }}>
-              Example: "What columns does this table have?" or "Show me the top 10 rows"
+              {tables && tables.length > 1
+                ? 'Example: "Join customers and orders to show total orders per customer" or "Compare sales across both tables"'
+                : 'Example: "What columns does this table have?" or "Show me the top 10 rows"'}
             </Typography>
           </Box>
         ) : (
@@ -223,12 +284,19 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
                     backgroundColor: msg.role === 'user' ? '#0E4DCA' : '#ffffff',
                     color: msg.role === 'user' ? '#ffffff' : '#1F1F1F',
                     borderRadius: '8px',
-                    border: msg.role === 'assistant' ? '1px solid #DADCE0' : 'none'
+                    border: msg.role === 'assistant' ? '1px solid #DADCE0' : 'none',
+                    ...(msg.role === 'assistant' ? markdownStyles : {})
                   }}
                 >
-                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-                    {msg.content}
-                  </Typography>
+                  {msg.role === 'assistant' ? (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  ) : (
+                    <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                      {msg.content}
+                    </Typography>
+                  )}
                   <Typography
                     variant="caption"
                     sx={{
@@ -276,7 +344,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
             fullWidth
             variant="outlined"
             label="Ask a question..."
-            placeholder="e.g., What columns does this table have? Show me sample data."
+            placeholder={tables && tables.length > 1
+              ? "e.g., Join these tables to show..., Compare data across tables..."
+              : "e.g., What columns does this table have? Show me sample data."}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && !loading && handleAsk()}

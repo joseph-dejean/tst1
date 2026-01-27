@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Box, Button, Paper, Skeleton, Tab, Tabs, Typography } from '@mui/material'
 import { ArrowBack } from '@mui/icons-material'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import CustomTabPanel from '../TabPanel/CustomTabPanel'
 import PreviewAnnotation from '../Annotation/PreviewAnnotation'
@@ -9,7 +9,7 @@ import AnnotationFilter from '../Annotation/AnnotationFilter'
 import type { AppDispatch } from '../../app/store'
 import { useAuth } from '../../auth/AuthProvider'
 import { getEntryType, getMimeType, getName, hasValidAnnotationData  } from '../../utils/resourceUtils'
-import { fetchDataProductsAssetsList, fetchDataProductsList } from '../../features/dataProducts/dataProductsSlice'
+import { fetchDataProductsAssetsList, fetchDataProductsList, getDataProductDetails } from '../../features/dataProducts/dataProductsSlice'
 import Assets from './Assets'
 import AccessGroup from './AccessGroup'
 import Contract from './Contract'
@@ -73,13 +73,15 @@ const DataProductsDetailView: React.FC<DataProductsDetailViewProps> = ({ onReque
 
   const { user } = useAuth();
   const {
-        dataProductsItems, 
-        status, 
-        selectedDataProductDetails, 
-        selectedDataProductStatus
+        dataProductsItems,
+        status,
+        selectedDataProductDetails,
+        selectedDataProductStatus,
+        selectedDataProductError
     } = useSelector((state: any) => state.dataProducts);
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
+  const [searchParams] = useSearchParams();
 
   const { setAccessPanelOpen } = useAccessRequest();
 
@@ -168,6 +170,15 @@ const tabProps = (index: number)  => {
         'aria-controls': `tabpanel-${index}`,
     };
 }
+
+  // Fetch data product details if not already loaded (e.g., on page refresh)
+  useEffect(() => {
+    const dataProductId = searchParams.get('dataProductId');
+    if (dataProductId && user?.token && selectedDataProductStatus === 'idle') {
+      console.log('Fetching data product details from URL param:', dataProductId);
+      dispatch(getDataProductDetails({ dataProductId: decodeURIComponent(dataProductId), id_token: user.token }));
+    }
+  }, [searchParams, user?.token, selectedDataProductStatus, dispatch]);
 
   useEffect(() => {
     if (dataProductsItems.length === 0 && status === 'idle' && user?.token) {
@@ -292,6 +303,29 @@ const tabProps = (index: number)  => {
 
  
 
+
+  // Show error state if loading failed
+  if (selectedDataProductStatus === 'failed') {
+    return (
+      <Box sx={{ padding: "40px", textAlign: "center" }}>
+        <Typography variant="h6" sx={{ color: '#d32f2f', mb: 2 }}>
+          Failed to load data product details
+        </Typography>
+        <Typography variant="body2" sx={{ color: '#666', mb: 3 }}>
+          {typeof selectedDataProductError === 'string'
+            ? selectedDataProductError
+            : 'An error occurred while fetching the data product. Please try again.'}
+        </Typography>
+        <Button
+          variant="contained"
+          onClick={() => navigate('/data-products')}
+          sx={{ backgroundColor: '#0E4DCA' }}
+        >
+          Back to Data Products
+        </Button>
+      </Box>
+    );
+  }
 
   return selectedDataProductStatus == 'succeeded' ? (
     <div style={{display: "flex", flexDirection: "column", padding: "0px 0", background:"#F8FAFD", height: "100vh", overflow: "hidden" }}>
