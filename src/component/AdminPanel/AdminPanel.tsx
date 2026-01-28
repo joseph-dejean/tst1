@@ -63,6 +63,7 @@ const AdminPanel = () => {
   const [aspectTypeEditOptions, setAspectTypeEditOptions] = useState<any>({});
   const [selectedAssetsByProduct, setSelectedAssetsByProduct] = useState<Record<string, any[]>>({});
   const [selectedAspectNamesByType, setSelectedAspectNamesByType] = useState<Record<string, string[]>>({});
+  const [initError, setInitError] = useState<string | null>(null);
 
   const showSuccess = (message: string) => {
     setAcknowledgeModalData({ type: 'success', message });
@@ -71,6 +72,14 @@ const AdminPanel = () => {
 
   const fetchAppConfig = (showNotification = false) => {
     setLoading(true);
+    setInitError(null);
+
+    if (!id_token) {
+      setInitError('No authentication token available. Please log in again.');
+      setLoading(false);
+      return;
+    }
+
     axios.get(URLS.API_URL + URLS.APP_CONFIG, {
       headers: {
         Authorization: `Bearer ${id_token}`,
@@ -81,22 +90,27 @@ const AdminPanel = () => {
       updateUser(id_token, userData);
 
       if (appConfig.aspects && Array.isArray(appConfig.aspects)) {
-        let o = appConfig.aspects.map((aspect: any) => (aspect.dataplexEntry.entrySource.displayName));
-        let n = appConfig.aspects.map((aspect: any) => (aspect.dataplexEntry.entrySource.resource));
-        setAspectTypeOptions([...new Set(o)]);
+        let o = appConfig.aspects.map((aspect: any) => (aspect.dataplexEntry?.entrySource?.displayName || 'Unknown'));
+        let n = appConfig.aspects.map((aspect: any) => (aspect.dataplexEntry?.entrySource?.resource || ''));
+        setAspectTypeOptions([...new Set(o.filter(Boolean))]);
 
-        axios.post(URLS.API_URL + URLS.BATCH_ASPECTS, { entryNames: n }, {
+        axios.post(URLS.API_URL + URLS.BATCH_ASPECTS, { entryNames: n.filter(Boolean) }, {
           headers: { Authorization: `Bearer ${id_token}`, 'Content-Type': 'application/json' }
         }).then(response => {
           setAspectTypeEditOptions(response.data);
           setLoading(false);
           if (showNotification) showSuccess("Metadata configuration refreshed from Dataplex!");
+        }).catch((batchErr) => {
+          console.error("Batch aspects fetch failed:", batchErr);
+          setLoading(false);
+          // Continue without aspect edit options
         });
       } else {
         setLoading(false);
       }
     }).catch((err) => {
-      console.error("Refresh failed:", err);
+      console.error("App config fetch failed:", err);
+      setInitError(err.response?.data?.message || err.message || 'Failed to load admin configuration. Please check your permissions.');
       setLoading(false);
     });
   };
@@ -255,6 +269,45 @@ const AdminPanel = () => {
       navigate('/home');
     }
   };
+
+  // Show error state if initialization failed
+  if (initError) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '100vh',
+          backgroundColor: '#F8FAFD',
+          gap: 2,
+          padding: 3
+        }}
+      >
+        <Typography variant="h6" sx={{ color: '#D32F2F' }}>
+          Failed to Load Admin Panel
+        </Typography>
+        <Typography variant="body1" sx={{ color: '#575757', textAlign: 'center', maxWidth: 500 }}>
+          {initError}
+        </Typography>
+        <Button
+          variant="contained"
+          onClick={() => navigate('/home')}
+          sx={{ mt: 2, backgroundColor: '#0E4DCA' }}
+        >
+          Back to Home
+        </Button>
+        <Button
+          variant="outlined"
+          onClick={() => fetchAppConfig()}
+          sx={{ borderColor: '#0E4DCA', color: '#0E4DCA' }}
+        >
+          Retry
+        </Button>
+      </Box>
+    );
+  }
 
   return !loading ? (
     <Box

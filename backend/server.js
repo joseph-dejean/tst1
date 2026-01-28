@@ -185,40 +185,64 @@ app.post('/api/v1/chat', async (req, res) => {
     let tableReferences = [];
 
     if (isDataProduct && context.tables && context.tables.length > 0) {
-      // For Data Products, extract BigQuery references from all tables
-      context.tables.forEach((table) => {
-        if (table.fullyQualifiedName) {
-          const fqn = table.fullyQualifiedName;
-          let tProjectId, tDatasetId, tTableId;
+      // For Data Products or multi-table chat, extract BigQuery references from all tables
+      console.log('Processing multi-table context with', context.tables.length, 'tables');
 
-          if (fqn.startsWith('bigquery://')) {
-            const parts = fqn.replace('bigquery://', '').split('.');
-            if (parts.length >= 3) {
-              tProjectId = parts[0];
-              tDatasetId = parts[1];
-              tTableId = parts[2];
-            }
-          } else if (fqn.includes(':')) {
-            const [project, rest] = fqn.split(':');
-            tProjectId = project;
-            const parts = rest.split('.');
-            if (parts.length >= 2) {
-              tDatasetId = parts[0];
-              tTableId = parts[1];
-            }
-          }
+      context.tables.forEach((table, idx) => {
+        let fqn = table.fullyQualifiedName || '';
+        console.log(`Table ${idx}: ${table.name}, FQN: ${fqn}`);
 
-          if (tProjectId && tDatasetId && tTableId) {
-            tableReferences.push({
-              projectId: tProjectId,
-              datasetId: tDatasetId,
-              tableId: tTableId,
-              schema: {
-                description: table.description || '',
-                fields: []
-              }
-            });
+        let tProjectId, tDatasetId, tTableId;
+
+        // Handle various FQN formats
+        if (fqn.startsWith('bigquery://')) {
+          // Format: bigquery://project.dataset.table
+          const parts = fqn.replace('bigquery://', '').split('.');
+          if (parts.length >= 3) {
+            tProjectId = parts[0];
+            tDatasetId = parts[1];
+            tTableId = parts[2];
           }
+        } else if (fqn.startsWith('bigquery:')) {
+          // Format: bigquery:project.dataset.table (Dataplex FQN format)
+          const parts = fqn.replace('bigquery:', '').split('.');
+          if (parts.length >= 3) {
+            tProjectId = parts[0];
+            tDatasetId = parts[1];
+            tTableId = parts[2];
+          }
+        } else if (fqn.includes(':') && fqn.includes('.')) {
+          // Format: project:dataset.table
+          const [project, rest] = fqn.split(':');
+          tProjectId = project;
+          const parts = rest.split('.');
+          if (parts.length >= 2) {
+            tDatasetId = parts[0];
+            tTableId = parts[1];
+          }
+        } else if (fqn.includes('.')) {
+          // Format: project.dataset.table (simple dot notation)
+          const parts = fqn.split('.');
+          if (parts.length >= 3) {
+            tProjectId = parts[0];
+            tDatasetId = parts[1];
+            tTableId = parts[2];
+          }
+        }
+
+        if (tProjectId && tDatasetId && tTableId) {
+          console.log(`Parsed table reference: ${tProjectId}.${tDatasetId}.${tTableId}`);
+          tableReferences.push({
+            projectId: tProjectId,
+            datasetId: tDatasetId,
+            tableId: tTableId,
+            schema: {
+              description: table.description || '',
+              fields: []
+            }
+          });
+        } else {
+          console.warn(`Could not parse FQN for table: ${table.name}, FQN: ${fqn}`);
         }
       });
     } else {
@@ -484,6 +508,18 @@ Do not explain. Output only the SQL query. Do not use markdown backticks.`;
 
     // Send structured response
     console.log('Sending response to frontend:', { replyLength: fullResponseText.length, hasChart: !!finalChart });
+
+    // If no text was extracted, provide helpful feedback
+    if (!fullResponseText || fullResponseText.trim().length === 0) {
+      fullResponseText = finalSql
+        ? `I executed a query but couldn't generate a natural language response.\n\n**SQL Query:**\n\`\`\`sql\n${finalSql}\n\`\`\``
+        : "I received your question but couldn't generate a response. This might be because:\n\n" +
+          "1. The table doesn't contain data relevant to your question\n" +
+          "2. The question requires data from a different table\n" +
+          "3. The Conversational Analytics API returned an unexpected format\n\n" +
+          "Try rephrasing your question or selecting additional related tables.";
+    }
+
     res.json({
       reply: fullResponseText,
       chart: finalChart,
