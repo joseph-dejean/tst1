@@ -1,17 +1,15 @@
 const { Firestore } = require('@google-cloud/firestore');
 
 // Lazy Firestore initialization to avoid blocking server startup
-// Uses FIRESTORE_PROJECT_ID if set, otherwise falls back to Cloud Run's default project (via ADC)
+// Auto-detects project from Cloud Run environment (GOOGLE_CLOUD_PROJECT is set automatically by Cloud Run)
 let firestore = null;
 const getFirestore = () => {
     if (!firestore) {
-        const config = {};
-        // Use FIRESTORE_PROJECT_ID for Firestore (separate from GOOGLE_CLOUD_PROJECT_ID used for Dataplex)
-        // If not set, Firestore will use ADC which defaults to Cloud Run's project
-        if (process.env.FIRESTORE_PROJECT_ID) {
-            config.projectId = process.env.FIRESTORE_PROJECT_ID;
-        }
-        firestore = new Firestore(config);
+        // Cloud Run automatically sets GOOGLE_CLOUD_PROJECT
+        // This ensures Firestore uses the same project as the Cloud Run service
+        const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID;
+        firestore = new Firestore(projectId ? { projectId } : {});
+        console.log(`Firestore initialized for project: ${projectId || 'auto-detected via ADC'}`);
     }
     return firestore;
 };

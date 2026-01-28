@@ -56,53 +56,53 @@ import {
  * @returns {JSX.Element} The rendered React component for the Overview tab.
  */
 
-const StringRenderer = ({ value }:any) => {
+const StringRenderer = ({ value }: any) => {
   // Check if the string contains HTML tags
   const isHtml = /<\/?[a-z][\s\S]*>/i.test(value);
   if (isHtml) {
     // If it's HTML, render it directly. CAUTION: This can be a security risk (XSS) if the HTML is from an untrusted source.
     return <div dangerouslySetInnerHTML={{ __html: value }} />;
   }
-  return <span style={{fontSize:"14px", textTransform:"capitalize", padding:"0px 5px"}}>{value}</span>;
+  return <span style={{ fontSize: "14px", textTransform: "capitalize", padding: "0px 5px" }}>{value}</span>;
 };
 
-const NumberRenderer = ({ value }:any) => {
-  return <span style={{fontSize:"14px"}}>{value}</span>;
+const NumberRenderer = ({ value }: any) => {
+  return <span style={{ fontSize: "14px" }}>{value}</span>;
 };
 
-const BooleanRenderer = ({ value }:any) => {
-  return value ? 
-    <span style={{fontSize:"14px"}}>TRUE</span> : 
-    <span style={{fontSize:"14px"}}>FALSE</span>;
+const BooleanRenderer = ({ value }: any) => {
+  return value ?
+    <span style={{ fontSize: "14px" }}>TRUE</span> :
+    <span style={{ fontSize: "14px" }}>FALSE</span>;
 };
 
-const ListRenderer = ({ values }:any) => {
+const ListRenderer = ({ values }: any) => {
   return (<>
-      {values.map((item:any) => (
-            <FieldRenderer field={item} />
-      ))}
+    {values.map((item: any) => (
+      <FieldRenderer field={item} />
+    ))}
   </>);
 };
 
 const StructRenderer = ({ fields }: any) => {
   return (
-    <Box style={{paddingTop:"10px"}}>
+    <Box style={{ paddingTop: "10px" }}>
       {Object.entries(fields).map(([key, value]) => (
         <div key={key}>
-            <span style={{fontWeight:"600", fontSize:"12px", textTransform:"capitalize"}}>{key.replace(/_/g, ' ')}:</span>
-            <FieldRenderer field={value} />
-        </div>   
+          <span style={{ fontWeight: "600", fontSize: "12px", textTransform: "capitalize" }}>{key.replace(/_/g, ' ')}:</span>
+          <FieldRenderer field={value} />
+        </div>
       ))}
-      <br/>
+      <br />
     </Box>
   );
 };
 
 // --- The Main Field Renderer (Component) ---
 
-const FieldRenderer = ({ field } : any) => {
+const FieldRenderer = ({ field }: any) => {
   if (!field || !field.kind) {
-    return <span style={{fontSize:"14px"}}>-</span>; 
+    return <span style={{ fontSize: "14px" }}>-</span>;
   }
 
   switch (field.kind) {
@@ -117,7 +117,7 @@ const FieldRenderer = ({ field } : any) => {
     case 'structValue':
       return <StructRenderer fields={field.structValue.fields} />;
     default:
-      return <span  style={{fontWeight:"500", fontSize:"14px"}}>Unknown kind: {field.kind}</span>;
+      return <span style={{ fontWeight: "500", fontSize: "14px" }}>Unknown kind: {field.kind}</span>;
   }
 };
 
@@ -130,97 +130,99 @@ interface ContractProps {
 // FilterDropdown component
 const Contract: React.FC<ContractProps> = ({ entry, css }) => {
 
-  const number = entry?.entryType?.split('/')[1];
+  if (!entry) return null;
 
-//   let schema = <Schema entry={filteredSchemaEntry || entry} sx={{width:"100%", borderTopRightRadius:"0px", borderTopLeftRadius:"0px"}} />;
-//   const schemaData = entry.aspects[`${number}.global.schema`]?.data?.fields?.fields?.listValue?.values || [];
+  const type = entry.entryType || '';
+  const typeParts = type.split('/');
+  const typePrefix = typeParts.length > 1 ? typeParts[1] : 'dataplex-types';
+
   let contracts = {
-    "refresh-cadence" : entry.aspects[`${number}.global.refresh-cadence`]?.data || []
+    "refresh-cadence": entry.aspects?.[`${typePrefix}.global.refresh-cadence`]?.data || []
   };
   //let usage = entry.aspects[`${number}.global.usage`]?.data.fields || {};
 
 
   return (
     <div style={{ width: '100%', ...css }}>
-        <Grid
-            container
-            spacing={0}
-            style={{marginBottom:"5px"}}
-        >
-            {/* left side  */}
-            <Grid size={12} sx={{ padding: "10px 5px 10px 0px" }}>
-                {/* Documentation Accordion */}
-                <Box sx={{ 
-                    //border: "1px solid #DADCE0", 
-                    //borderRadius: "8px", 
-                    marginTop: "10px", 
-                    padding: "16px",
-                    overflow: "hidden",
-                    backgroundColor: "#FFFFFF"
-                }}>
-                        <Box sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px"
-                        }}>
-                                <Typography 
-                                    component="span"
-                                    variant="heading2Medium"
-                            sx={{
-                                        fontWeight: 400, 
-                                        fontSize: "14px", 
-                                        lineHeight: "1.33em",
-                                        color: "#1F1F1F",
-                                    }}
-                                >
-                                Contract guarantees define the service level agreements and data quality commitments for this data product. These guarantees help consumers understand what to expect when using this data.
-                            </Typography>
-                            </Box>
-                        <Grid container spacing={4}>
-                    { Object.keys(contracts).map((key:string) => (
-                    // Grid item for each card, defining its responsive width
-                    <Grid
-                        size={3} // One-third width (3 columns) on medium screens (4 out of 12 columns)
-                        key={key}
-                        sx={{ marginTop: '16px' }}
-                    >
-                        <Box sx={{ 
-                                border: '1px solid #E0E0E0', 
-                                borderRadius: '16px',
-                                height: '100%',
-                                boxSizing: 'border-box',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                justifyContent: 'space-between'
-                            }}
-                        >
-                            <Box sx={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #E0E0E0', padding: '15px 20px' }}>
-                                <Typography variant="h6" sx={{ fontFamily: 'Google Sans', fontSize: '16px', fontWeight: 500, color: '#1F1F1F', textWrap: 'break-word', lineHeight:1.3, textTransform: 'capitalize' }}>
-                                    {key}
-                                </Typography>
-                            </Box>
-                            <Box sx={{display: 'flex', alignItems: 'center', padding: '15px', gap: 1 }}>
-                                
-                                <table>
-                                <tbody>
-                                    {Object.entries(contracts['refresh-cadence']).map(([key1, value]) => (
-                                    <tr key={key1} style={{padding:"15px", fontSize:"12px"}}>
-                                        <td style={{fontWeight:"400", textTransform:'capitalize', color:'#575757',fontSize:"14px"}}>{key1}</td>
-                                        <td style={{paddingLeft:"20px"}}>{`${value}`}</td>
-                                    </tr>
-                                    ))}
-                                </tbody>
-                                </table>
-                            </Box>
-                        </Box>
-                    </Grid>
-                    ))}
+      <Grid
+        container
+        spacing={0}
+        style={{ marginBottom: "5px" }}
+      >
+        {/* left side  */}
+        <Grid size={12} sx={{ padding: "10px 5px 10px 0px" }}>
+          {/* Documentation Accordion */}
+          <Box sx={{
+            //border: "1px solid #DADCE0", 
+            //borderRadius: "8px", 
+            marginTop: "10px",
+            padding: "16px",
+            overflow: "hidden",
+            backgroundColor: "#FFFFFF"
+          }}>
+            <Box sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px"
+            }}>
+              <Typography
+                component="span"
+                variant="heading2Medium"
+                sx={{
+                  fontWeight: 400,
+                  fontSize: "14px",
+                  lineHeight: "1.33em",
+                  color: "#1F1F1F",
+                }}
+              >
+                Contract guarantees define the service level agreements and data quality commitments for this data product. These guarantees help consumers understand what to expect when using this data.
+              </Typography>
+            </Box>
+            <Grid container spacing={4}>
+              {Object.keys(contracts).map((key: string) => (
+                // Grid item for each card, defining its responsive width
+                <Grid
+                  size={3} // One-third width (3 columns) on medium screens (4 out of 12 columns)
+                  key={key}
+                  sx={{ marginTop: '16px' }}
+                >
+                  <Box sx={{
+                    border: '1px solid #E0E0E0',
+                    borderRadius: '16px',
+                    height: '100%',
+                    boxSizing: 'border-box',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between'
+                  }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #E0E0E0', padding: '15px 20px' }}>
+                      <Typography variant="h6" sx={{ fontFamily: 'Google Sans', fontSize: '16px', fontWeight: 500, color: '#1F1F1F', textWrap: 'break-word', lineHeight: 1.3, textTransform: 'capitalize' }}>
+                        {key}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', padding: '15px', gap: 1 }}>
+
+                      <table>
+                        <tbody>
+                          {Object.entries(contracts['refresh-cadence']).map(([key1, value]) => (
+                            <tr key={key1} style={{ padding: "15px", fontSize: "12px" }}>
+                              <td style={{ fontWeight: "400", textTransform: 'capitalize', color: '#575757', fontSize: "14px" }}>{key1}</td>
+                              <td style={{ paddingLeft: "20px" }}>{`${value}`}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </Box>
+                  </Box>
                 </Grid>
-                            
-                </Box>
+              ))}
             </Grid>
+
+          </Box>
         </Grid>
-        
+      </Grid>
+
 
     </div>
   );

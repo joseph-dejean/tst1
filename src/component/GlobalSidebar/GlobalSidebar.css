@@ -28,22 +28,33 @@
 /* Logo Area */
 .sidebar-logo-container {
   width: 64px;
-  height: 48px;
+  height: 64px;
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  padding: 0;
-  margin-left: 32px;
-  gap: 10px;
+  justify-content: center;
+  padding: 4px 0;
+  margin-left: 0;
+  gap: 2px;
   cursor: pointer;
   box-sizing: border-box;
 }
 
 .logo-icon-only {
-  width: 32px;
-  height: 46px;
+  width: 28px;
+  height: 40px;
   object-fit: contain;
+}
+
+/* France Practice label */
+.sidebar-practice-label {
+  font-family: 'Google Sans', sans-serif;
+  font-weight: 500;
+  font-size: 8px;
+  color: #0B57D0;
+  white-space: nowrap;
+  text-align: center;
+  line-height: 1.2;
 }
 
 /* Menu Items Container */

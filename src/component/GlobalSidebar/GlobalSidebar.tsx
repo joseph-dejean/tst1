@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search } from '@mui/icons-material';
+import { Search, AdminPanelSettings } from '@mui/icons-material';
 import SidebarMenuItem from './SidebarMenuItem';
 import BrowsePopover from './BrowsePopover';
 import { useAccessRequest } from '../../contexts/AccessRequestContext';
@@ -64,6 +64,7 @@ const GlobalSidebar: React.FC<GlobalSidebarProps> = ({ isHomePage = false }) => 
             alt="Dataplex"
             className="logo-icon-only"
           />
+          <span className="sidebar-practice-label">France Practice</span>
         </div>
       )}
 
@@ -116,6 +117,24 @@ const GlobalSidebar: React.FC<GlobalSidebarProps> = ({ isHomePage = false }) => 
           label="Chat"
           isActive={location.pathname === '/chat-analytics'}
           onClick={() => navigate('/chat-analytics')}
+        />
+
+        {/* Access Management */}
+        <SidebarMenuItem
+          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 1L3 5V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V5L12 1ZM12 11.99H19C18.47 16.11 15.72 19.78 12 20.93V12H5V6.3L12 3.19V11.99Z" fill={['/admin-access', '/access-requests'].includes(location.pathname) ? '#0E4DCA' : '#5F6368'} />
+          </svg>}
+          label="Access"
+          isActive={['/admin-access', '/access-requests'].includes(location.pathname)}
+          onClick={() => navigate('/admin-access')}
+        />
+
+        {/* Admin Panel */}
+        <SidebarMenuItem
+          icon={<AdminPanelSettings sx={{ fontSize: 20, color: location.pathname === '/admin-panel' ? '#0E4DCA' : '#5F6368' }} />}
+          label="Admin"
+          isActive={location.pathname === '/admin-panel'}
+          onClick={() => navigate('/admin-panel')}
         />
       </div>
 
