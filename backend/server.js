@@ -1164,15 +1164,26 @@ app.post('/api/v1/batch-aspects', async (req, res) => {
  */
 app.get('/api/v1/aspect-types', async (req, res) => {
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
     const configuredLocation = process.env.GCP_LOCATION || 'us-central1';
 
     if (!projectId) {
+      console.error('[ASPECT-TYPES] No project ID configured');
       return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID must be set.' });
     }
 
-    // Define locations to check - include configured one and common defaults
-    const locationsToFetch = Array.from(new Set([configuredLocation, 'us-central1', 'europe-west1', 'global', 'us']));
+    // Define locations to check - include configured one and common defaults including EU
+    const locationsToFetch = Array.from(new Set([
+      configuredLocation,
+      'global',
+      'us-central1',
+      'us',
+      'europe-west1',
+      'europe-west2',
+      'europe-west3',
+      'europe-west4',
+      'eu'
+    ]));
 
     console.log(`[ASPECT-TYPES] Fetching from multiple locations: ${locationsToFetch.join(', ')}`);
 
@@ -1220,14 +1231,25 @@ app.get('/api/v1/aspect-types', async (req, res) => {
  */
 app.get('/api/v1/entry-list', async (req, res) => {
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
     const configuredLocation = process.env.GCP_LOCATION || 'us-central1';
 
     if (!projectId) {
+      console.error('[ENTRY-LIST] No project ID configured');
       return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID must be set.' });
     }
 
-    const locationsToFetch = Array.from(new Set([configuredLocation, 'us-central1', 'europe-west1', 'global', 'us']));
+    const locationsToFetch = Array.from(new Set([
+      configuredLocation,
+      'global',
+      'us-central1',
+      'us',
+      'europe-west1',
+      'europe-west2',
+      'europe-west3',
+      'europe-west4',
+      'eu'
+    ]));
     const auth = new AdcGoogleAuth();
     const dataplexClientv1 = new CatalogServiceClient({ auth: auth });
 
@@ -1880,7 +1902,7 @@ app.get('/api/v1/get-aspect', async (req, res) => {
 
 app.get('/api/v1/app-configs', async (req, res) => {
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
     const location = process.env.GCP_LOCATION || 'us-central1';
     // ADC Auth
     const auth = new AdcGoogleAuth();
@@ -1893,38 +1915,75 @@ app.get('/api/v1/app-configs', async (req, res) => {
       auth: auth,
     });
 
-    if (!projectId || !location) {
-      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
+    if (!projectId) {
+      console.error('[APP-CONFIGS] No project ID configured');
+      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID must be set.' });
     }
 
-    const parent = `projects/${projectId}/locations/${location}`;
-    const aspectQuery = `type=projects/dataplex-types/locations/global/entryTypes/aspecttype`
+    // Multi-region fetching for aspects - include EU regions
+    const locationsToFetch = [
+      location,
+      'global',
+      'us-central1',
+      'us',
+      'europe-west1',
+      'europe-west2',
+      'europe-west3',
+      'europe-west4',
+      'eu'
+    ];
 
-    // Construct the request for the Dataplex API
-    const request = {
-      // The name of the project and location to search within
-      name: parent,
-      query: aspectQuery,
-      pageSize: 999, // Limit the number of results returned
-      pageToken: '',
-    };
+    const aspectQuery = `type=projects/dataplex-types/locations/global/entryTypes/aspecttype`;
 
+    console.log(`[APP-CONFIGS] Fetching aspects from multiple locations: ${locationsToFetch.join(', ')}`);
 
-    let projects = aspects = [];
+    let projects = [];
+    let aspects = [];
     let configData = {};
+
     try {
-      const [aspectsList, projectList, currentProject, defaultConfigData] = await Promise.all([
-        dataplexClientv1.searchEntries(request, { autoPaginate: false }),
+      // Fetch aspects from all locations in parallel
+      const aspectPromises = locationsToFetch.map(async (loc) => {
+        try {
+          const parent = `projects/${projectId}/locations/${loc}`;
+          const request = {
+            name: parent,
+            query: aspectQuery,
+            pageSize: 999,
+            pageToken: '',
+          };
+          const [aspectsList] = await dataplexClientv1.searchEntries(request, { autoPaginate: false });
+          console.log(`[APP-CONFIGS] Found ${aspectsList ? aspectsList.length : 0} aspects in ${loc}`);
+          return aspectsList || [];
+        } catch (err) {
+          console.warn(`[APP-CONFIGS] Failed to fetch aspects from ${loc}:`, err.message);
+          return [];
+        }
+      });
+
+      const [aspectResults, projectList, currentProject, defaultConfigData] = await Promise.all([
+        Promise.all(aspectPromises),
         resourceManagerClientv1.searchProjects({ pageSize: 2000 }, { autoPaginate: false }),
         resourceManagerClientv1.getProject({ name: `projects/${projectId}` }),
-        fs.readFile(dataFilePath, 'utf8') || {}
+        fs.readFile(dataFilePath, 'utf8').catch(() => '{}')
       ]);
-      aspects = aspectsList[0] || [];
+
+      // Merge and deduplicate aspects from all regions
+      const allAspects = aspectResults.flat();
+      const uniqueAspectsMap = new Map();
+      allAspects.forEach(aspect => {
+        if (aspect && aspect.name && !uniqueAspectsMap.has(aspect.name)) {
+          uniqueAspectsMap.set(aspect.name, aspect);
+        }
+      });
+      aspects = Array.from(uniqueAspectsMap.values());
+      console.log(`[APP-CONFIGS] Total unique aspects: ${aspects.length}`);
+
       let p = projectList[0] ? projectList[0].filter(pr => pr.projectId !== projectId) : [];
       projects = [currentProject[0], ...p];
       configData = defaultConfigData ? JSON.parse(defaultConfigData) : {};
     } catch (err) {
-      console.error('Error listing projects for app config:', err);
+      console.error('[APP-CONFIGS] Error fetching configs:', err);
     }
 
     const reduceAspect = ({ name, fullyQualifiedName, entrySource, entryType }) => ({ name, fullyQualifiedName, entrySource, entryType });
