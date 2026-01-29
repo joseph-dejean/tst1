@@ -181,8 +181,17 @@ app.post('/api/v1/chat', async (req, res) => {
     }
 
     // Use Conversational Analytics API with inline context for BigQuery tables
-    const projectId_env = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const projectId_env = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
     const location = process.env.GCP_LOCATION || 'europe-west1';
+
+    if (!projectId_env) {
+      console.error('[CHAT] CRITICAL: No project ID found in environment variables!');
+      return res.status(200).json({
+        reply: "Configuration error: The server is not properly configured with a Google Cloud Project ID. Please contact your administrator.",
+        error: true
+      });
+    }
+
     const chatUrl = `https://geminidataanalytics.googleapis.com/v1beta/projects/${projectId_env}/locations/${location}:chat`;
 
     // Build BigQuery data source reference
@@ -2074,8 +2083,11 @@ app.post('/api/v1/send-feedback', async (req, res) => {
 
 app.get('/api/v1/get-projects', async (req, res) => {
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
     const location = process.env.GCP_LOCATION || 'us-central1';
+
+    console.log(`[GET-PROJECTS] Using Project: ${projectId}, Location: ${location}`);
+
     // ADC Auth
     const auth = new AdcGoogleAuth();
 
@@ -2083,8 +2095,10 @@ app.get('/api/v1/get-projects', async (req, res) => {
       auth: auth,
     });
 
-    if (!projectId || !location) {
-      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
+    if (!projectId) {
+      console.error('[GET-PROJECTS] No project ID configured');
+      // Return empty array instead of error to prevent UI crash
+      return res.json([]);
     }
 
     let projects = [];
@@ -2092,7 +2106,9 @@ app.get('/api/v1/get-projects', async (req, res) => {
       const [projectList] = await resourceManagerClientv1.searchProjects();
       projects = projectList || [];
     } catch (err) {
-      console.error('Error listing projects for app config:', err);
+      console.error('[GET-PROJECTS] Error listing projects:', err.message);
+      // Return empty array instead of crashing
+      return res.json([]);
     }
     res.json(projects.map(({ projectId, name, displayName }) => ({ projectId, name, displayName })));
 
@@ -2452,8 +2468,20 @@ app.post('/api/v1/search', async (req, res) => {
 
     // Fetch ALL results (Service Account Scope)
     const client = new CatalogServiceClient();
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
     const location = 'global';
+
+    if (!projectId) {
+      console.error('[SEARCH] CRITICAL: No project ID found in environment variables!');
+      return res.status(500).json({
+        success: false,
+        error: 'Server configuration error: GOOGLE_CLOUD_PROJECT_ID is not set.',
+        data: [],
+        results: []
+      });
+    }
+
+    console.log(`[SEARCH] Using Project: ${projectId}, Location: ${location}`);
 
     const request = {
       name: `projects/${projectId}/locations/${location}`,
