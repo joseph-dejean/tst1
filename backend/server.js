@@ -3518,6 +3518,7 @@ app.use((err, req, res, next) => {
 // Start the server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server listening on port ${PORT}`);
+  console.log('--- DEPLOYMENT_VERSION: v3.2 - Troubleshooting Check ---');
   console.log('API Endpoints:');
   console.log(`  POST /api/v1/check-iam-role`);
   console.log(`  POST /api/v1/search`);

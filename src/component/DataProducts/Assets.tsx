@@ -151,6 +151,8 @@ const Assets: React.FC<AssetsProps> = ({ entry, css, onAssetPreviewChange }) => 
   const number = entry?.entryType?.split('/')[1];
 
   useEffect(() => {
+    console.log('--- FRONTEND_ASSETS_VERSION: 3.2 ---');
+    console.log('Assets Entry Name:', entry?.name);
     console.log('num', number);
     if (dataProductAssets.length === 0) return;
     if (dataProductAssetsStatus !== 'succeeded') return;
