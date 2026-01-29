@@ -60,10 +60,21 @@ interface ChatTabProps {
   tables?: any[]; // Optional list of tables for Data Products/Datasets
 }
 
+interface ChartData {
+  chartType?: string;
+  data?: any[];
+  query?: {
+    instructions?: string;
+    [key: string]: any;
+  };
+  [key: string]: any;
+}
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  chart?: ChartData;
 }
 
 const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {

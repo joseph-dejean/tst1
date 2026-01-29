@@ -179,13 +179,22 @@ const Assets: React.FC<AssetsProps> = ({ entry, css, onAssetPreviewChange }) => 
         return;
       }
 
+      // Extract project ID and location from the entry name (e.g., projects/{proj}/locations/{loc}/...)
+      const entryParts = entry?.name?.split('/') || [];
+      const projectIndex = entryParts.indexOf('projects');
+      const locationIndex = entryParts.indexOf('locations');
+      const projectId = projectIndex !== -1 ? entryParts[projectIndex + 1] : import.meta.env.VITE_GOOGLE_PROJECT_ID;
+      const location = locationIndex !== -1 ? entryParts[locationIndex + 1] : 'global';
+
+      console.log('[Assets] Using project:', projectId, 'location:', location);
+
       let searchTerm = 'fully_qualified_name=(' + a.join(' | ');
       searchTerm += ')';
       const requestResourceData = {
         query: searchTerm,
       }
       axios.post(
-        `https://dataplex.googleapis.com/v1/projects/${import.meta.env.VITE_GOOGLE_PROJECT_ID}/locations/global:searchEntries`,
+        `https://dataplex.googleapis.com/v1/projects/${projectId}/locations/${location}:searchEntries`,
         requestResourceData,
         {
           headers: {
@@ -200,9 +209,32 @@ const Assets: React.FC<AssetsProps> = ({ entry, css, onAssetPreviewChange }) => 
         setAssetListLoader(true);
       }).catch((error: any) => {
         console.error('Error fetching data product assets details:', error);
+        // Try with 'global' location as fallback
+        if (location !== 'global') {
+          console.log('[Assets] Retrying with global location...');
+          axios.post(
+            `https://dataplex.googleapis.com/v1/projects/${projectId}/locations/global:searchEntries`,
+            requestResourceData,
+            {
+              headers: {
+                Authorization: `Bearer ${user?.token}`,
+                'Content-Type': 'application/json',
+              },
+            }
+          ).then((response: any) => {
+            console.log('[Assets] Fallback succeeded:', response.data);
+            setDataProductsAssetsList(response.data.results || []);
+            setAssetListLoader(true);
+          }).catch((err: any) => {
+            console.error('[Assets] Fallback also failed:', err);
+            setAssetListLoader(true);
+          });
+        } else {
+          setAssetListLoader(true);
+        }
       });
     }
-  }, [dataProductAssets]);
+  }, [dataProductAssets, entry?.name]);
 
 
   // useEffect(() => {
