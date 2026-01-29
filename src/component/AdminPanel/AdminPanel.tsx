@@ -262,7 +262,9 @@ const AdminPanel = () => {
         hasRole: user?.hasRole,
         roles: user?.roles,
         permissions: user?.permissions,
-        appConfig: appConfig
+        appConfig: appConfig,
+        role: user?.role,
+        isAdmin: user?.isAdmin ?? false
       };
 
       updateUser(user?.token, userData);

@@ -55,6 +55,8 @@ describe('AdminPanel', () => {
     hasRole: true,
     roles: [],
     permissions: [],
+    role: 'admin',
+    isAdmin: true,
     appConfig: {
       aspects: [
         {

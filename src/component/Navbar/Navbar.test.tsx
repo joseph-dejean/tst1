@@ -52,6 +52,8 @@ describe('Navbar', () => {
     hasRole: true,
     roles: [],
     permissions: [],
+    role: 'user',
+    isAdmin: false,
     appConfig: {
       aspects: {},
       projects: {},

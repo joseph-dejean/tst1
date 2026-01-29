@@ -761,78 +761,14 @@ app.post('/api/v1/check-iam-role', async (req, res) => {
 });
 
 /**
- * POST /api/v1/search
- * A protected endpoint to search for entries in Google Cloud Dataplex.
- * The user must be authenticated.
- *
- * Request Body:
- * {
- * "query": "The search query string for Dataplex. Supports structured search like 'type=TABLE name:customer'."
- * }
+ * OLD SEARCH ENDPOINT - COMMENTED OUT
+ * This was superseded by the new search endpoint with SUPER_ADMIN bypass and IAM filtering
+ * See: POST /api/v1/search below (around line 2453)
  */
-app.post('/api/v1/search', async (req, res) => {
-  const { query, pageSize, pageToken } = req.body;
-
-  // Validate that a search query was provided
-  if (!query) {
-    return res.status(400).json({ message: 'Bad Request: A "query" field is required in the request body.' });
-  }
-
-  try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-    const location = process.env.GCP_LOCATION;
-    // const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
-    // ADC Auth
-    const auth = new AdcGoogleAuth();
-
-    const dataplexClientv1 = new CatalogServiceClient({
-      auth: auth,
-    });
-
-
-    if (!projectId || !location) {
-      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
-    }
-
-    // Construct the request for the Dataplex API
-    const request = {
-      // The name of the project and location to search within
-      name: `projects/${projectId}/locations/${location}`,
-      query: query,
-      pageSize: pageSize ?? 20,
-      pageToken: pageToken ?? '',
-    };
-
-    console.log('Performing Dataplex search with query:', query);
-
-    // Call the searchEntries method of the Dataplex client
-    const [data, requestData, response] = await dataplexClientv1.searchEntries(request, { autoPaginate: false });
-
-    // Fetch full entry for each result to get aspects (concurrency limited to 10)
-    const resultsWithAspects = await Promise.all(data.map(async (result) => {
-      try {
-        // Get the full entry to include aspects
-        const [entry] = await dataplexClientv1.getEntry({
-          name: result.dataplexEntry.name,
-          view: 'FULL'
-        });
-        return { ...result, dataplexEntry: entry };
-      } catch (err) {
-        console.warn(`Failed to fetch full entry for ${result.dataplexEntry.name}:`, err.message);
-        return result;
-      }
-    }));
-
-    // Send the search results back to the client
-    res.json({ data: resultsWithAspects, requestData: requestData, results: response });
-
-  } catch (error) {
-    console.error('Error during Dataplex search:', error);
-    // Return a generic error message to the client
-    res.status(500).json({ message: 'An error occurred while searching Dataplex.', details: error.message });
-  }
-});
+// app.post('/api/v1/search', async (req, res) => {
+//   // OLD HANDLER - DISABLED. The new handler with permission filtering is used instead.
+//   // See the second /api/v1/search endpoint below.
+// });
 
 /**
  * POST /api/aspects
@@ -2455,19 +2391,30 @@ app.post('/api/v1/search', async (req, res) => {
     const { query, pageSize, pageToken } = req.body;
     const userEmail = req.headers['x-user-email'];
 
+    // DEBUG: Log all incoming headers
+    console.log('======== [SEARCH DEBUG] ========');
+    console.log('[SEARCH] Query:', query);
+    console.log('[SEARCH] x-user-email header:', userEmail);
+    console.log('[SEARCH] Authorization header:', req.headers.authorization ? 'Present (Bearer...)' : 'MISSING');
+    console.log('[SEARCH] All headers:', JSON.stringify(Object.keys(req.headers), null, 2));
+
     if (!userEmail) {
       // If no user email, we can't filter, so strictly return empty or error
-      // returning empty is safer
+      console.log('[SEARCH] WARNING: No x-user-email header - returning empty results');
       return res.status(200).json({ results: [], totalSize: 0, nextPageToken: '' });
     }
 
     // Check if user is SUPER_ADMIN - they bypass all access checks
-    // Check if user is SUPER_ADMIN - they bypass all access checks
     const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL;
-    // Fix: Use 'includes' instead of strict equality to handle prefixes like accounts.google.com:
-    const isSuperAdmin = SUPER_ADMIN_EMAIL && userEmail.toLowerCase().includes(SUPER_ADMIN_EMAIL.toLowerCase());
+    console.log('[SEARCH] SUPER_ADMIN_EMAIL from env:', SUPER_ADMIN_EMAIL);
+    console.log('[SEARCH] User email from header:', userEmail);
+
+    // Use case-insensitive comparison
+    const isSuperAdmin = SUPER_ADMIN_EMAIL && userEmail.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+    console.log('[SEARCH] Is Super Admin?', isSuperAdmin);
+
     if (isSuperAdmin) {
-      console.log(`MATCHED ADMIN: [${userEmail}] matches [${SUPER_ADMIN_EMAIL}] - bypassing all access checks`);
+      console.log(`[SEARCH] ✅ SUPER_ADMIN MATCH: [${userEmail}] === [${SUPER_ADMIN_EMAIL}] - bypassing all access checks`);
     }
 
     // 1. Perform Search via Dataplex Client (using ADC)

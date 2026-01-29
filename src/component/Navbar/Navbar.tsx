@@ -132,7 +132,9 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
         hasRole: user.hasRole ?? false,
         roles: user.roles ?? [],
         permissions: user.permissions ?? [],
-        appConfig: {}
+        appConfig: {},
+        role: user.role ?? null,
+        isAdmin: user.isAdmin ?? false
       };
       updateUser(user.token, userData);
     }

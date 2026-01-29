@@ -36,7 +36,7 @@ export interface AccessRequest {
   projectId: string;
   gcpProjectId: string;
   projectAdmin: string[];
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
   submittedAt: string;
   reviewedBy: string | null;
   reviewedAt: string | null;

@@ -63,7 +63,7 @@ const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName,
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [contactEmails, setContactEmails] = useState<string[]>([]);
-  const [success, setSuccess] = useState(false);
+  const [_success, setSuccess] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
   const { user } = useAuth();
   const userState = useSelector((state: any) => state.user);
   // console.log(userState.token);
