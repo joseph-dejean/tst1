@@ -473,9 +473,13 @@ app.post('/api/v1/chat', async (req, res) => {
       }
     }
 
-    res.status(500).json({
-      error: "Failed to generate response from Conversational Analytics API.",
-      details: err.message
+    // Return a graceful fallback instead of crashing
+    res.status(200).json({
+      reply: "I'm sorry, but I couldn't process your request at this time. The AI service may be temporarily unavailable. Please try again later or contact your administrator if the issue persists.",
+      chart: null,
+      sql: null,
+      error: true,
+      errorDetails: err.message
     });
   }
 });
@@ -3410,6 +3414,18 @@ app.get('/', (req, res) => {
 // For any other routes, serve the React index.html
 app.get('{*path}', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+// ============================================
+// GLOBAL ERROR HANDLER (Catch-all for unhandled exceptions)
+// ============================================
+app.use((err, req, res, next) => {
+  console.error('[GLOBAL ERROR HANDLER] Unhandled Server Error:', err);
+  res.status(500).json({
+    success: false,
+    error: 'Internal Server Error',
+    details: err.message || 'An unexpected error occurred'
+  });
 });
 
 // Start the server
