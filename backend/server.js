@@ -1730,8 +1730,8 @@ app.get('/api/v1/projects', async (req, res) => {
  */
 app.get('/api/v1/tag-templates', async (req, res) => {
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-    const location = process.env.GCP_LOCATION;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    const location = process.env.GCP_LOCATION || 'us-central1';
 
     if (!projectId || !location) {
       return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
@@ -1867,8 +1867,8 @@ app.get('/api/v1/get-aspect', async (req, res) => {
 
 app.get('/api/v1/app-configs', async (req, res) => {
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-    const location = process.env.GCP_LOCATION;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    const location = process.env.GCP_LOCATION || 'us-central1';
     // ADC Auth
     const auth = new AdcGoogleAuth();
 
@@ -2070,8 +2070,8 @@ app.post('/api/v1/send-feedback', async (req, res) => {
 
 app.get('/api/v1/get-projects', async (req, res) => {
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-    const location = process.env.GCP_LOCATION;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    const location = process.env.GCP_LOCATION || 'us-central1';
     // ADC Auth
     const auth = new AdcGoogleAuth();
 
@@ -2105,8 +2105,8 @@ app.get('/api/v1/get-projects', async (req, res) => {
 app.get('/api/v1/data-scans', async (req, res) => {
   const { project } = req.query;
   try {
-    const projectId = (project != '' && project != null && project != "undefined") ? project : process.env.GOOGLE_CLOUD_PROJECT_ID;
-    const location = process.env.GCP_LOCATION;
+    const projectId = (project != '' && project != null && project != "undefined") ? project : (process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT);
+    const location = process.env.GCP_LOCATION || 'us-central1';
 
     if (!projectId || !location) {
       return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
@@ -2143,8 +2143,8 @@ app.get('/api/v1/data-quality-scan-jobs/:scanId', async (req, res) => {
   }
 
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-    const location = process.env.GCP_LOCATION;
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    const location = process.env.GCP_LOCATION || 'us-central1';
 
     if (!projectId || !location) {
       return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
