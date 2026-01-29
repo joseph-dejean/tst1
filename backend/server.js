@@ -2391,161 +2391,84 @@ app.post('/api/v1/search', async (req, res) => {
     const { query, pageSize, pageToken } = req.body;
     const userEmail = req.headers['x-user-email'];
 
-    // DEBUG: Log all incoming headers
+    // ======== DEBUG LOGGING ========
     console.log('======== [SEARCH DEBUG] ========');
     console.log('[SEARCH] Query:', query);
     console.log('[SEARCH] x-user-email header:', userEmail);
     console.log('[SEARCH] Authorization header:', req.headers.authorization ? 'Present (Bearer...)' : 'MISSING');
-    console.log('[SEARCH] All headers:', JSON.stringify(Object.keys(req.headers), null, 2));
 
-    if (!userEmail) {
-      // If no user email, we can't filter, so strictly return empty or error
-      console.log('[SEARCH] WARNING: No x-user-email header - returning empty results');
-      return res.status(200).json({ results: [], totalSize: 0, nextPageToken: '' });
-    }
-
-    // Check if user is SUPER_ADMIN - they bypass all access checks
+    // ======== SUPER_ADMIN CHECK (loose matching with 'includes') ========
     const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL;
     console.log('[SEARCH] SUPER_ADMIN_EMAIL from env:', SUPER_ADMIN_EMAIL);
     console.log('[SEARCH] User email from header:', userEmail);
 
-    // Use case-insensitive comparison
-    const isSuperAdmin = SUPER_ADMIN_EMAIL && userEmail.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
-    console.log('[SEARCH] Is Super Admin?', isSuperAdmin);
+    // Use 'includes' for loose matching per user request
+    const isSuperAdmin = SUPER_ADMIN_EMAIL && userEmail &&
+      userEmail.toLowerCase().includes(SUPER_ADMIN_EMAIL.toLowerCase());
+    console.log('[SEARCH] Is Super Admin (loose match)?', isSuperAdmin);
 
-    if (isSuperAdmin) {
-      console.log(`[SEARCH] ✅ SUPER_ADMIN MATCH: [${userEmail}] === [${SUPER_ADMIN_EMAIL}] - bypassing all access checks`);
-    }
-
-    // 1. Perform Search via Dataplex Client (using ADC)
+    // ======== FETCH ALL RESULTS FROM DATAPLEX (Service Account) ========
     const client = new CatalogServiceClient();
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
     const location = 'global';
 
     const request = {
       name: `projects/${projectId}/locations/${location}`,
-      query: query,
+      query: query || '*', // Default to all if no query
       pageSize: pageSize || 20,
       pageToken: pageToken
     };
 
-    // Use searchEntries (client library) or REST fallback?
-    // The client library returns an iterable.
-    // Let's use the REST API style via the client if possible, or basic iteration.
-    // client.searchEntries return [defs, request, response]
+    console.log('[SEARCH] Fetching from Dataplex with request:', JSON.stringify(request));
+
     const [searchResults, searchRequest, searchResponse] = await client.searchEntries(request);
 
-    // 2. Filter Results based on IAM
-    // SUPER_ADMIN bypasses all access checks
-    if (isSuperAdmin) {
-      const annotatedResults = searchResults.map(entry => ({ ...entry, userHasAccess: true }));
-      return res.json({
-        results: annotatedResults,
-        nextPageToken: searchResponse.nextPageToken,
-        totalSize: searchResponse.totalSize
-      });
-    }
+    console.log('[SEARCH] Raw results count:', searchResults ? searchResults.length : 0);
 
-    // We need to check if 'userEmail' has access to each result.
-    // Optimization: Check Project Level Roles first.
-    // If user has 'roles/viewer', 'roles/editor', 'roles/owner', 'roles/bigquery.dataViewer' on the project, they see everything.
+    // ======== ANNOTATE RESULTS - NEVER FILTER ========
+    // Per user request: DO NOT FILTER. Return ALL results with userHasAccess flag.
+    // If admin: userHasAccess = true
+    // If not admin: userHasAccess = false (default to locked, no IAM check for now)
 
-    let hasProjectLevelAccess = false;
-    try {
-      console.log(`[SEARCH] Checking access for user: ${userEmail} on project: ${projectId}`);
-      const isOwner = await verifyUserAccess(projectId, userEmail, 'roles/owner');
-      const isEditor = await verifyUserAccess(projectId, userEmail, 'roles/editor');
-      const isViewer = await verifyUserAccess(projectId, userEmail, 'roles/viewer');
-      const isBqViewer = await verifyUserAccess(projectId, userEmail, 'roles/bigquery.dataViewer');
-      const isBqAdmin = await verifyUserAccess(projectId, userEmail, 'roles/bigquery.admin');
-
-      console.log(`[SEARCH] Role checks - Owner:${isOwner}, Editor:${isEditor}, Viewer:${isViewer}, BQ Viewer:${isBqViewer}, BQ Admin:${isBqAdmin}`);
-      hasProjectLevelAccess = isOwner || isEditor || isViewer || isBqViewer || isBqAdmin;
-      console.log(`[SEARCH] User ${userEmail} Project Level Access: ${hasProjectLevelAccess}`);
-    } catch (e) {
-      console.warn('[SEARCH] Project level access check failed', e);
-    }
-
-    let annotatedResults = [];
-
-    if (hasProjectLevelAccess) {
-      annotatedResults = searchResults.map(entry => ({ ...entry, userHasAccess: true }));
-    } else {
-      // Check individual resources
-      // Parallelize checks
-      const checks = searchResults.map(async (entry) => {
-        try {
-          // Entry structure: { linkedResource: '//bigquery.googleapis.com/projects/p/datasets/d/tables/t', ... }
-          const resource = entry.linkedResource;
-          if (!resource || !resource.startsWith('//bigquery.googleapis.com/')) {
-            return { ...entry, userHasAccess: false };
-          }
-
-          // Extract Dataset ID from: //bigquery.googleapis.com/projects/{project}/datasets/{dataset}/tables/{table}
-          // Or just //bigquery.googleapis.com/projects/{project}/datasets/{dataset}
-          const parts = resource.split('/');
-          const datasetIndex = parts.indexOf('datasets');
-          if (datasetIndex === -1) return null;
-
-          const datasetId = parts[datasetIndex + 1];
-          // We can use the BigQuery client to check access to the dataset
-          const bq = new BigQuery();
-          const dataset = bq.dataset(datasetId);
-
-          // Try to get metadata. If user (we assume Server logic??) 
-          // WAIT. The Server runs as ADC (Admin). It ALWAYS has access.
-          // We need to check if the *USER* has access.
-          // We can't use `dataset.get()` because that uses Server Credentials.
-          // We need IAM policy of the dataset.
-
-          const [policy] = await dataset.getIamPolicy();
-          // Check binding
-          const userMember = `user:${userEmail}`;
-          const hasAccess = policy.bindings.some(binding => {
-            const role = binding.role;
-            // Basic roles or BQ specific roles
-            const meaningfulRoles = [
-              'roles/bigquery.dataViewer',
-              'roles/bigquery.dataEditor',
-              'roles/bigquery.dataOwner',
-              'roles/bigquery.admin',
-              'roles/viewer', 'roles/editor', 'roles/owner'
-            ];
-            return meaningfulRoles.includes(role) && binding.members.includes(userMember);
-          });
-
-          return { ...entry, userHasAccess: hasAccess };
-
-        } catch (err) {
-          console.warn(`[SEARCH] Access check error for ${entry.fullyQualifiedName}:`, err);
-          return { ...entry, userHasAccess: false };
-        }
-      });
-
-      annotatedResults = await Promise.all(checks);
-    }
-    const filteredResults = annotatedResults;
-
-    // searchResponse.totalSize is for the *unfiltered* results.
-    // We should probably return the filtered count, but pagination breaks if we filter.
-    // For now, we return valid next page token (so they can fetch more) but only show what they can see.
-    // Note: If we filter out all 20 items, the UI will show empty page but might have "next" button.
-
-    // Construct response matching frontend expectation
-    // Frontend expects: { results: [...], nextPageToken: ... }
-    // Actually frontend maps this in `resourcesSlice`.
-    // searchResponse is the raw protobuf response? 
-    // client.searchEntries returns [SearchResult[], ..., ...]
-
-    res.json({
-      results: filteredResults,
-      nextPageToken: searchResponse.nextPageToken,
-      totalSize: searchResponse.totalSize // Approximate
+    const annotatedResults = (searchResults || []).map(entry => {
+      // If super admin, grant access to everything
+      if (isSuperAdmin) {
+        return { ...entry, userHasAccess: true };
+      }
+      // For non-admins, default to locked (no IAM check per user request)
+      return { ...entry, userHasAccess: false };
     });
+
+    console.log('[SEARCH] Annotated results count:', annotatedResults.length);
+    console.log('[SEARCH] Sample result access flags:', annotatedResults.slice(0, 3).map(r => ({
+      name: r.fullyQualifiedName || r.name,
+      userHasAccess: r.userHasAccess
+    })));
+
+    // ======== RETURN FULL LIST (NEVER FILTER OUT) ========
+    const response = {
+      success: true,
+      data: annotatedResults,
+      results: annotatedResults, // Also include as 'results' for backwards compatibility
+      nextPageToken: searchResponse?.nextPageToken || '',
+      totalSize: searchResponse?.totalSize || annotatedResults.length
+    };
+
+    console.log('[SEARCH] Response totalSize:', response.totalSize);
+    console.log('[SEARCH] Response has data:', response.data.length > 0);
+
+    res.json(response);
 
   } catch (error) {
     console.error('[SEARCH] Error:', error);
-    res.status(500).json({ message: 'Search failed', details: error.message });
+    // Return consistent error format
+    res.status(500).json({
+      success: false,
+      data: [],
+      results: [],
+      message: 'Search failed',
+      error: error.message
+    });
   }
 });
 
@@ -2836,46 +2759,83 @@ app.get('/api/v1/access-requests', async (req, res) => {
  */
 app.post('/api/v1/access-request/update', async (req, res) => {
   try {
-    const { requestId, status, reviewerEmail, adminNote } = req.body;
+    // ======== DEBUG LOGGING ========
+    console.log('======== [ACCESS-REQUEST UPDATE DEBUG] ========');
+    console.log('[UPDATE] Raw body:', JSON.stringify(req.body, null, 2));
+    console.log('[UPDATE] Headers x-user-email:', req.headers['x-user-email']);
+    console.log('[UPDATE] Headers authorization:', req.headers.authorization ? 'Present' : 'MISSING');
 
-    if (!requestId || !status) {
-      return res.status(400).json({ success: false, error: 'Request ID and status are required' });
+    // FLEXIBLE FIELD NAMES: Accept multiple field name variations
+    const requestId = req.body.requestId || req.body.id || req.body.request_id;
+    const status = req.body.status || req.body.newStatus || req.body.new_status;
+    const reviewerEmail = req.body.reviewerEmail || req.body.reviewer_email || req.headers['x-user-email'];
+    const adminNote = req.body.adminNote || req.body.admin_note || req.body.note || '';
+
+    console.log('[UPDATE] Resolved values - requestId:', requestId, 'status:', status, 'reviewerEmail:', reviewerEmail);
+
+    if (!requestId) {
+      console.log('[UPDATE] ERROR: No request ID found in body. Tried: requestId, id, request_id');
+      return res.status(400).json({ success: false, error: 'Request ID is required. Use: requestId, id, or request_id' });
     }
 
-    if (!['approved', 'rejected', 'APPROVED', 'REJECTED'].includes(status)) {
-      return res.status(400).json({ success: false, error: 'Status must be either "approved" or "rejected"' });
+    if (!status) {
+      console.log('[UPDATE] ERROR: No status found in body. Tried: status, newStatus, new_status');
+      return res.status(400).json({ success: false, error: 'Status is required. Use: status, newStatus, or new_status' });
+    }
+
+    // Normalize status to uppercase
+    const normalizedStatus = status.toUpperCase();
+    if (!['APPROVED', 'REJECTED', 'PENDING'].includes(normalizedStatus)) {
+      console.log('[UPDATE] ERROR: Invalid status value:', status);
+      return res.status(400).json({ success: false, error: 'Status must be APPROVED, REJECTED, or PENDING' });
     }
 
     // Get the full request first
     const fullRequest = await getAccessRequestById(requestId);
+    console.log('[UPDATE] Found request:', fullRequest ? 'Yes' : 'No');
+
     if (!fullRequest) {
       return res.status(404).json({ success: false, error: 'Access request not found' });
     }
 
-    // Check if reviewer is admin for this project
-    const isAdmin = await adminService.isProjectAdmin(reviewerEmail, fullRequest.gcpProjectId);
-    if (!isAdmin) {
-      // For backwards compatibility, also check the old role system
-      const userRole = req.headers['x-user-role'] || 'user';
-      if (userRole !== 'admin' && userRole !== 'manager') {
-        return res.status(403).json({ success: false, error: 'Not authorized to approve/reject this request' });
+    // SUPER_ADMIN bypass check
+    const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL;
+    const isSuperAdmin = SUPER_ADMIN_EMAIL && reviewerEmail &&
+      reviewerEmail.toLowerCase().includes(SUPER_ADMIN_EMAIL.toLowerCase());
+
+    console.log('[UPDATE] SUPER_ADMIN_EMAIL:', SUPER_ADMIN_EMAIL);
+    console.log('[UPDATE] Is Super Admin?:', isSuperAdmin);
+
+    // Check if reviewer is admin (with SUPER_ADMIN bypass)
+    if (!isSuperAdmin) {
+      const isAdmin = await adminService.isProjectAdmin(reviewerEmail, fullRequest.gcpProjectId);
+      console.log('[UPDATE] Is Project Admin?:', isAdmin);
+
+      if (!isAdmin) {
+        // For backwards compatibility, also check the old role system
+        const userRole = req.headers['x-user-role'] || 'user';
+        if (userRole !== 'admin' && userRole !== 'manager') {
+          console.log('[UPDATE] Not authorized - userRole:', userRole);
+          return res.status(403).json({ success: false, error: 'Not authorized to approve/reject this request' });
+        }
       }
     }
 
     // SIMPLIFIED LOGIC: Only update Firestore status (no IAM, no notifications)
-    console.log(`Updating request ${requestId} to status ${status} (No IAM action)`);
+    console.log(`[UPDATE] Updating request ${requestId} to status ${normalizedStatus}`);
 
     // Update the request in Firestore
-    const updatedRequest = await updateAccessRequestStatus(requestId, status, adminNote, reviewerEmail);
+    const updatedRequest = await updateAccessRequestStatus(requestId, normalizedStatus, adminNote, reviewerEmail);
+    console.log('[UPDATE] Update successful:', updatedRequest ? 'Yes' : 'No');
 
     return res.status(200).json({
       success: true,
-      message: `Access request updated to ${status} successfully`,
+      message: `Access request updated to ${normalizedStatus} successfully`,
       data: updatedRequest
     });
 
   } catch (error) {
-    console.error('Error updating access request:', error);
+    console.error('[UPDATE] Error updating access request:', error);
     return res.status(500).json({
       success: false,
       error: 'Internal server error',

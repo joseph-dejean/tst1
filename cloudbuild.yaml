@@ -56,6 +56,8 @@ steps:
       - 'GCP_REGION=${_GCP_REGION}'
       - '--set-env-vars'
       - 'VITE_GOOGLE_CLIENT_SECRET=${_CLIENT_SECRET}'
+      - '--set-env-vars'
+      - 'SUPER_ADMIN_EMAIL=${_ADMIN_EMAIL}'
     id: 'deploy-cloud-run'
 
 # Substitution variables (set these in Cloud Build triggers)

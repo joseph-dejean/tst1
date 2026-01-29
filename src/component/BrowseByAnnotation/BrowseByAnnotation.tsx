@@ -142,8 +142,19 @@ const BrowseByAnnotation = () => {
             headers: { Authorization: `Bearer ${id_token}` }
           });
 
-          const aspectTypes = response.data || [];
+          // Handle both array response and wrapped response { data: [...] }
+          let aspectTypes = response.data || [];
+          if (!Array.isArray(aspectTypes)) {
+            // If response.data is an object with a data property, extract it
+            aspectTypes = response.data?.data || [];
+          }
           console.log('Fetched aspect types:', aspectTypes);
+
+          // Ensure aspectTypes is an array before filtering
+          if (!Array.isArray(aspectTypes)) {
+            console.warn('aspectTypes is not an array:', typeof aspectTypes);
+            aspectTypes = [];
+          }
 
           // Transform aspect types into browse-friendly format
           const generatedData = aspectTypes
