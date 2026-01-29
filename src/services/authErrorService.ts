@@ -15,7 +15,7 @@ export const setGlobalAuthFunctions = (
 // Check if error is an authentication error
 export const isAuthenticationError = (error: AxiosError | unknown): boolean => {
   // Check for HTTP status codes
-  if ((error as AxiosError)?.response?.status === 401 || (error as AxiosError)?.response?.status === 403) {
+  if ((error as AxiosError)?.response?.status === 401) {
     return true;
   }
 
@@ -24,7 +24,7 @@ export const isAuthenticationError = (error: AxiosError | unknown): boolean => {
   if (errorData && typeof errorData === 'object') {
     const message = (errorData as any).message || (errorData as any).details || '';
     const messageStr = message.toString().toLowerCase();
-    
+
     return (
       messageStr.includes('unauthenticated') ||
       messageStr.includes('invalid authentication') ||
@@ -42,7 +42,7 @@ export const isAuthenticationError = (error: AxiosError | unknown): boolean => {
 // Handle authentication error with notification and redirect
 export const handleAuthenticationError = (error?: AxiosError | unknown) => {
   console.log('Authentication error detected:', (error as AxiosError)?.response?.data || error);
-  
+
   // Show notification
   if (globalShowError) {
     globalShowError('Your session has expired. You will be redirected to the login page.', 5000);

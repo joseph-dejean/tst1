@@ -9,8 +9,8 @@ const { GoogleAuth, OAuth2Client } = require('google-auth-library');
 const { google } = require('googleapis');
 console.log('[STARTUP] Loading Google Cloud clients...');
 const { CatalogServiceClient, DataScanServiceClient, protos, DataplexServiceClient } = require('@google-cloud/dataplex');
-const { LineageClient } = require('@google-cloud/lineage');
 const { ProjectsClient } = require('@google-cloud/resource-manager');
+const { LineageClient } = require('@google-cloud/lineage');
 const { DataCatalogClient } = require('@google-cloud/datacatalog');
 const path = require('path');
 const cors = require('cors');
@@ -2386,86 +2386,106 @@ app.post('/api/v1/get-dataset-entries', async (req, res) => {
  * POST /api/v1/search
  * Proxy Dataplex Search with Permission Filtering
  */
+
+// Helper: Check actual GCP IAM Admin Role
+const checkUserAdminRole = async (userEmail) => {
+  if (!userEmail) return false;
+
+  // SUPER_ADMIN bypass
+  const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL;
+  if (SUPER_ADMIN_EMAIL && userEmail.toLowerCase().includes(SUPER_ADMIN_EMAIL.toLowerCase())) {
+    console.log(`[IAM-CHECK] ${userEmail} matches SUPER_ADMIN`);
+    return true;
+  }
+
+  try {
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    if (!projectId) return false;
+
+    // Use Resource Manager to check IAM policy locally (faster/cheaper than API calls per request if cached, but for now direct)
+    const resourceManager = new ProjectsClient();
+    const [policy] = await resourceManager.getIamPolicy({
+      resource: `projects/${projectId}`
+    });
+
+    const adminRoles = [
+      'roles/owner',
+      'roles/editor',
+      'roles/dataplex.admin',
+      'roles/bigquery.admin'
+    ];
+
+    const userMember = `user:${userEmail}`;
+    // Also check group membership if needed, but for now user-direct
+    const hasRole = policy.bindings.some(binding =>
+      adminRoles.includes(binding.role) && binding.members.includes(userMember)
+    );
+
+    console.log(`[IAM-CHECK] User ${userEmail} has admin role? ${hasRole}`);
+    return hasRole;
+
+  } catch (err) {
+    console.error('[IAM-CHECK] Failed to check IAM policy:', err);
+    return false;
+  }
+};
+
+/**
+ * POST /api/v1/search
+ * Proxy Dataplex Search with Permission Annotation
+ */
 app.post('/api/v1/search', async (req, res) => {
   try {
     const { query, pageSize, pageToken } = req.body;
     const userEmail = req.headers['x-user-email'];
 
-    // ======== DEBUG LOGGING ========
-    console.log('======== [SEARCH DEBUG] ========');
-    console.log('[SEARCH] Query:', query);
-    console.log('[SEARCH] x-user-email header:', userEmail);
-    console.log('[SEARCH] Authorization header:', req.headers.authorization ? 'Present (Bearer...)' : 'MISSING');
+    console.log('======== [SEARCH START] ========');
+    console.log(`[SEARCH] Query: ${query}, User: ${userEmail}`);
 
-    // ======== SUPER_ADMIN CHECK (loose matching with 'includes') ========
-    const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL;
-    console.log('[SEARCH] SUPER_ADMIN_EMAIL from env:', SUPER_ADMIN_EMAIL);
-    console.log('[SEARCH] User email from header:', userEmail);
+    // Check Admin Status (Real IAM Check)
+    const isAdmin = await checkUserAdminRole(userEmail);
+    console.log(`[SEARCH] Is Admin (User/IAM)? ${isAdmin}`);
 
-    // Use 'includes' for loose matching per user request
-    const isSuperAdmin = SUPER_ADMIN_EMAIL && userEmail &&
-      userEmail.toLowerCase().includes(SUPER_ADMIN_EMAIL.toLowerCase());
-    console.log('[SEARCH] Is Super Admin (loose match)?', isSuperAdmin);
-
-    // ======== FETCH ALL RESULTS FROM DATAPLEX (Service Account) ========
+    // Fetch ALL results (Service Account Scope)
     const client = new CatalogServiceClient();
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
     const location = 'global';
 
     const request = {
       name: `projects/${projectId}/locations/${location}`,
-      query: query || '*', // Default to all if no query
+      query: query || '*',
       pageSize: pageSize || 20,
       pageToken: pageToken
     };
 
-    console.log('[SEARCH] Fetching from Dataplex with request:', JSON.stringify(request));
-
     const [searchResults, searchRequest, searchResponse] = await client.searchEntries(request);
+    console.log(`[SEARCH] Fetched ${searchResults ? searchResults.length : 0} results from Data Catalog`);
 
-    console.log('[SEARCH] Raw results count:', searchResults ? searchResults.length : 0);
-
-    // ======== ANNOTATE RESULTS - NEVER FILTER ========
-    // Per user request: DO NOT FILTER. Return ALL results with userHasAccess flag.
-    // If admin: userHasAccess = true
-    // If not admin: userHasAccess = false (default to locked, no IAM check for now)
-
+    // Annotate Access
     const annotatedResults = (searchResults || []).map(entry => {
-      // If super admin, grant access to everything
-      if (isSuperAdmin) {
-        return { ...entry, userHasAccess: true };
-      }
-      // For non-admins, default to locked (no IAM check per user request)
-      return { ...entry, userHasAccess: false };
+      // Logic: 
+      // 1. If Admin -> Has Access
+      // 2. If Not Admin -> No Access (Request Access flow)
+      //    (This simplifies the "partial access" logic which was buggy/slow)
+      return {
+        ...entry,
+        userHasAccess: isAdmin
+      };
     });
 
-    console.log('[SEARCH] Annotated results count:', annotatedResults.length);
-    console.log('[SEARCH] Sample result access flags:', annotatedResults.slice(0, 3).map(r => ({
-      name: r.fullyQualifiedName || r.name,
-      userHasAccess: r.userHasAccess
-    })));
-
-    // ======== RETURN FULL LIST (NEVER FILTER OUT) ========
-    const response = {
+    // Return response
+    res.json({
       success: true,
       data: annotatedResults,
-      results: annotatedResults, // Also include as 'results' for backwards compatibility
+      results: annotatedResults,
       nextPageToken: searchResponse?.nextPageToken || '',
       totalSize: searchResponse?.totalSize || annotatedResults.length
-    };
-
-    console.log('[SEARCH] Response totalSize:', response.totalSize);
-    console.log('[SEARCH] Response has data:', response.data.length > 0);
-
-    res.json(response);
+    });
 
   } catch (error) {
     console.error('[SEARCH] Error:', error);
-    // Return consistent error format
     res.status(500).json({
       success: false,
-      data: [],
-      results: [],
       message: 'Search failed',
       error: error.message
     });
@@ -2755,96 +2775,49 @@ app.get('/api/v1/access-requests', async (req, res) => {
 
 /**
  * POST /api/v1/access-request/update
- * Update an access request status (approve/reject)
+ * Approve or Reject access requests.
+ * REFACTORED: Flexible payload, DB-only update (no IAM/Email for stability).
  */
 app.post('/api/v1/access-request/update', async (req, res) => {
   try {
-    // ======== DEBUG LOGGING ========
-    console.log('======== [ACCESS-REQUEST UPDATE DEBUG] ========');
-    console.log('[UPDATE] Raw body:', JSON.stringify(req.body, null, 2));
-    console.log('[UPDATE] Headers x-user-email:', req.headers['x-user-email']);
-    console.log('[UPDATE] Headers authorization:', req.headers.authorization ? 'Present' : 'MISSING');
+    console.log('======== [ACCESS-REQUEST UPDATE] ========');
+    console.log('[UPDATE] Body:', JSON.stringify(req.body, null, 2));
 
-    // FLEXIBLE FIELD NAMES: Accept multiple field name variations
-    const requestId = req.body.requestId || req.body.id || req.body.request_id;
-    const status = req.body.status || req.body.newStatus || req.body.new_status;
-    const reviewerEmail = req.body.reviewerEmail || req.body.reviewer_email || req.headers['x-user-email'];
-    const adminNote = req.body.adminNote || req.body.admin_note || req.body.note || '';
+    // Flexible Field Parsing (Frontend vs Backend mismatch fix)
+    const requestId = req.body.requestId || req.body.id || req.body._id;
+    const rawStatus = req.body.status || req.body.newStatus || req.body.action; // 'APPROVED', 'REJECTED'
+    const adminNote = req.body.adminNote || req.body.reason || '';
+    const reviewerEmail = req.headers['x-user-email'] || req.body.reviewerEmail || 'system';
 
-    console.log('[UPDATE] Resolved values - requestId:', requestId, 'status:', status, 'reviewerEmail:', reviewerEmail);
-
-    if (!requestId) {
-      console.log('[UPDATE] ERROR: No request ID found in body. Tried: requestId, id, request_id');
-      return res.status(400).json({ success: false, error: 'Request ID is required. Use: requestId, id, or request_id' });
+    if (!requestId || !rawStatus) {
+      console.warn('[UPDATE] Missing requestId or status');
+      return res.status(400).json({ success: false, error: 'Missing requestId or status' });
     }
 
-    if (!status) {
-      console.log('[UPDATE] ERROR: No status found in body. Tried: status, newStatus, new_status');
-      return res.status(400).json({ success: false, error: 'Status is required. Use: status, newStatus, or new_status' });
+    // Normalize Status
+    const status = rawStatus.toUpperCase(); // APPROVED, REJECTED
+    if (!['APPROVED', 'REJECTED'].includes(status)) {
+      return res.status(400).json({ success: false, error: 'Invalid status. Must be APPROVED or REJECTED.' });
     }
 
-    // Normalize status to uppercase
-    const normalizedStatus = status.toUpperCase();
-    if (!['APPROVED', 'REJECTED', 'PENDING'].includes(normalizedStatus)) {
-      console.log('[UPDATE] ERROR: Invalid status value:', status);
-      return res.status(400).json({ success: false, error: 'Status must be APPROVED, REJECTED, or PENDING' });
+    console.log(`[UPDATE] Processing: ID=${requestId}, Status=${status}, Reviewer=${reviewerEmail}`);
+
+    // DB Update Only (Stability Fix)
+    const updatedRequest = await updateAccessRequestStatus(requestId, status, adminNote, reviewerEmail);
+
+    if (updatedRequest) {
+      console.log('[UPDATE] Success.');
+      return res.json({ success: true, data: updatedRequest });
+    } else {
+      console.error('[UPDATE] Firestore update returned null.');
+      return res.status(404).json({ success: false, error: 'Request not found or failed to update' });
     }
-
-    // Get the full request first
-    const fullRequest = await getAccessRequestById(requestId);
-    console.log('[UPDATE] Found request:', fullRequest ? 'Yes' : 'No');
-
-    if (!fullRequest) {
-      return res.status(404).json({ success: false, error: 'Access request not found' });
-    }
-
-    // SUPER_ADMIN bypass check
-    const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL;
-    const isSuperAdmin = SUPER_ADMIN_EMAIL && reviewerEmail &&
-      reviewerEmail.toLowerCase().includes(SUPER_ADMIN_EMAIL.toLowerCase());
-
-    console.log('[UPDATE] SUPER_ADMIN_EMAIL:', SUPER_ADMIN_EMAIL);
-    console.log('[UPDATE] Is Super Admin?:', isSuperAdmin);
-
-    // Check if reviewer is admin (with SUPER_ADMIN bypass)
-    if (!isSuperAdmin) {
-      const isAdmin = await adminService.isProjectAdmin(reviewerEmail, fullRequest.gcpProjectId);
-      console.log('[UPDATE] Is Project Admin?:', isAdmin);
-
-      if (!isAdmin) {
-        // For backwards compatibility, also check the old role system
-        const userRole = req.headers['x-user-role'] || 'user';
-        if (userRole !== 'admin' && userRole !== 'manager') {
-          console.log('[UPDATE] Not authorized - userRole:', userRole);
-          return res.status(403).json({ success: false, error: 'Not authorized to approve/reject this request' });
-        }
-      }
-    }
-
-    // SIMPLIFIED LOGIC: Only update Firestore status (no IAM, no notifications)
-    console.log(`[UPDATE] Updating request ${requestId} to status ${normalizedStatus}`);
-
-    // Update the request in Firestore
-    const updatedRequest = await updateAccessRequestStatus(requestId, normalizedStatus, adminNote, reviewerEmail);
-    console.log('[UPDATE] Update successful:', updatedRequest ? 'Yes' : 'No');
-
-    return res.status(200).json({
-      success: true,
-      message: `Access request updated to ${normalizedStatus} successfully`,
-      data: updatedRequest
-    });
 
   } catch (error) {
-    console.error('[UPDATE] Error updating access request:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Internal server error',
-      message: 'Failed to update access request',
-      details: error.message
-    });
+    console.error('[UPDATE] Error:', error);
+    res.status(500).json({ success: false, error: 'Internal server error', details: error.message });
   }
 });
-
 
 
 // ============================================
