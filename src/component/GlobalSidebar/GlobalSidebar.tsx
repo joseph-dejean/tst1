@@ -109,33 +109,16 @@ const GlobalSidebar: React.FC<GlobalSidebarProps> = ({ isHomePage = false }) => 
           onClick={() => { handleDataProducts(); }}
         />
 
-        {/* Chat Analytics */}
-        <SidebarMenuItem
-          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2ZM20 16H5.17L4 17.17V4H20V16ZM7 9H17V11H7V9ZM7 12H14V14H7V12ZM7 6H17V8H7V6Z" fill="#5F6368" />
-          </svg>}
-          label="Chat"
-          isActive={location.pathname === '/chat-analytics'}
-          onClick={() => navigate('/chat-analytics')}
-        />
-
         {/* Access Management */}
-        <SidebarMenuItem
-          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 1L3 5V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V5L12 1ZM12 11.99H19C18.47 16.11 15.72 19.78 12 20.93V12H5V6.3L12 3.19V11.99Z" fill={['/admin-access', '/access-requests'].includes(location.pathname) ? '#0E4DCA' : '#5F6368'} />
-          </svg>}
-          label="Access"
-          isActive={['/admin-access', '/access-requests'].includes(location.pathname)}
-          onClick={() => navigate('/admin-access')}
-        />
+        {user?.isAdmin && (
+          <SidebarMenuItem
+            icon={<AdminPanelSettings sx={{ fontSize: 20, color: ['/admin-access', '/access-requests'].includes(location.pathname) ? '#0E4DCA' : '#5F6368' }} />}
+            label="Admin"
+            isActive={['/admin-access', '/access-requests'].includes(location.pathname)}
+            onClick={() => navigate('/admin-access')}
+          />
+        )}
 
-        {/* Admin Panel */}
-        <SidebarMenuItem
-          icon={<AdminPanelSettings sx={{ fontSize: 20, color: location.pathname === '/admin-panel' ? '#0E4DCA' : '#5F6368' }} />}
-          label="Admin"
-          isActive={location.pathname === '/admin-panel'}
-          onClick={() => navigate('/admin-panel')}
-        />
       </div>
 
       {/* Browse Popover */}

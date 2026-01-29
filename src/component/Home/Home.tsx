@@ -1,6 +1,6 @@
 import './Home.css'
 import SearchBar from '../SearchBar/SearchBar'
-import { CircularProgress, Grid } from '@mui/material'
+import { Button, CircularProgress, Grid } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../auth/AuthProvider'
@@ -50,23 +50,25 @@ const Home = () => {
 
   useEffect(() => {
     setLoader(true);
-    if(!projectsLoaded) {
+    if (!projectsLoaded) {
       dispatch(getProjects({ id_token: user?.token }));
     }
     dispatch({ type: 'resources/setItemsPreviousPageRequest', payload: null });
     dispatch({ type: 'resources/setItemsPageRequest', payload: null });
     dispatch({ type: 'resources/setItemsStoreData', payload: [] });
     dispatch({ type: 'resources/setItems', payload: [] });
-      if(Object.keys(user?.appConfig).length === 0){
-        axios.get(URLS.API_URL + URLS.APP_CONFIG)
-        .then((res)=>{
-          const appConfig:any = res.data;
+    if (Object.keys(user?.appConfig).length === 0) {
+      axios.get(URLS.API_URL + URLS.APP_CONFIG)
+        .then((res) => {
+          const appConfig: any = res.data;
           let userData = {
             name: user?.name,
             email: user?.email,
             picture: user?.picture,
             token: user?.token,
             hasRole: true,
+            role: 'user',
+            isAdmin: user?.email === import.meta.env.VITE_ADMIN_EMAIL,
             roles: [],
             permissions: [],
             appConfig: appConfig
@@ -78,19 +80,33 @@ const Home = () => {
             showSuccess("Welcome " + user?.name + "!", 2000);
             sessionStorage.setItem('welcomeShown', 'true');
           }
-        }).catch((err)=>{
+        }).catch((err) => {
           console.log(err);
-          showError("Access token expired or you do not have enough permissions", 2000);
+          // Don't logout immediately on connection error, just warn
+          showError("Backend unavailable. Some features may not work.", 3000);
+
+          // Set fallback user data to keep UI functional
+          let userData = {
+            name: user?.name,
+            email: user?.email,
+            picture: user?.picture,
+            token: user?.token,
+            hasRole: true,
+            role: 'user',
+            isAdmin: user?.email === import.meta.env.VITE_ADMIN_EMAIL,
+            roles: [],
+            permissions: [],
+            appConfig: {}
+          };
+          updateUser(user?.token, userData);
           setLoader(false);
-          sessionStorage.removeItem('welcomeShown');
-          logout();
         });
-      }else{
-        setLoader(false);
-      }
+    } else {
+      setLoader(false);
+    }
   }, [user, projectsLoaded, dispatch, updateUser, logout, showSuccess, showError]);
 
-  const handleSearch = (text:string) => {
+  const handleSearch = (text: string) => {
     console.log("Search Term:", text);
     dispatch({ type: 'resources/setItemsPreviousPageRequest', payload: null });
     dispatch({ type: 'resources/setItemsPageRequest', payload: null });
@@ -104,7 +120,7 @@ const Home = () => {
   return (
     <div className="home">
       <div className='home-body'>
-        { loader ? (<>
+        {loader ? (<>
           <Grid
             container
             spacing={0}
@@ -115,30 +131,70 @@ const Home = () => {
           >
             <CircularProgress />
           </Grid>
-          </>) :
-          ( <div className='home-banner'>
-              <Grid
-                container
-                spacing={0}
-                direction="column"
-                alignItems="center"
-                justifyContent="center"
-                sx={{ minHeight: 'inherit' }}
-              >
-                <div style={{fontSize: "1.75rem",color:"#1F1F1F",fontWeight: "500", marginBottom:"1.25rem", fontStyle:"Medium", fontFamily: '"Google Sans", sans-serif'}}>
-                  <span>What would you like to discover?</span>
-                </div>
-                <div className="home-search-container">
-                    <SearchBar handleSearchSubmit={handleSearch} variant="default" dataSearch={[
-                        { name: 'BigQuery' },
-                        { name: 'Data Warehouse' },
-                        { name: 'Data Lake' },
-                        { name: 'Data Pipeline' },
-                        { name: 'GCS' }
-                    ]}/>
-                </div>
-              </Grid>
-            </div>
+        </>) :
+          (<div className='home-banner'>
+            <Grid
+              container
+              spacing={0}
+              direction="column"
+              alignItems="center"
+              justifyContent="center"
+              sx={{ minHeight: 'inherit' }}
+            >
+              <div style={{ fontSize: "1.75rem", color: "#1F1F1F", fontWeight: "500", marginBottom: "1.25rem", fontStyle: "Medium", fontFamily: '"Google Sans", sans-serif' }}>
+                <span>What would you like to discover?</span>
+              </div>
+              <div className="home-search-container">
+                <SearchBar handleSearchSubmit={handleSearch} variant="default" dataSearch={[
+                  { name: 'BigQuery' },
+                  { name: 'Data Warehouse' },
+                  { name: 'Data Lake' },
+                  { name: 'Data Pipeline' },
+                  { name: 'GCS' }
+                ]} />
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                <Button
+                  variant="outlined"
+                  onClick={() => navigate('/glossaries')}
+                  startIcon={<img src="/assets/svg/glossary_icon.svg" alt="" style={{ width: '20px' }} onError={(e) => { e.currentTarget.style.display = 'none' }} />}
+                  sx={{
+                    borderRadius: '24px',
+                    textTransform: 'none',
+                    color: '#0E4DCA',
+                    borderColor: '#DADCE0',
+                    padding: '8px 20px',
+                    backgroundColor: '#FFFFFF',
+                    '&:hover': {
+                      borderColor: '#0E4DCA',
+                      backgroundColor: '#F8FAFD'
+                    }
+                  }}
+                >
+                  Browse by Glossaries
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={() => navigate('/browse-by-annotation')}
+                  startIcon={<img src="/assets/svg/annotations-icon-blue.svg" alt="" style={{ width: '20px' }} onError={(e) => { e.currentTarget.style.display = 'none' }} />}
+                  sx={{
+                    borderRadius: '24px',
+                    textTransform: 'none',
+                    color: '#0E4DCA',
+                    borderColor: '#DADCE0',
+                    padding: '8px 20px',
+                    backgroundColor: '#FFFFFF',
+                    '&:hover': {
+                      borderColor: '#0E4DCA',
+                      backgroundColor: '#F8FAFD'
+                    }
+                  }}
+                >
+                  Browse by Aspects
+                </Button>
+              </div>
+            </Grid>
+          </div>
           )}
       </div>
     </div>

@@ -865,7 +865,7 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
               return (
                 <Box
                   key={resource.dataplexEntry.name}
-                  onClick={() => handleSearchEntriesClick(resource.dataplexEntry)}
+                  onClick={() => handleSearchEntriesClick({ ...resource.dataplexEntry, userHasAccess: resource.userHasAccess })}
                   onMouseEnter={() => setHoveredIndex(index)}
                   onMouseLeave={() => setHoveredIndex(null)}
                   sx={{
@@ -878,7 +878,7 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
                 >
                   <SearchEntriesCard
                     index={index}
-                    entry={resource.dataplexEntry}
+                    entry={{ ...resource.dataplexEntry, userHasAccess: resource.userHasAccess }}
                     hideTopBorderOnHover={hideTopBorder}
                     sx={{ backgroundColor: 'transparent', borderRadius: isSelected ? '8px' : '0px', marginTop: isSelected ? '-1px' : '0px',  marginBottom: isSelected ? '-2px' : '0px' }}
                     isSelected={isSelected}

@@ -13,12 +13,12 @@ type AuthContextType = {
   user: User | null;
   login: (credentialResponse: CredentialResponse) => void;
   logout: () => void;
-  updateUser: (token: string|undefined, userData: User) => void;
+  updateUser: (token: string | undefined, userData: User) => void;
 };
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = ():AuthContextType => {
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (!context) throw new Error("useAuth must be used within AuthProvider");
   return context;
@@ -29,9 +29,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const { showSuccess, showError, showInfo } = useNotification();
   const storedData = JSON.parse(localStorage.getItem('sessionUserData') || 'null');
   const [user, setUser] = useState<User | null>(storedData ?? null);
-  if(storedData){
+  if (storedData) {
     dispatch(
-      setCredentials({token: storedData.token, user: storedData})
+      setCredentials({ token: storedData.token, user: storedData })
     );
   }
 
@@ -39,15 +39,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (credentialResponse.credential) {
       try {
         axios.defaults.headers.common['Authorization'] = `Bearer ${credentialResponse.credential}`;
-        
+
         // Optional: fetch user info from Google API
         const res = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo');
         const decoded: { name: string; email: string; picture: string } = res.data;
-        // Check IAM role and fetch app configurations in parallel
-        // These can be uncommented when needed for role checking
+        // Fetch app config and role info
+        const configRes = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/v1/app-configs?email=${decoded.email}`);
+        const userRole = configRes.data.userRole;
 
-
-        const userData = {
+        const userData: User = {
           name: decoded.name,
           email: decoded.email,
           picture: decoded.picture,
@@ -55,15 +55,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           hasRole: true,
           roles: [],
           permissions: [],
-          appConfig: {}
+          appConfig: configRes.data,
+          role: userRole,
+          isAdmin: userRole !== null
         };
         setUser(userData);
         localStorage.setItem('sessionUserData', JSON.stringify(userData));
 
         dispatch(
-          setCredentials({token: credentialResponse.credential, user: userData})
+          setCredentials({ token: credentialResponse.credential, user: userData })
         );
-        
+
         showSuccess('Successfully signed in!', 3000);
 
       } catch (err) {
@@ -74,7 +76,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [dispatch, showSuccess, showError]);
 
   const logout = useCallback(() => {
-    dispatch(setCredentials({token: null, user: null}));
+    dispatch(setCredentials({ token: null, user: null }));
     localStorage.removeItem('sessionUserData');
     setUser(null);
     clearPersistedState(); // Clear persisted Redux state
@@ -86,8 +88,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setGlobalAuthFunctions(showError, logout);
   }, [showError, logout]);
 
-  const updateUser = useCallback((token:string|undefined, userData:User) => {
-    dispatch(setCredentials({token: token, user: userData}));
+  const updateUser = useCallback((token: string | undefined, userData: User) => {
+    dispatch(setCredentials({ token: token, user: userData }));
     localStorage.setItem('sessionUserData', JSON.stringify(userData));
     setUser(userData);
   }, [dispatch]);

@@ -84,7 +84,7 @@ const AdminAccessManagement = () => {
   const [loading, setLoading] = useState(true);
   const [pendingRequests, setPendingRequests] = useState<AccessRequest[]>([]);
   const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
-  const [statusFilter, setStatusFilter] = useState<string>('pending');
+  const [statusFilter, setStatusFilter] = useState<string>('PENDING');
   const [projectFilter] = useState<string>('');
 
   // Dialog states
@@ -97,6 +97,12 @@ const AdminAccessManagement = () => {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
+  // Client-side filtering
+  const filteredRequests = pendingRequests.filter((req) => {
+    if (statusFilter === 'all') return true;
+    return req.status?.toUpperCase() === statusFilter.toUpperCase();
+  });
+
   const token = user?.token || '';
   const email = user?.email || '';
 
@@ -108,7 +114,7 @@ const AdminAccessManagement = () => {
 
       // Fetch pending requests
       const params: Record<string, string> = { userEmail: email, userRole: 'admin' };
-      if (statusFilter !== 'all') params.status = statusFilter;
+      // REMOVED status filter from params to enable client-side filtering
       if (projectFilter) params.projectId = projectFilter;
 
       const response = await axios.get(`${URLS.API_URL}${URLS.GET_ACCESS_REQUESTS}`, {
@@ -149,7 +155,7 @@ const AdminAccessManagement = () => {
 
   const handleSelectAllRequests = (checked: boolean) => {
     if (checked) {
-      setSelectedRequests(pendingRequests.filter((r) => r.status === 'pending').map((r) => r.id));
+      setSelectedRequests(filteredRequests.filter((r) => r.status === 'PENDING').map((r) => r.id));
     } else {
       setSelectedRequests([]);
     }
@@ -167,7 +173,7 @@ const AdminAccessManagement = () => {
     try {
       await axios.post(
         `${URLS.API_URL}${URLS.UPDATE_ACCESS_REQUEST}`,
-        { requestId, status: 'approved', reviewerEmail: email },
+        { requestId, status: 'APPROVED', reviewerEmail: email },
         { headers: { Authorization: `Bearer ${token}`, 'x-user-email': email } }
       );
       showSuccess('Access request approved successfully');
@@ -181,7 +187,7 @@ const AdminAccessManagement = () => {
     try {
       await axios.post(
         `${URLS.API_URL}${URLS.UPDATE_ACCESS_REQUEST}`,
-        { requestId, status: 'rejected', reviewerEmail: email, adminNote: reason },
+        { requestId, status: 'REJECTED', reviewerEmail: email, adminNote: reason },
         { headers: { Authorization: `Bearer ${token}`, 'x-user-email': email } }
       );
       showSuccess('Access request rejected');
@@ -280,6 +286,8 @@ const AdminAccessManagement = () => {
       approved: 'success',
       rejected: 'error',
       PENDING: 'warning',
+      APPROVED: 'success',
+      REJECTED: 'error',
       ACTIVE: 'success',
       REVOKED: 'error',
     };
@@ -341,9 +349,9 @@ const AdminAccessManagement = () => {
               <InputLabel>Status</InputLabel>
               <Select value={statusFilter} label="Status" onChange={(e) => setStatusFilter(e.target.value)}>
                 <MenuItem value="all">All</MenuItem>
-                <MenuItem value="pending">Pending</MenuItem>
-                <MenuItem value="approved">Approved</MenuItem>
-                <MenuItem value="rejected">Rejected</MenuItem>
+                <MenuItem value="PENDING">Pending</MenuItem>
+                <MenuItem value="APPROVED">Approved</MenuItem>
+                <MenuItem value="REJECTED">Rejected</MenuItem>
               </Select>
             </FormControl>
 
@@ -359,15 +367,16 @@ const AdminAccessManagement = () => {
             )}
           </Box>
 
-          {/* Requests Table */}
+          {/* Filter Logic */}
+
           <TableContainer component={Paper} sx={{ boxShadow: 'none', border: '1px solid #DADCE0' }}>
             <Table>
               <TableHead>
                 <TableRow sx={{ backgroundColor: '#F8FAFD' }}>
                   <TableCell padding="checkbox">
                     <Checkbox
-                      checked={selectedRequests.length === pendingRequests.filter((r) => r.status === 'pending').length && selectedRequests.length > 0}
-                      indeterminate={selectedRequests.length > 0 && selectedRequests.length < pendingRequests.filter((r) => r.status === 'pending').length}
+                      checked={selectedRequests.length === filteredRequests.filter((r) => r.status === 'PENDING').length && selectedRequests.length > 0}
+                      indeterminate={selectedRequests.length > 0 && selectedRequests.length < filteredRequests.filter((r) => r.status === 'PENDING').length}
                       onChange={(e) => handleSelectAllRequests(e.target.checked)}
                     />
                   </TableCell>
@@ -381,15 +390,15 @@ const AdminAccessManagement = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {pendingRequests.length === 0 ? (
+                {filteredRequests.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} align="center">No access requests found</TableCell>
                   </TableRow>
                 ) : (
-                  pendingRequests.map((request) => (
+                  filteredRequests.map((request) => (
                     <TableRow key={request.id} hover>
                       <TableCell padding="checkbox">
-                        {request.status === 'pending' && (
+                        {request.status === 'PENDING' && (
                           <Checkbox
                             checked={selectedRequests.includes(request.id)}
                             onChange={(e) => handleSelectRequest(request.id, e.target.checked)}
@@ -411,7 +420,7 @@ const AdminAccessManagement = () => {
                       <TableCell>{getStatusChip(request.status)}</TableCell>
                       <TableCell>{formatDate(request.submittedAt)}</TableCell>
                       <TableCell>
-                        {request.status === 'pending' ? (
+                        {request.status === 'PENDING' ? (
                           <Box sx={{ display: 'flex', gap: 1 }}>
                             <IconButton size="small" sx={{ backgroundColor: '#E6F4EA', color: '#137333' }} onClick={() => handleApprove(request.id)}>
                               <CheckCircle fontSize="small" />
@@ -422,7 +431,7 @@ const AdminAccessManagement = () => {
                           </Box>
                         ) : (
                           <Typography variant="caption" color="text.secondary">
-                            {request.status === 'approved' ? 'Granted' : 'Rejected'}
+                            {request.status === 'APPROVED' ? 'Granted' : 'Rejected'}
                             {request.reviewedBy && ` by ${request.reviewedBy}`}
                           </Typography>
                         )}

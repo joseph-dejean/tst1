@@ -431,27 +431,29 @@ const sendAccessRequestEmail = async (assetName, message, requesterEmail, projec
     await initializeGmailClient();
 
     const emailContent = createAccessRequestEmail(assetName, message, requesterEmail, projectId);
-    const fromEmail = requesterEmail
+    // Use projectAdmin emails if available, otherwise fall back to system admin
+    let toEmails = projectAdmin;
+    if (!toEmails || toEmails.length === 0) {
+      const fallbackEmail = process.env.VITE_SUPPORT_EMAIL || process.env.VITE_ADMIN_EMAIL || 'dataplex-interface-feedback@google.com';
+      console.log(`No project admins found, falling back to: ${fallbackEmail}`);
+      toEmails = [fallbackEmail];
+    }
 
-    // Use projectAdmin emails if available, otherwise fall back to test email
-    const toEmails = projectAdmin;
-
-    // Send email to each project admin
+    // Send email to each recipient
     const emailPromises = toEmails.map(async (toEmail) => {
       const gmailMessage = createGmailMessage(
         toEmail,
         emailContent.subject,
         emailContent.html,
-        fromEmail
+        requesterEmail
       );
       return await gmailClient.users.messages.send({
-        userId: fromEmail,
+        userId: 'me',
         requestBody: {
           raw: gmailMessage
         }
       });
     });
-
 
     const responses = await Promise.all(emailPromises);
 
@@ -478,35 +480,36 @@ const sendFeedbackEmail = async (message, requesterEmail, projectId, projectAdmi
     await initializeGmailClient();
 
     const emailContent = createFeedbackEmail(message, requesterEmail, projectId);
-    const fromEmail = requesterEmail
+    // Use projectAdmin emails if available, otherwise fall back to system admin
+    let toEmails = projectAdmin;
+    if (!toEmails || toEmails.length === 0) {
+      const fallbackEmail = process.env.VITE_SUPPORT_EMAIL || process.env.VITE_ADMIN_EMAIL || 'dataplex-interface-feedback@google.com';
+      toEmails = [fallbackEmail];
+    }
 
-    // Use projectAdmin emails if available, otherwise fall back to test email
-    const toEmails = projectAdmin;
-
-    // Send email to each project admin
+    // Send email to each recipient
     const emailPromises = toEmails.map(async (toEmail) => {
       const gmailMessage = createGmailMessage(
         toEmail,
         emailContent.subject,
         emailContent.html,
-        fromEmail
+        requesterEmail
       );
       return await gmailClient.users.messages.send({
-        userId: fromEmail,
+        userId: 'me',
         requestBody: {
           raw: gmailMessage
         }
       });
     });
 
-
     const responses = await Promise.all(emailPromises);
 
-    console.log('Access request emails sent successfully to', responses.length, 'recipients');
+    console.log('Feedback emails sent successfully to', responses.length, 'recipients');
     return {
       success: true,
       messageIds: responses.map(r => r.data.id),
-      message: `Access request email sent successfully to ${responses.length} recipient(s)`
+      message: `Feedback email sent successfully to ${responses.length} recipient(s)`
     };
   } catch (error) {
     console.error('Error sending access request email:', error);

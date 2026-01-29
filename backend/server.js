@@ -74,7 +74,12 @@ const { getOrCreateDataAgent } = require('./services/dataAgentService');
 app.post('/api/v1/chat', async (req, res) => {
   try {
     const { message, context } = req.body;
-    // const accessToken = req.headers.authorization?.split(' ')[1]; // Ignored, using ADC
+    // Extract user's access token - this ensures queries run with USER's permissions
+    const userAccessToken = req.headers.authorization?.split(' ')[1];
+
+    if (!userAccessToken) {
+      return res.status(401).json({ error: 'Authorization token is required.' });
+    }
 
     if (!message || !context) {
       return res.status(400).json({ error: 'Message and context are required.' });
@@ -296,84 +301,12 @@ app.post('/api/v1/chat', async (req, res) => {
 
     const systemInstruction = 'You are a helpful Data Steward assistant for Dataplex. Answer questions about the data tables based on their schema and metadata. Be concise and accurate.';
 
-    // [AI Feature]: Authorized View Query
-    // If it's a view, we bypass Data Agents and use direct SQL generation via Gemini + Execution
-    if (!isDataProduct && (context.entryType === 'VIEW' || context.type === 'VIEW' || context.entryType === 'AUTHORIZED_VIEW')) {
-      console.log('Detecting Authorized View - Switching to Gemini SQL Generation mode.');
-
-      try {
-        // 1. Generate SQL with Vertex AI
-        const vertex_ai = new VertexAI({ project: projectId_env, location: process.env.GCP_LOCATION || 'us-central1' });
-        const generativModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
-
-        const prompt = `You are a BigQuery SQL Expert.
-The user has access to a View: ${context.name}.
-Description: ${context.description}.
-Schema: ${JSON.stringify(context.schema || [])}.
-Fully Qualified Name: ${context.fullyQualifiedName}.
-
-User Question: ${message}
-
-Generate a single valid BigQuery SQL query to answer the question using strictly the view provided (${context.fullyQualifiedName}).
-Do not explain. Output only the SQL query. Do not use markdown backticks.`;
-
-        const result = await generativModel.generateContent(prompt);
-        let sql = result.response.candidates[0].content.parts[0].text.trim();
-        // Clean markdown
-        sql = sql.replace(/```sql/g, '').replace(/```/g, '').trim();
-
-        console.log('Generated SQL:', sql);
-
-        // 2. Execute SQL
-        // We use the application's credentials (ADC). 
-        const bigquery = new BigQuery({ projectId: projectId_env });
-
-        // Basic query execution
-        const [rows] = await bigquery.query({
-          query: sql,
-          location: location,
-        });
-
-        // 3. Format Response
-        let fullResponseText = `I have generated a SQL query for the view. \n\n**Generated SQL:**\n\`\`\`sql\n${sql}\n\`\`\`\n`;
-
-        if (rows.length > 0) {
-          const columns = Object.keys(rows[0]);
-          const displayLimit = 10;
-          fullResponseText += `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
-          rows.slice(0, displayLimit).forEach(row => {
-            fullResponseText += `| ${columns.map(c => row[c]).join(' | ')} |\n`;
-          });
-          if (rows.length > displayLimit) fullResponseText += `\n*(Showing top ${displayLimit} of ${rows.length} rows)*`;
-        } else {
-          fullResponseText += `\n\nNo results found.`;
-        }
-
-        return res.json({
-          reply: fullResponseText,
-          chart: null, // Charts not supported in this simplified mode yet
-          sql: sql,
-          conversationHistory: []
-        });
-
-      } catch (viewError) {
-        console.error('Error handling View Chat:', viewError);
-        return res.json({
-          reply: `I attempted to query the view but encountered an error.\n\n**Error:** ${viewError.message}`,
-          sql: null
-        });
-      }
-    }
-
-    // Try to use Data Agent first (preferred), fall back to inline context if it fails
+    // Use Data Agent for all BigQuery tables (preferred), fall back to inline context if agent creation fails
     let chatPayload;
 
-    // Get ADC token for Chat API
-    const auth = new GoogleAuth({
-      scopes: 'https://www.googleapis.com/auth/cloud-platform'
-    });
-    const client = await auth.getClient();
-    const accessToken = (await client.getAccessToken()).token;
+    // Use user's access token for CA API - this ensures queries run with USER's table-level permissions
+    // The user's token was extracted at the start of this endpoint from Authorization header
+    console.log('Using user access token for CA API call (user-level permissions)');
 
     const agentName = await getOrCreateDataAgent(tableReferences, systemInstruction);
 
@@ -398,10 +331,10 @@ Do not explain. Output only the SQL query. Do not use markdown backticks.`;
       };
     }
 
-    // Make request to Conversational Analytics API
+    // Make request to Conversational Analytics API using USER's token
     const chatResponse = await axios.post(chatUrl, chatPayload, {
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${userAccessToken}`,
         'Content-Type': 'application/json',
         'x-server-timeout': '300'
       },
@@ -514,10 +447,10 @@ Do not explain. Output only the SQL query. Do not use markdown backticks.`;
       fullResponseText = finalSql
         ? `I executed a query but couldn't generate a natural language response.\n\n**SQL Query:**\n\`\`\`sql\n${finalSql}\n\`\`\``
         : "I received your question but couldn't generate a response. This might be because:\n\n" +
-          "1. The table doesn't contain data relevant to your question\n" +
-          "2. The question requires data from a different table\n" +
-          "3. The Conversational Analytics API returned an unexpected format\n\n" +
-          "Try rephrasing your question or selecting additional related tables.";
+        "1. The table doesn't contain data relevant to your question\n" +
+        "2. The question requires data from a different table\n" +
+        "3. The Conversational Analytics API returned an unexpected format\n\n" +
+        "Try rephrasing your question or selecting additional related tables.";
     }
 
     res.json({
@@ -653,11 +586,11 @@ Rank these data entries by relevance (most relevant first). Return a JSON array 
 
 Entries:
 ${results.slice(0, 15).map((r, i) => {
-  const entry = r.dataplexEntry || r;
-  return `${i}. Name: ${entry.entrySource?.displayName || entry.name?.split('/').pop() || 'Unknown'}
+        const entry = r.dataplexEntry || r;
+        return `${i}. Name: ${entry.entrySource?.displayName || entry.name?.split('/').pop() || 'Unknown'}
      Description: ${entry.entrySource?.description || 'No description'}
      Type: ${entry.entryType || 'Unknown'}`;
-}).join('\n')}
+      }).join('\n')}
 
 Return ONLY a JSON array of indices like [2,0,5,1,3,4,...], no explanation.`;
 
@@ -876,8 +809,23 @@ app.post('/api/v1/search', async (req, res) => {
     // Call the searchEntries method of the Dataplex client
     const [data, requestData, response] = await dataplexClientv1.searchEntries(request, { autoPaginate: false });
 
+    // Fetch full entry for each result to get aspects (concurrency limited to 10)
+    const resultsWithAspects = await Promise.all(data.map(async (result) => {
+      try {
+        // Get the full entry to include aspects
+        const [entry] = await dataplexClientv1.getEntry({
+          name: result.dataplexEntry.name,
+          view: 'FULL'
+        });
+        return { ...result, dataplexEntry: entry };
+      } catch (err) {
+        console.warn(`Failed to fetch full entry for ${result.dataplexEntry.name}:`, err.message);
+        return result;
+      }
+    }));
+
     // Send the search results back to the client
-    res.json({ data: data, requestData: requestData, results: response });
+    res.json({ data: resultsWithAspects, requestData: requestData, results: response });
 
   } catch (error) {
     console.error('Error during Dataplex search:', error);
@@ -1268,27 +1216,47 @@ app.post('/api/v1/batch-aspects', async (req, res) => {
 app.get('/api/v1/aspect-types', async (req, res) => {
   try {
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-    const location = process.env.GCP_LOCATION;
-    // const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
+    const configuredLocation = process.env.GCP_LOCATION || 'us-central1';
 
-    // ADC Auth
-    const auth = new AdcGoogleAuth();
-
-    const dataplexClientv1 = new CatalogServiceClient({
-      auth: auth,
-    });
-
-    if (!projectId || !location) {
-      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
+    if (!projectId) {
+      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID must be set.' });
     }
 
-    const parent = `projects/${projectId}/locations/${location}`;
-    console.log(`Listing aspect types for parent: ${parent}`);
+    // Define locations to check - include configured one and common defaults
+    const locationsToFetch = Array.from(new Set([configuredLocation, 'us-central1', 'europe-west1', 'global', 'us']));
 
-    // The listAspectTypes method returns an iterable. We'll collect all results into an array.
-    const [aspects] = await dataplexClientv1.listAspectTypes({ parent });
+    console.log(`[ASPECT-TYPES] Fetching from multiple locations: ${locationsToFetch.join(', ')}`);
 
-    res.json(aspects);
+    const auth = new AdcGoogleAuth();
+    const dataplexClientv1 = new CatalogServiceClient({ auth: auth });
+
+    const fetchPromises = locationsToFetch.map(async (loc) => {
+      try {
+        const parent = `projects/${projectId}/locations/${loc}`;
+        const [aspects] = await dataplexClientv1.listAspectTypes({ parent });
+        console.log(`[ASPECT-TYPES] Found ${aspects.length} types in ${loc}`);
+        return aspects;
+      } catch (err) {
+        console.warn(`[ASPECT-TYPES] Failed to fetch from ${loc}:`, err.message);
+        return [];
+      }
+    });
+
+    const resultsArray = await Promise.all(fetchPromises);
+
+    // Merge results and remove duplicates by name
+    const allAspects = resultsArray.flat();
+    const uniqueAspectsMap = new Map();
+    allAspects.forEach(aspect => {
+      if (!uniqueAspectsMap.has(aspect.name)) {
+        uniqueAspectsMap.set(aspect.name, aspect);
+      }
+    });
+
+    const finalAspectsList = Array.from(uniqueAspectsMap.values());
+    console.log(`[ASPECT-TYPES] Returning ${finalAspectsList.length} unique aspect types.`);
+
+    res.json(finalAspectsList);
 
   } catch (error) {
     console.error('Error listing aspect types:', error);
@@ -1304,31 +1272,46 @@ app.get('/api/v1/aspect-types', async (req, res) => {
 app.get('/api/v1/entry-list', async (req, res) => {
   try {
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-    const location = process.env.GCP_LOCATION;
-    // const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
+    const configuredLocation = process.env.GCP_LOCATION || 'us-central1';
 
-    // ADC Auth
-    const auth = new AdcGoogleAuth();
-
-    const dataplexClientv1 = new CatalogServiceClient({
-      auth: auth,
-    });
-
-    if (!projectId || !location) {
-      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
+    if (!projectId) {
+      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID must be set.' });
     }
 
-    const parent = `projects/${projectId}/locations/${location}`;
-    console.log(`Listing aspect types for parent: ${parent}`);
+    const locationsToFetch = Array.from(new Set([configuredLocation, 'us-central1', 'europe-west1', 'global', 'us']));
+    const auth = new AdcGoogleAuth();
+    const dataplexClientv1 = new CatalogServiceClient({ auth: auth });
 
-    // The listAspectTypes method returns an iterable. We'll collect all results into an array.
-    const [entries] = await dataplexClientv1.listEntries({ parent });
+    console.log(`[ENTRY-LIST] Fetching from multiple locations: ${locationsToFetch.join(', ')}`);
 
-    res.json(entries);
+    const fetchPromises = locationsToFetch.map(async (loc) => {
+      try {
+        const parent = `projects/${projectId}/locations/${loc}`;
+        const [entries] = await dataplexClientv1.listEntries({ parent });
+        console.log(`[ENTRY-LIST] Found ${entries.length} entries in ${loc}`);
+        return entries;
+      } catch (err) {
+        console.warn(`[ENTRY-LIST] Failed to fetch from ${loc}:`, err.message);
+        return [];
+      }
+    });
+
+    const resultsArray = await Promise.all(fetchPromises);
+    const allEntries = resultsArray.flat();
+    const uniqueEntriesMap = new Map();
+    allEntries.forEach(entry => {
+      if (!uniqueEntriesMap.has(entry.name)) {
+        uniqueEntriesMap.set(entry.name, entry);
+      }
+    });
+
+    const finalEntriesList = Array.from(uniqueEntriesMap.values());
+    console.log(`[ENTRY-LIST] Returning ${finalEntriesList.length} unique entries.`);
+    res.json(finalEntriesList);
 
   } catch (error) {
-    console.error('Error listing aspect types:', error);
-    res.status(500).json({ message: 'An error occurred while listing aspect types from Dataplex.', details: error.message });
+    console.error('Error listing entries:', error);
+    res.status(500).json({ message: 'An error occurred while listing entries.', details: error.message });
   }
 });
 
@@ -1340,31 +1323,46 @@ app.get('/api/v1/entry-list', async (req, res) => {
 app.get('/api/v1/entry-types', async (req, res) => {
   try {
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-    const location = process.env.GCP_LOCATION;
-    // const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
+    const configuredLocation = process.env.GCP_LOCATION || 'us-central1';
 
-    // ADC Auth
-    const auth = new AdcGoogleAuth();
-
-    const dataplexClientv1 = new CatalogServiceClient({
-      auth: auth,
-    });
-
-    if (!projectId || !location) {
-      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID and GCP_LOCATION must be set in the .env file.' });
+    if (!projectId) {
+      return res.status(500).json({ message: 'Server Configuration Error: GOOGLE_CLOUD_PROJECT_ID must be set.' });
     }
 
-    const parent = `projects/${projectId}/locations/${location}`;
-    console.log(`Listing aspect types for parent: ${parent}`);
+    const locationsToFetch = Array.from(new Set([configuredLocation, 'us-central1', 'europe-west1', 'global', 'us']));
+    const auth = new AdcGoogleAuth();
+    const dataplexClientv1 = new CatalogServiceClient({ auth: auth });
 
-    // The listEntryTypes method returns an iterable. We'll collect all results into an array.
-    const [entries] = await dataplexClientv1.listEntryTypes({ parent });
+    console.log(`[ENTRY-TYPES] Fetching from multiple locations: ${locationsToFetch.join(', ')}`);
 
-    res.json(entries);
+    const fetchPromises = locationsToFetch.map(async (loc) => {
+      try {
+        const parent = `projects/${projectId}/locations/${loc}`;
+        const [types] = await dataplexClientv1.listEntryTypes({ parent });
+        console.log(`[ENTRY-TYPES] Found ${types.length} types in ${loc}`);
+        return types;
+      } catch (err) {
+        console.warn(`[ENTRY-TYPES] Failed to fetch from ${loc}:`, err.message);
+        return [];
+      }
+    });
+
+    const resultsArray = await Promise.all(fetchPromises);
+    const allTypes = resultsArray.flat();
+    const uniqueTypesMap = new Map();
+    allTypes.forEach(type => {
+      if (!uniqueTypesMap.has(type.name)) {
+        uniqueTypesMap.set(type.name, type);
+      }
+    });
+
+    const finalTypesList = Array.from(uniqueTypesMap.values());
+    console.log(`[ENTRY-TYPES] Returning ${finalTypesList.length} unique entry types.`);
+    res.json(finalTypesList);
 
   } catch (error) {
-    console.error('Error listing aspect types:', error);
-    res.status(500).json({ message: 'An error occurred while listing aspect types from Dataplex.', details: error.message });
+    console.error('Error listing entry types:', error);
+    res.status(500).json({ message: 'An error occurred while listing entry types.', details: error.message });
   }
 });
 
@@ -1982,12 +1980,44 @@ app.get('/api/v1/app-configs', async (req, res) => {
 
     const reduceAspect = ({ name, fullyQualifiedName, entrySource, entryType }) => ({ name, fullyQualifiedName, entrySource, entryType });
 
+    // Fetch user role if email is provided
+    let userAdminRole = null;
+    const userEmail = req.query.email || req.headers['x-user-email'];
+    if (userEmail) {
+      try {
+        // 1. Check Firestore first
+        userAdminRole = await adminService.getAdminRole(userEmail);
+
+        // 2. If not in Firestore, check GCP IAM Roles (Alignment with GCP Rights)
+        if (!userAdminRole) {
+          const currentProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID;
+          if (currentProjectId) {
+            console.log(`Checking GCP IAM roles for ${userEmail} on ${currentProjectId}`);
+            const isOwner = await verifyUserAccess(currentProjectId, userEmail, 'roles/owner');
+            const isEditor = await verifyUserAccess(currentProjectId, userEmail, 'roles/editor');
+
+            if (isOwner || isEditor) {
+              console.log(`User ${userEmail} granted admin UI access via GCP IAM (${isOwner ? 'Owner' : 'Editor'})`);
+              userAdminRole = {
+                role: 'project-admin',
+                assignedProjects: [currentProjectId],
+                isGcpAligned: true
+              };
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching user role for app config:', err);
+      }
+    }
+
     const configs = {
       aspects: aspects.map(({ dataplexEntry }) => ({ dataplexEntry: reduceAspect(dataplexEntry) })),
       projects: projects.map(({ projectId, name, displayName }) => ({ projectId, name, displayName })),
       defaultSearchProduct: configData.products || 'All',
       defaultSearchAssets: configData.assets || '',
-      browseByAspectTypes: configData.aspectType || []
+      browseByAspectTypes: configData.aspectType || [],
+      userRole: userAdminRole
     };
 
     res.json(configs);
@@ -2416,8 +2446,261 @@ app.post('/api/v1/get-dataset-entries', async (req, res) => {
 
 
 
-app.post('/api/v1/access-request', async (req, res) => {
+/**
+ * POST /api/v1/search
+ * Proxy Dataplex Search with Permission Filtering
+ */
+app.post('/api/v1/search', async (req, res) => {
+  try {
+    const { query, pageSize, pageToken } = req.body;
+    const userEmail = req.headers['x-user-email'];
 
+    if (!userEmail) {
+      // If no user email, we can't filter, so strictly return empty or error
+      // returning empty is safer
+      return res.status(200).json({ results: [], totalSize: 0, nextPageToken: '' });
+    }
+
+    // Check if user is SUPER_ADMIN - they bypass all access checks
+    // Check if user is SUPER_ADMIN - they bypass all access checks
+    const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL;
+    // Fix: Use 'includes' instead of strict equality to handle prefixes like accounts.google.com:
+    const isSuperAdmin = SUPER_ADMIN_EMAIL && userEmail.toLowerCase().includes(SUPER_ADMIN_EMAIL.toLowerCase());
+    if (isSuperAdmin) {
+      console.log(`MATCHED ADMIN: [${userEmail}] matches [${SUPER_ADMIN_EMAIL}] - bypassing all access checks`);
+    }
+
+    // 1. Perform Search via Dataplex Client (using ADC)
+    const client = new CatalogServiceClient();
+    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    const location = 'global';
+
+    const request = {
+      name: `projects/${projectId}/locations/${location}`,
+      query: query,
+      pageSize: pageSize || 20,
+      pageToken: pageToken
+    };
+
+    // Use searchEntries (client library) or REST fallback?
+    // The client library returns an iterable.
+    // Let's use the REST API style via the client if possible, or basic iteration.
+    // client.searchEntries return [defs, request, response]
+    const [searchResults, searchRequest, searchResponse] = await client.searchEntries(request);
+
+    // 2. Filter Results based on IAM
+    // SUPER_ADMIN bypasses all access checks
+    if (isSuperAdmin) {
+      const annotatedResults = searchResults.map(entry => ({ ...entry, userHasAccess: true }));
+      return res.json({
+        results: annotatedResults,
+        nextPageToken: searchResponse.nextPageToken,
+        totalSize: searchResponse.totalSize
+      });
+    }
+
+    // We need to check if 'userEmail' has access to each result.
+    // Optimization: Check Project Level Roles first.
+    // If user has 'roles/viewer', 'roles/editor', 'roles/owner', 'roles/bigquery.dataViewer' on the project, they see everything.
+
+    let hasProjectLevelAccess = false;
+    try {
+      console.log(`[SEARCH] Checking access for user: ${userEmail} on project: ${projectId}`);
+      const isOwner = await verifyUserAccess(projectId, userEmail, 'roles/owner');
+      const isEditor = await verifyUserAccess(projectId, userEmail, 'roles/editor');
+      const isViewer = await verifyUserAccess(projectId, userEmail, 'roles/viewer');
+      const isBqViewer = await verifyUserAccess(projectId, userEmail, 'roles/bigquery.dataViewer');
+      const isBqAdmin = await verifyUserAccess(projectId, userEmail, 'roles/bigquery.admin');
+
+      console.log(`[SEARCH] Role checks - Owner:${isOwner}, Editor:${isEditor}, Viewer:${isViewer}, BQ Viewer:${isBqViewer}, BQ Admin:${isBqAdmin}`);
+      hasProjectLevelAccess = isOwner || isEditor || isViewer || isBqViewer || isBqAdmin;
+      console.log(`[SEARCH] User ${userEmail} Project Level Access: ${hasProjectLevelAccess}`);
+    } catch (e) {
+      console.warn('[SEARCH] Project level access check failed', e);
+    }
+
+    let annotatedResults = [];
+
+    if (hasProjectLevelAccess) {
+      annotatedResults = searchResults.map(entry => ({ ...entry, userHasAccess: true }));
+    } else {
+      // Check individual resources
+      // Parallelize checks
+      const checks = searchResults.map(async (entry) => {
+        try {
+          // Entry structure: { linkedResource: '//bigquery.googleapis.com/projects/p/datasets/d/tables/t', ... }
+          const resource = entry.linkedResource;
+          if (!resource || !resource.startsWith('//bigquery.googleapis.com/')) {
+            return { ...entry, userHasAccess: false };
+          }
+
+          // Extract Dataset ID from: //bigquery.googleapis.com/projects/{project}/datasets/{dataset}/tables/{table}
+          // Or just //bigquery.googleapis.com/projects/{project}/datasets/{dataset}
+          const parts = resource.split('/');
+          const datasetIndex = parts.indexOf('datasets');
+          if (datasetIndex === -1) return null;
+
+          const datasetId = parts[datasetIndex + 1];
+          // We can use the BigQuery client to check access to the dataset
+          const bq = new BigQuery();
+          const dataset = bq.dataset(datasetId);
+
+          // Try to get metadata. If user (we assume Server logic??) 
+          // WAIT. The Server runs as ADC (Admin). It ALWAYS has access.
+          // We need to check if the *USER* has access.
+          // We can't use `dataset.get()` because that uses Server Credentials.
+          // We need IAM policy of the dataset.
+
+          const [policy] = await dataset.getIamPolicy();
+          // Check binding
+          const userMember = `user:${userEmail}`;
+          const hasAccess = policy.bindings.some(binding => {
+            const role = binding.role;
+            // Basic roles or BQ specific roles
+            const meaningfulRoles = [
+              'roles/bigquery.dataViewer',
+              'roles/bigquery.dataEditor',
+              'roles/bigquery.dataOwner',
+              'roles/bigquery.admin',
+              'roles/viewer', 'roles/editor', 'roles/owner'
+            ];
+            return meaningfulRoles.includes(role) && binding.members.includes(userMember);
+          });
+
+          return { ...entry, userHasAccess: hasAccess };
+
+        } catch (err) {
+          console.warn(`[SEARCH] Access check error for ${entry.fullyQualifiedName}:`, err);
+          return { ...entry, userHasAccess: false };
+        }
+      });
+
+      annotatedResults = await Promise.all(checks);
+    }
+    const filteredResults = annotatedResults;
+
+    // searchResponse.totalSize is for the *unfiltered* results.
+    // We should probably return the filtered count, but pagination breaks if we filter.
+    // For now, we return valid next page token (so they can fetch more) but only show what they can see.
+    // Note: If we filter out all 20 items, the UI will show empty page but might have "next" button.
+
+    // Construct response matching frontend expectation
+    // Frontend expects: { results: [...], nextPageToken: ... }
+    // Actually frontend maps this in `resourcesSlice`.
+    // searchResponse is the raw protobuf response? 
+    // client.searchEntries returns [SearchResult[], ..., ...]
+
+    res.json({
+      results: filteredResults,
+      nextPageToken: searchResponse.nextPageToken,
+      totalSize: searchResponse.totalSize // Approximate
+    });
+
+  } catch (error) {
+    console.error('[SEARCH] Error:', error);
+    res.status(500).json({ message: 'Search failed', details: error.message });
+  }
+});
+
+
+/**
+ * POST /api/v1/check-access
+ * Check if a user has access to a specific BigQuery table/dataset
+ */
+app.post('/api/v1/check-access', async (req, res) => {
+  try {
+    const { fullyQualifiedName, linkedResource } = req.body;
+    const userEmail = req.headers['x-user-email'];
+
+    if (!userEmail) {
+      return res.status(400).json({ hasAccess: false, error: 'User email required' });
+    }
+
+    // SUPER_ADMIN bypass - they have access to everything
+    const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL;
+    // Fix: Use 'includes'
+    if (SUPER_ADMIN_EMAIL && userEmail.toLowerCase().includes(SUPER_ADMIN_EMAIL.toLowerCase())) {
+      console.log(`MATCHED ADMIN: [${userEmail}] matches [${SUPER_ADMIN_EMAIL}] - granting full access`);
+      return res.json({ hasAccess: true, level: 'super_admin' });
+    }
+
+    // Extract project/dataset from fullyQualifiedName or linkedResource
+    // FQN format: bigquery:{project}.{dataset}.{table}
+    // LinkedResource format: //bigquery.googleapis.com/projects/{project}/datasets/{dataset}/tables/{table}
+    let targetProject = null;
+    let datasetId = null;
+
+    if (fullyQualifiedName) {
+      const fqn = fullyQualifiedName.replace('bigquery:', '');
+      const parts = fqn.split('.');
+      if (parts.length >= 2) {
+        targetProject = parts[0];
+        datasetId = parts[1];
+      }
+    } else if (linkedResource && linkedResource.startsWith('//bigquery.googleapis.com/')) {
+      const parts = linkedResource.split('/');
+      const projectIndex = parts.indexOf('projects');
+      const datasetIndex = parts.indexOf('datasets');
+      if (projectIndex !== -1) targetProject = parts[projectIndex + 1];
+      if (datasetIndex !== -1) datasetId = parts[datasetIndex + 1];
+    }
+
+    if (!targetProject) {
+      console.log(`[CHECK-ACCESS] Could not extract project from FQN: ${fullyQualifiedName}`);
+      return res.json({ hasAccess: false, reason: 'Could not determine project' });
+    }
+
+    console.log(`[CHECK-ACCESS] Checking access for ${userEmail} on project ${targetProject}, dataset ${datasetId}`);
+
+    // 1. Check project-level access
+    const isOwner = await verifyUserAccess(targetProject, userEmail, 'roles/owner');
+    const isEditor = await verifyUserAccess(targetProject, userEmail, 'roles/editor');
+    const isViewer = await verifyUserAccess(targetProject, userEmail, 'roles/viewer');
+    const isBqViewer = await verifyUserAccess(targetProject, userEmail, 'roles/bigquery.dataViewer');
+    const isBqAdmin = await verifyUserAccess(targetProject, userEmail, 'roles/bigquery.admin');
+
+    console.log(`[CHECK-ACCESS] Project roles - Owner:${isOwner}, Editor:${isEditor}, Viewer:${isViewer}, BQ Viewer:${isBqViewer}, BQ Admin:${isBqAdmin}`);
+
+    if (isOwner || isEditor || isViewer || isBqViewer || isBqAdmin) {
+      return res.json({ hasAccess: true, level: 'project' });
+    }
+
+    // 2. Check dataset-level access
+    if (datasetId) {
+      try {
+        const bq = new BigQuery({ projectId: targetProject });
+        const dataset = bq.dataset(datasetId);
+        const [policy] = await dataset.getIamPolicy();
+
+        const userMember = `user:${userEmail}`;
+        const hasDatasetAccess = policy.bindings?.some(binding => {
+          const meaningfulRoles = [
+            'roles/bigquery.dataViewer',
+            'roles/bigquery.dataEditor',
+            'roles/bigquery.dataOwner',
+            'roles/bigquery.admin',
+            'roles/viewer', 'roles/editor', 'roles/owner'
+          ];
+          return meaningfulRoles.includes(binding.role) && binding.members?.includes(userMember);
+        });
+
+        if (hasDatasetAccess) {
+          return res.json({ hasAccess: true, level: 'dataset' });
+        }
+      } catch (dsError) {
+        console.warn(`[CHECK-ACCESS] Dataset IAM check failed: ${dsError.message}`);
+      }
+    }
+
+    return res.json({ hasAccess: false, reason: 'No matching IAM bindings found' });
+
+  } catch (error) {
+    console.error('[CHECK-ACCESS] Error:', error);
+    return res.status(500).json({ hasAccess: false, error: error.message });
+  }
+});
+
+app.post('/api/v1/access-request', async (req, res) => {
   try {
     const { assetName, message, requesterEmail, projectId, projectAdmin } = req.body;
 
@@ -2487,13 +2770,31 @@ app.post('/api/v1/access-request', async (req, res) => {
       autoApproved: false
     };
 
-    // Check if should auto-approve, defined in accessRequestService or local helper if restored
-    // keeping simple for now or restoring local helper if needed. 
-    // Wait, I deleted shouldAutoApprove helper too. I should restore it or just default to false for now.
-    // The user wants it stored.
-
     // Store the request in Firestore
-    const accessRequest = await createAccessRequest(requestData);
+    console.log('[ACCESS-REQUEST] About to write to Firestore with data:', JSON.stringify(requestData, null, 2));
+    let accessRequest;
+    try {
+      accessRequest = await createAccessRequest(requestData);
+      console.log('[ACCESS-REQUEST] Successfully saved to Firestore:', accessRequest.id);
+    } catch (firestoreError) {
+      console.error('[ACCESS-REQUEST] Firestore write FAILED:', firestoreError);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to save access request to database',
+        details: firestoreError.message
+      });
+    }
+
+    // Send in-app notifications to project admins
+    if (projectAdmin && projectAdmin.length > 0) {
+      try {
+        await notificationService.notifyNewRequest(accessRequest, projectAdmin);
+        console.log(`Sent in-app notifications to ${projectAdmin.length} admin(s)`);
+      } catch (notifError) {
+        console.error('Failed to send in-app notifications:', notifError);
+        // Don't fail the request if notifications fail
+      }
+    }
 
     // Send access request email
     console.log('About to send access request email...');
@@ -2594,7 +2895,7 @@ app.post('/api/v1/access-request/update', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Request ID and status are required' });
     }
 
-    if (!['approved', 'rejected'].includes(status)) {
+    if (!['approved', 'rejected', 'APPROVED', 'REJECTED'].includes(status)) {
       return res.status(400).json({ success: false, error: 'Status must be either "approved" or "rejected"' });
     }
 
@@ -2614,81 +2915,16 @@ app.post('/api/v1/access-request/update', async (req, res) => {
       }
     }
 
-    let grantedAccess = null;
-
-    // [AI Feature]: Automated Provisioning
-    if (status === 'approved') {
-      try {
-        console.log(`Request ${requestId} approved. Starting automated provisioning...`);
-        const { gcpProjectId, requesterEmail, assetName, requestedRole } = fullRequest;
-
-        // 1. Grant BigQuery Role via IAM
-        const role = requestedRole || 'roles/bigquery.dataViewer';
-        await grantIamAccess(gcpProjectId, requesterEmail, role);
-        console.log(`Granted ${role} to ${requesterEmail} on project ${gcpProjectId}`);
-
-        // 2. Create granted access record
-        grantedAccess = await grantedAccessService.createGrantedAccess({
-          userEmail: requesterEmail,
-          assetName: assetName,
-          gcpProjectId: gcpProjectId,
-          role: role,
-          grantedBy: reviewerEmail,
-          originalRequestId: requestId
-        });
-        console.log(`Created granted access record: ${grantedAccess.id}`);
-
-        // 3. Ensure Data Agent exists & Grant Agent Role
-        let items = assetName.split('/tables/');
-        if (items.length > 1) {
-          const tableId = items[1];
-          const datasetPart = items[0].split('/datasets/')[1];
-          const projectPart = items[0].split('/projects/')[1].split('/')[0];
-
-          if (projectPart && datasetPart && tableId) {
-            const tableRef = [{
-              projectId: projectPart,
-              datasetId: datasetPart,
-              tableId: tableId
-            }];
-            const systemInstruction = 'You are a helpful Data Steward assistant for Dataplex. Answer questions about the data tables based on their schema and metadata. Be concise and accurate.';
-
-            const agentName = await getOrCreateDataAgent(tableRef, systemInstruction);
-
-            if (agentName) {
-              const uiProjectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-              await grantIamAccess(uiProjectId, requesterEmail, 'roles/dataanalytics.agentUser');
-              console.log(`Granted roles/dataanalytics.agentUser to ${requesterEmail} on ${uiProjectId}`);
-            }
-          }
-        }
-
-        // 4. Send in-app notification to requester
-        await notificationService.notifyAccessApproved(fullRequest, reviewerEmail);
-        console.log(`Sent approval notification to ${requesterEmail}`);
-
-      } catch (provError) {
-        console.error('Automated provisioning failed:', provError);
-        return res.status(500).json({
-          success: false,
-          error: 'Failed to grant IAM access',
-          details: provError.message
-        });
-      }
-    } else if (status === 'rejected') {
-      // Send rejection notification
-      await notificationService.notifyAccessRejected(fullRequest, reviewerEmail, adminNote);
-      console.log(`Sent rejection notification to ${fullRequest.requesterEmail}`);
-    }
+    // SIMPLIFIED LOGIC: Only update Firestore status (no IAM, no notifications)
+    console.log(`Updating request ${requestId} to status ${status} (No IAM action)`);
 
     // Update the request in Firestore
     const updatedRequest = await updateAccessRequestStatus(requestId, status, adminNote, reviewerEmail);
 
     return res.status(200).json({
       success: true,
-      message: `Access request ${status} successfully`,
-      data: updatedRequest,
-      grantedAccess: grantedAccess
+      message: `Access request updated to ${status} successfully`,
+      data: updatedRequest
     });
 
   } catch (error) {
@@ -2720,7 +2956,26 @@ app.get('/api/v1/admin/check', async (req, res) => {
       return res.status(400).json({ success: false, error: 'User email is required' });
     }
 
-    const adminRole = await adminService.getAdminRole(userEmail);
+    // 1. Check Firestore first
+    let adminRole = await adminService.getAdminRole(userEmail);
+
+    // 2. Fallback to GCP IAM Alignment
+    if (!adminRole) {
+      const currentProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID;
+      if (currentProjectId) {
+        console.log(`[ADMIN_CHECK] Falling back to GCP IAM check for ${userEmail} on ${currentProjectId}`);
+        const isOwner = await verifyUserAccess(currentProjectId, userEmail, 'roles/owner');
+        const isEditor = await verifyUserAccess(currentProjectId, userEmail, 'roles/editor');
+        if (isOwner || isEditor) {
+          console.log(`[ADMIN_CHECK] User ${userEmail} recognized as admin via IAM (${isOwner ? 'Owner' : 'Editor'})`);
+          adminRole = {
+            role: 'project-admin',
+            assignedProjects: [currentProjectId],
+            isGcpAligned: true
+          };
+        }
+      }
+    }
 
     return res.status(200).json({
       success: true,

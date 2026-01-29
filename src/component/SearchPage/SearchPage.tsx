@@ -55,9 +55,9 @@ interface SearchPageProps {
 const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
   const { user } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
-  const searchTerm = useSelector((state:any) => state.search.searchTerm);
-  const searchType = useSelector((state:any) => state.search.searchType);
-  const semanticSearch = useSelector((state:any) => state.search.semanticSearch);
+  const searchTerm = useSelector((state: any) => state.search.searchTerm);
+  const searchType = useSelector((state: any) => state.search.searchType);
+  const semanticSearch = useSelector((state: any) => state.search.semanticSearch);
   const id_token = user?.token || '';
   const [previewData, setPreviewData] = useState<any | null>(null);
   const [filters, setFilters] = useState<any[]>([]);
@@ -93,8 +93,14 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
     dispatch({ type: 'resources/setItemsStoreData', payload: [] });
     // Only search if there's a search term and no existing results
     if (searchTerm && searchTerm.trim() !== '' && resources.length === 0) {
-      
-      dispatch(searchResourcesByTerm({term : searchTerm, id_token: id_token, filters: filters, semanticSearch: semanticSearch}) );   
+      dispatch(searchResourcesByTerm({
+        term: searchTerm,
+        id_token: id_token,
+        filters: filters,
+        aspectFilters: selectedAspects,
+        semanticSearch: semanticSearch,
+        userEmail: user?.email
+      }));
     }
   }, []);
 
@@ -104,7 +110,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
     setPageSize(20);
     dispatch({ type: 'resources/setItemsPreviousPageRequest', payload: null });
     dispatch({ type: 'resources/setItemsPageRequest', payload: null });
-    dispatch({ type: 'resources/setItemsStoreData', payload: [] });   
+    dispatch({ type: 'resources/setItemsStoreData', payload: [] });
   }, [searchTerm]);
 
   useEffect(() => {
@@ -114,8 +120,15 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
     dispatch({ type: 'resources/setItemsStoreData', payload: [] });
     setStartIndex(0);
     setPageNumber(1);
-    if(filters.length > 0 || prevFilters.length > 0){
-      dispatch(searchResourcesByTerm({term : searchTerm, id_token: id_token, filters: filters, semanticSearch: semanticSearch}));
+    if (filters.length > 0 || prevFilters.length > 0) {
+      dispatch(searchResourcesByTerm({
+        term: searchTerm,
+        id_token: id_token,
+        filters: filters,
+        aspectFilters: selectedAspects,
+        semanticSearch: semanticSearch,
+        userEmail: user?.email
+      }));
     }
     setPrevFilters(filters);
   }, [filters]);
@@ -126,15 +139,31 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
     dispatch({ type: 'resources/setItemsStoreData', payload: [] });
     setStartIndex(0);
     setPageNumber(1);
-    if(searchType === "BigQuery" || searchType === "bigquery"){
-      if(!filters.some(item => item.name === "BigQuery")){
-        const updatedFilters = [...filters, {name: 'BigQuery', type: 'system'}];
+    dispatch(searchResourcesByTerm({
+      term: searchTerm,
+      id_token: id_token,
+      filters: filters,
+      aspectFilters: selectedAspects,
+      semanticSearch: semanticSearch,
+      userEmail: user?.email
+    }));
+  }, [selectedAspects]);
+
+  useEffect(() => {
+    dispatch({ type: 'resources/setItemsPreviousPageRequest', payload: null });
+    dispatch({ type: 'resources/setItemsPageRequest', payload: null });
+    dispatch({ type: 'resources/setItemsStoreData', payload: [] });
+    setStartIndex(0);
+    setPageNumber(1);
+    if (searchType === "BigQuery" || searchType === "bigquery") {
+      if (!filters.some(item => item.name === "BigQuery")) {
+        const updatedFilters = [...filters, { name: 'BigQuery', type: 'system' }];
         setFilters(updatedFilters);
         // Notify parent
         dispatch({ type: 'search/setSearchFilters', payload: { searchFilters: updatedFilters } });
       }
-    }else if(searchType === "All"){
-      if(filters.some(item => item.name === "BigQuery")){
+    } else if (searchType === "All") {
+      if (filters.some(item => item.name === "BigQuery")) {
         const updatedFilters = filters.filter((f: any) => !(f.name === "BigQuery" && f.type === 'system'));
         setFilters(updatedFilters);
         // Notify parent
@@ -149,8 +178,8 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
     if (selectedTypeFilter) {
       const withoutTypeAliases = filters.filter((f: any) => f.type !== 'typeAliases');
       const alreadySelected = filters.some((f: any) => f.type === 'typeAliases' && f.name === selectedTypeFilter);
-      const next = alreadySelected 
-        ? filters 
+      const next = alreadySelected
+        ? filters
         : [...withoutTypeAliases, { name: selectedTypeFilter, type: 'typeAliases' }];
       setFilters(next);
     } else {
@@ -166,12 +195,12 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
   const rawResources = useSelector((state: any) => state.resources.items);
   const resourcesStatus = useSelector((state: any) => state.resources.status);
   const error = useSelector((state: any) => state.resources.error);
-  
+
   // Merge Data Products into search results if there's a search term
   // Apply Data Product filtering if selected
   const resources = React.useMemo(() => {
     let mergedResources = rawResources;
-    
+
     if (!searchTerm || searchTerm.trim() === '') {
       mergedResources = rawResources;
     } else {
@@ -180,7 +209,7 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
         mergedResources = mergeDataProductsIntoResults(rawResources, searchTerm);
       }
     }
-    
+
     // Apply Data Product filtering if a Data Product is selected
     if (selectedDataProducts.length > 0) {
       // If filtering by Data Product, show only tables belonging to that product
@@ -197,12 +226,12 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
       });
       mergedResources = filteredResults.length > 0 ? filteredResults : mergedResources;
     }
-    
+
     return mergedResources;
   }, [rawResources, searchTerm, resourcesStatus, selectedDataProducts]);
 
   useEffect(() => {
-    if(resourcesStatus === 'succeeded' || resourcesStatus === 'failed'){
+    if (resourcesStatus === 'succeeded' || resourcesStatus === 'failed') {
       dispatch({ type: 'resources/setItemsNextPageSize', payload: null });
     }
   }, [resourcesStatus]);
@@ -213,34 +242,40 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
   const requestItemStore = useSelector((state: any) => state.resources.itemsStore);
 
   // Pagination handler
-  const handlePagination = (direction: 'next' | 'previous', size: number, sizeChange:boolean = false) => {
+  const handlePagination = (direction: 'next' | 'previous', size: number, sizeChange: boolean = false) => {
     if (!resourcesRequestData) return;
     let requestResourceData = { ...resourcesRequestData };
-    if (sizeChange){
+    if (sizeChange) {
       setStartIndex(0);
       setPageNumber(1);
       setPageSize(size);
     }
 
     if (direction === 'next') {
-      if (requestItemStore.length > 0){
+      if (requestItemStore.length > 0) {
         const start = sizeChange ? 0 : size * pageNumber;
         setPageNumber(pageNumber + 1);
         setStartIndex(start);
-        const paginatedItems = start + size <= requestItemStore.length 
-        ? requestItemStore.slice(start, start + size) : requestItemStore.slice(start);
+        const paginatedItems = start + size <= requestItemStore.length
+          ? requestItemStore.slice(start, start + size) : requestItemStore.slice(start);
 
-        if(paginatedItems.length === size || ((start + size) >= resourcesTotalSize && requestItemStore.length === resourcesTotalSize)){
+        if (paginatedItems.length === size || ((start + size) >= resourcesTotalSize && requestItemStore.length === resourcesTotalSize)) {
           dispatch({ type: 'resources/setItemsStatus', payload: 'loading' });
           dispatch({ type: 'resources/setItems', payload: paginatedItems });
-        }else if(requestResourceData != null){
-          requestResourceData.pageSize = (start + size) - requestItemStore.length;
-          dispatch({ type: 'resources/setItemsNextPageSize', payload: size });
-          dispatch(searchResourcesByTerm({ term:searchTerm, requestResourceData: requestResourceData, id_token: id_token, filters:filters, semanticSearch: semanticSearch }) );
+        } else if (requestResourceData != null) {
+          dispatch(searchResourcesByTerm({
+            term: searchTerm,
+            requestResourceData: requestResourceData,
+            id_token: id_token,
+            filters: filters,
+            aspectFilters: selectedAspects,
+            semanticSearch: semanticSearch,
+            userEmail: user?.email
+          }));
         }
       }
     } else if (direction === 'previous') {
-      if (requestItemStore.length > 0){
+      if (requestItemStore.length > 0) {
         dispatch({ type: 'resources/setItemsStatus', payload: 'loading' });
         const start = sizeChange ? 0 : Math.max(0, size * (pageNumber - 2));
         setPageNumber(Math.max(1, pageNumber - 1));
@@ -267,129 +302,129 @@ const SearchPage: React.FC<SearchPageProps> = ({ searchResult }) => {
     //   //console.log("Resources fetched successfully:", resources);
     // }
   }, [resourcesStatus]);
-  
+
   // Custom filter component for SearchPage
   const customFilters = (
     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-      <span 
-          style={{
-              background: isFiltersOpen ? "#E7F0FE" : "none", 
-              color: "#0E4DCA" , 
-              padding:"8px 13px", 
-              borderRadius:"59px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "40px",
-              height: "32px",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-              border: isFiltersOpen ? "none" : "1px solid #DADCE0"
-          }}
-          onClick={handleTuneIconClick}
+      <span
+        style={{
+          background: isFiltersOpen ? "#E7F0FE" : "none",
+          color: "#0E4DCA",
+          padding: "8px 13px",
+          borderRadius: "59px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "40px",
+          height: "32px",
+          cursor: "pointer",
+          transition: "all 0.2s ease",
+          border: isFiltersOpen ? "none" : "1px solid #DADCE0"
+        }}
+        onClick={handleTuneIconClick}
       >
-          <Tune style={{ fontSize: "20px" }} />
+        <Tune style={{ fontSize: "20px" }} />
       </span>
-      <span 
-          style={{
-              background: isGlobalFilterOpen ? "#E7F0FE" : "none", 
-              color: "#0E4DCA" , 
-              padding:"8px 13px", 
-              borderRadius:"59px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "40px",
-              height: "32px",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-              border: isGlobalFilterOpen ? "none" : "1px solid #DADCE0"
-          }}
-          onClick={() => setIsGlobalFilterOpen(!isGlobalFilterOpen)}
-          title="Global Filters (Aspect & Data Product)"
+      <span
+        style={{
+          background: isGlobalFilterOpen ? "#E7F0FE" : "none",
+          color: "#0E4DCA",
+          padding: "8px 13px",
+          borderRadius: "59px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "40px",
+          height: "32px",
+          cursor: "pointer",
+          transition: "all 0.2s ease",
+          border: isGlobalFilterOpen ? "none" : "1px solid #DADCE0"
+        }}
+        onClick={() => setIsGlobalFilterOpen(!isGlobalFilterOpen)}
+        title="Global Filters (Aspect & Data Product)"
       >
-          <FilterList style={{ fontSize: "20px" }} />
+        <FilterList style={{ fontSize: "20px" }} />
       </span>
     </Box>
   );
 
   return (
     <>
-        <div style={{backgroundColor:"#F8FAFD", height: 'calc(100vh - 3.9rem)', position: "relative"}}>
-            {/* Filters Component - Absolute Overlay */}
-            <div style={{
-                position: 'absolute',
-                left: isFiltersOpen ? '0' : '-210px',
-                top: '0',
-                width: '210px',
-                height: 'calc(100vh - 3.9rem)',
-                transition: 'left 0.3s ease-in-out',
-                zIndex: 900,
-                overflowY: 'auto',
-                backgroundColor: '#ffffff',
-                borderRadius: '20px',
-                padding: '10px 0'
-            }}>
-                <FilterDropdown key="filters-panel" filters={filters} onFilterChange={(f) => { handleFilterChange(f)} }/>
-            </div>
-
-            {/* Main Content - Always Stable Layout */}
-            <Grid container spacing={0} style={{padding:"0 10px", height: 'calc(100vh - 3.9rem)'}}>
-                <Grid size={previewData ? 8.5 : 12}>
-                    <div style={{
-                        transition: 'margin-left 0.3s ease-in-out',
-                        marginLeft: isFiltersOpen ? '13.25rem' : '-1.25rem'
-                    }}>
-                          <ResourceViewer
-                          resources={resources}
-                          resourcesStatus={resourcesStatus}
-                          error={error}
-                          previewData={previewData}
-                          onPreviewDataChange={setPreviewData}
-                          selectedTypeFilter={selectedTypeFilter}
-                          onTypeFilterChange={setSelectedTypeFilter}
-                          typeAliases={typeAliases}
-                          viewMode={viewMode}
-                          onViewModeChange={setViewMode}
-                          id_token={id_token}
-                          showFilters={true}
-                          showSortBy={true}
-                          showResultsCount={true}
-                          customFilters={customFilters}
-                          selectedFilters={filters}
-                          onFiltersChange={(updated) => {handleFilterChange(updated);}}
-                          containerStyle={{ marginLeft: '0px' }}
-                          contentStyle={{ margin: '0px 5px 0px 20px' }}
-                          renderPreview={false}
-                          startIndex={startIndex}
-                          pageSize={pageSize}
-                          setPageSize={setPageSize}
-                          requestItemStore={requestItemStore}
-                          resourcesTotalSize={resourcesTotalSize}
-                          handlePagination={handlePagination}
-                        />
-                    </div>
-                </Grid>
-                {previewData && (
-                  <Grid size={3.5}>
-                      <ResourcePreview
-                        previewData={previewData}
-                        onPreviewDataChange={setPreviewData}
-                        id_token={id_token}
-                      />
-                  </Grid>
-                )}
-            </Grid>
+      <div style={{ backgroundColor: "#F8FAFD", height: 'calc(100vh - 3.9rem)', position: "relative" }}>
+        {/* Filters Component - Absolute Overlay */}
+        <div style={{
+          position: 'absolute',
+          left: isFiltersOpen ? '0' : '-210px',
+          top: '0',
+          width: '210px',
+          height: 'calc(100vh - 3.9rem)',
+          transition: 'left 0.3s ease-in-out',
+          zIndex: 900,
+          overflowY: 'auto',
+          backgroundColor: '#ffffff',
+          borderRadius: '20px',
+          padding: '10px 0'
+        }}>
+          <FilterDropdown key="filters-panel" filters={filters} onFilterChange={(f) => { handleFilterChange(f) }} />
         </div>
-        <GlobalFilterSidebar
-          isOpen={isGlobalFilterOpen}
-          onClose={() => setIsGlobalFilterOpen(false)}
-          selectedAspects={selectedAspects}
-          selectedDataProducts={selectedDataProducts}
-          onAspectChange={setSelectedAspects}
-          onDataProductChange={setSelectedDataProducts}
-          availableAspects={availableAspects}
-        />
+
+        {/* Main Content - Always Stable Layout */}
+        <Grid container spacing={0} style={{ padding: "0 10px", height: 'calc(100vh - 3.9rem)' }}>
+          <Grid size={previewData ? 8.5 : 12}>
+            <div style={{
+              transition: 'margin-left 0.3s ease-in-out',
+              marginLeft: isFiltersOpen ? '13.25rem' : '-1.25rem'
+            }}>
+              <ResourceViewer
+                resources={resources}
+                resourcesStatus={resourcesStatus}
+                error={error}
+                previewData={previewData}
+                onPreviewDataChange={setPreviewData}
+                selectedTypeFilter={selectedTypeFilter}
+                onTypeFilterChange={setSelectedTypeFilter}
+                typeAliases={typeAliases}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                id_token={id_token}
+                showFilters={true}
+                showSortBy={true}
+                showResultsCount={true}
+                customFilters={customFilters}
+                selectedFilters={filters}
+                onFiltersChange={(updated) => { handleFilterChange(updated); }}
+                containerStyle={{ marginLeft: '0px' }}
+                contentStyle={{ margin: '0px 5px 0px 20px' }}
+                renderPreview={false}
+                startIndex={startIndex}
+                pageSize={pageSize}
+                setPageSize={setPageSize}
+                requestItemStore={requestItemStore}
+                resourcesTotalSize={resourcesTotalSize}
+                handlePagination={handlePagination}
+              />
+            </div>
+          </Grid>
+          {previewData && (
+            <Grid size={3.5}>
+              <ResourcePreview
+                previewData={previewData}
+                onPreviewDataChange={setPreviewData}
+                id_token={id_token}
+              />
+            </Grid>
+          )}
+        </Grid>
+      </div>
+      <GlobalFilterSidebar
+        isOpen={isGlobalFilterOpen}
+        onClose={() => setIsGlobalFilterOpen(false)}
+        selectedAspects={selectedAspects}
+        selectedDataProducts={selectedDataProducts}
+        onAspectChange={setSelectedAspects}
+        onDataProductChange={setSelectedDataProducts}
+        availableAspects={availableAspects}
+      />
     </>
   )
 }

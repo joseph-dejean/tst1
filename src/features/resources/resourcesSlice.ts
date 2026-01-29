@@ -6,16 +6,22 @@ import axios, { AxiosError } from 'axios';
 const getAspectName = (name: string) => {
   let session = localStorage.getItem('sessionUserData');
   let appConfig = session ? JSON.parse(session)?.appConfig : null;
-  
-  let resource:string[] = appConfig.aspects.find((a:any) => a.dataplexEntry?.entrySource?.displayName === name)?.dataplexEntry?.entrySource?.resource.split('/') ?? [];
-  let projects:any[] = appConfig.projects;
-  let projectId:string = resource.length == 6 
-  ? projects.find((p) => p.name === `${resource[0]}/${resource[1]}`)?.projectId
-  : '';
-  return (projectId.length > 1 && resource.length == 6) ? `${projectId}.${resource[3]}.${resource[5]}` : resource.toString();
+
+  if (!appConfig || !appConfig.aspects) {
+    console.warn('App config or aspects not found in session storage');
+    return '';
+  }
+
+  let resource: string[] = appConfig.aspects.find((a: any) => a.dataplexEntry?.entrySource?.displayName === name)?.dataplexEntry?.entrySource?.resource.split('/') ?? [];
+  let projects: any[] = appConfig.projects || [];
+  let projectId: string = resource.length == 6
+    ? projects.find((p) => p.name === `${resource[0]}/${resource[1]}`)?.projectId
+    : '';
+  return (projectId && projectId.length > 1 && resource.length == 6) ? `${projectId}.${resource[3]}.${resource[5]}` : resource.toString();
 }
+
 // Thunk for searching resources based on a search term
-export const searchResourcesByTerm = createAsyncThunk('resources/searchResourcesByTerm', async (requestData: any , { rejectWithValue }) => {
+export const searchResourcesByTerm = createAsyncThunk('resources/searchResourcesByTerm', async (requestData: any, { rejectWithValue }) => {
   // If the search term is empty, we are returning an empty list.
   if (!requestData.term) {
     return [];
@@ -25,9 +31,9 @@ export const searchResourcesByTerm = createAsyncThunk('resources/searchResources
   try {
     let requestResourceData = {};
     axios.defaults.headers.common['Authorization'] = requestData.id_token ? `Bearer ${requestData.id_token}` : '';
-    if(requestData.requestResourceData) {
+    if (requestData.requestResourceData) {
       requestResourceData = requestData.requestResourceData;
-    }else{ 
+    } else {
       let searchString = '';
       // if(requestData.term.includes(':') || requestData.term.includes('=') 
       //   || requestData.term.includes('>') || requestData.term.includes('<')) {
@@ -40,42 +46,42 @@ export const searchResourcesByTerm = createAsyncThunk('resources/searchResources
       //   searchString += `category:${requestData.term}|displayName:${requestData.term}`;
       // }
       searchString = requestData.term;
-      if( requestData.filters && requestData.filters.length > 0) {
+      if (requestData.filters && requestData.filters.length > 0) {
         let aspectType = '';
         let system = '';
         let typeAliases = '';
         let project = '';
 
         requestData.filters.forEach((filter: any) => {
-          if(filter.type === 'aspectType') {
+          if (filter.type === 'aspectType') {
             //let aspect = filter.name.replace(' ', '-');
             const name = getAspectName(filter.name);
-            if(filter.subAnnotationData && filter.subAnnotationData.length > 0) {
-              filter.subAnnotationData.forEach((subAspect:any) => {
+            if (filter.subAnnotationData && filter.subAnnotationData.length > 0) {
+              filter.subAnnotationData.forEach((subAspect: any) => {
                 let subAspectName = `${name}.${subAspect.fieldName}`;
                 let subAspectNameVal = subAspect.enabled ? (subAspect.filterType == 'include' ? `(aspect:${subAspectName}:${subAspect.value})` : `-(aspect:(${subAspectName}:${subAspect.value})`) : '';
                 aspectType += (aspectType != '' ? '|' : '') + `aspect=(${subAspectName}) AND ${subAspectNameVal}`;
               });
-            }else {
+            } else {
               aspectType += (aspectType != '' ? '|' : '') + `aspect=(${name})`;
             }
           }
-          if(filter.type === 'system') {
-            system += (system != '' ? '|' : '') + `${filter.name.replaceAll(' ', '_').replace('/','').toUpperCase()}`;
+          if (filter.type === 'system') {
+            system += (system != '' ? '|' : '') + `${filter.name.replaceAll(' ', '_').replace('/', '').toUpperCase()}`;
           }
-          if(filter.type === 'typeAliases') {
+          if (filter.type === 'typeAliases') {
             const filterName = filter.name.toLowerCase();
             let assetType = '';
 
             if (filterName === 'exchange') {
-                assetType = 'data_exchange|exchange'; 
+              assetType = 'data_exchange|exchange';
             } else {
-                assetType = filter.name.replaceAll(' ', '_').replace('/','').toLowerCase();
+              assetType = filter.name.replaceAll(' ', '_').replace('/', '').toLowerCase();
             }
-            
+
             typeAliases += (typeAliases != '' ? '|' : '') + assetType;
-            }
-          if(filter.type === 'project') {
+          }
+          if (filter.type === 'project') {
             project += (project != '' ? '|' : '') + `${filter.name}`;
           }
         });
@@ -93,6 +99,11 @@ export const searchResourcesByTerm = createAsyncThunk('resources/searchResources
         searchString += typeAliases != '' ? ((searchString != '' ? ',' : '') + `(type=(${typeAliases}))`) : '';
         searchString += project != '' ? ((searchString != '' ? ',' : '') + `(project=(${project}))`) : '';
       }
+
+      if (requestData.aspectFilters && requestData.aspectFilters.length > 0) {
+        const aspects = requestData.aspectFilters.join('|');
+        searchString += (searchString !== '' ? ' ' : '') + `aspect:(${aspects})`;
+      }
       requestResourceData = {
         query: searchString,
         pageSize: requestData.semanticSearch ? 100 : 20,
@@ -101,47 +112,48 @@ export const searchResourcesByTerm = createAsyncThunk('resources/searchResources
         semanticSearch: requestData.semanticSearch || false,
       };
     }
-    
+
     // const response = await axios.post(URLS.API_URL + URLS.SEARCH, requestResourceData);
     // const data = await response.data;
     // return data;
 
     const response = await axios.post(
-      `https://dataplex.googleapis.com/v1/projects/${import.meta.env.VITE_GOOGLE_PROJECT_ID}/locations/global:searchEntries`,
-      requestResourceData
-      // },
-      // {
-      //   headers: {
-      //     Authorization: `Bearer ${requestData.id_token}`,
-      //     'Content-Type': 'application/json',
-      //   },
-      // }
+      URLS.API_URL + '/search',
+      requestResourceData,
+      {
+        headers: {
+          'Authorization': requestData.id_token ? `Bearer ${requestData.id_token}` : '',
+          'x-user-email': requestData.userEmail || '' // Ensure we pass the user email for filtering
+        }
+      }
     );
 
     //console.log(response);
     return response.status === 200 || response.status !== 401 ? {
-      data : response.data.results,
-      requestData: {...requestResourceData,pageToken: response.data.nextPageToken || ''},
-      results : response.data,
+      data: response.data.results,
+      requestData: { ...requestResourceData, pageToken: response.data.nextPageToken || '' },
+      results: response.data,
     } : rejectWithValue('Token expired');
     //return mockSearchData; // For testing, we return mock data
 
   } catch (error) {
     if (error instanceof AxiosError) {
       return rejectWithValue(error.response?.data || error.message);
+    } else if (error instanceof Error) {
+      return rejectWithValue(error.message);
     }
     return rejectWithValue('An unknown error occurred');
   }
 });
 
-export const browseResourcesByAspects = createAsyncThunk('resources/browseResourcesByAspects', async (requestData: any , { rejectWithValue }) => {
+export const browseResourcesByAspects = createAsyncThunk('resources/browseResourcesByAspects', async (requestData: any, { rejectWithValue }) => {
 
   // If the term is not empty, we will perform a search.
   try {
     // search from your API endpoint 
     axios.defaults.headers.common['Authorization'] = requestData.id_token ? `Bearer ${requestData.id_token}` : '';
     let searchString = '';
-    if(requestData.annotationName && requestData.annotationName != '') {
+    if (requestData.annotationName && requestData.annotationName != '') {
       let aspectType = getAspectName(requestData.annotationName);
 
       // let subAspect = '';
@@ -151,7 +163,7 @@ export const browseResourcesByAspects = createAsyncThunk('resources/browseResour
       searchString += aspectType != '' ? (
         `(aspect=(${aspectType}${(requestData.subAnnotationName && requestData.subAnnotationName != '') ? '.' : ''}${requestData.subAnnotationName}))`) : '';
     }
-    if(searchString != '') {
+    if (searchString != '') {
       const response = await axios.post(URLS.API_URL + URLS.SEARCH, {
         query: searchString,
       });
@@ -164,13 +176,13 @@ export const browseResourcesByAspects = createAsyncThunk('resources/browseResour
   } catch (error) {
     if (error instanceof AxiosError) {
       return rejectWithValue(error.response?.data || error.message);
-    }else if (error instanceof Error) {
-      return rejectWithValue(error);
+    } else if (error instanceof Error) {
+      return rejectWithValue(error.message);
     }
     return rejectWithValue('An unknown error occurred');
   }
 });
-export const fetchEntriesByParent = createAsyncThunk('resources/fetchEntriesByParent', async (requestData: any , { rejectWithValue }) => {
+export const fetchEntriesByParent = createAsyncThunk('resources/fetchEntriesByParent', async (requestData: any, { rejectWithValue }) => {
   // If the search parent is empty, we are returning an empty list.
   if (!requestData.parent) {
     return [];
@@ -182,7 +194,7 @@ export const fetchEntriesByParent = createAsyncThunk('resources/fetchEntriesByPa
     axios.defaults.headers.common['Authorization'] = requestData.id_token ? `Bearer ${requestData.id_token}` : '';
     let searchString = `parent=${requestData.parent}`;
 
-    
+
     const response = await axios.post(URLS.API_URL + URLS.SEARCH, {
       query: searchString,
     });
@@ -201,12 +213,12 @@ export const fetchEntriesByParent = createAsyncThunk('resources/fetchEntriesByPa
 // It includes an array of items, a status to track loading state, and an error message
 type ResourcesState = {
   items: unknown; // Replace 'unknown' with your actual resource type
-  itemsNextPageSize: number|null;
+  itemsNextPageSize: number | null;
   itemsRequestData: any | null;
   totalItems?: number;
   itemsStore: unknown[]; // For storing all fetched items
   // For entry list in resource details page
-  entryListData:unknown;
+  entryListData: unknown;
   entryListNextPageToken: string;
   totalEntryList?: number;
   entryListStatus: 'idle' | 'loading' | 'succeeded' | 'failed';
@@ -220,11 +232,11 @@ const initialState: ResourcesState = {
   itemsNextPageSize: null,
   itemsRequestData: null,
   totalItems: 0,
-  itemsStore:[],
-  entryListData:[],
+  itemsStore: [],
+  entryListData: [],
   entryListNextPageToken: '',
   totalEntryList: 0,
-  entryListStatus:'idle',
+  entryListStatus: 'idle',
   status: 'idle',
   error: null,
   entryListError: null,
@@ -264,13 +276,15 @@ export const resourcesSlice = createSlice({
         state.status = 'loading';
       })
       .addCase(searchResourcesByTerm.fulfilled, (state, action) => {
-        const payload = Array.isArray(action.payload) ? { data: [], requestData:{}, results:{} } : action.payload;
+        const payload = Array.isArray(action.payload) ? { data: [], requestData: {}, results: {} } : action.payload;
         state.totalItems = payload?.results?.totalSize ?? 0;
         state.itemsRequestData = payload?.requestData ?? {};
-        state.itemsStore = [...state.itemsStore, ...(payload?.data ?? [])]; // Append new results to the store
-        state.items = state.itemsNextPageSize != null 
-        ? state.itemsStore.slice(state.itemsStore.length - state.itemsNextPageSize)
-        : payload?.data ?? []; // Replace the list with search results
+        // Ensure data is always an array before spreading
+        const newData = Array.isArray(payload?.data) ? payload.data : [];
+        state.itemsStore = [...state.itemsStore, ...newData]; // Append new results to the store
+        state.items = state.itemsNextPageSize != null
+          ? state.itemsStore.slice(state.itemsStore.length - state.itemsNextPageSize)
+          : newData; // Replace the list with search results
         state.status = 'succeeded';
       })
       .addCase(searchResourcesByTerm.rejected, (state, action) => {
@@ -284,10 +298,12 @@ export const resourcesSlice = createSlice({
       .addCase(browseResourcesByAspects.fulfilled, (state, action) => {
         state.totalItems = action.payload?.results?.totalSize ?? 0;
         state.itemsRequestData = action.payload?.requestData ?? {};
-        state.itemsStore = [...state.itemsStore, ...(action.payload?.data ?? [])]; // Append new results to the store
-        state.items = state.itemsNextPageSize != null 
-        ? state.itemsStore.slice(state.itemsStore.length - state.itemsNextPageSize)
-        : action.payload?.data ?? []; // Replace the list with search results
+        // Ensure data is always an array before spreading
+        const newData = Array.isArray(action.payload?.data) ? action.payload.data : [];
+        state.itemsStore = [...state.itemsStore, ...newData]; // Append new results to the store
+        state.items = state.itemsNextPageSize != null
+          ? state.itemsStore.slice(state.itemsStore.length - state.itemsNextPageSize)
+          : newData; // Replace the list with search results
         state.status = 'succeeded';
       })
       .addCase(browseResourcesByAspects.rejected, (state, action) => {

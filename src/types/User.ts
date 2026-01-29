@@ -7,4 +7,6 @@ export interface User {
   roles: string[] | undefined;
   permissions: string[] | undefined;
   appConfig: any;
+  role: any;
+  isAdmin: boolean;
 };

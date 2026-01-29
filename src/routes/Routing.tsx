@@ -15,7 +15,6 @@ import SearchPage from '../component/SearchPage/SearchPage';
 import { Email, Info } from '@mui/icons-material';
 import { Button } from '@mui/material';
 import ViewDetails from '../component/ViewDetails/ViewDetails';
-import AdminPanel from '../component/AdminPanel/AdminPanel';
 import { useAuth } from '../auth/AuthProvider';
 import { ProtectedRoute } from '../auth/ProtectedRoute';
 import BrowseByAnnotation from '../component/BrowseByAnnotation/BrowseByAnnotation';
@@ -160,7 +159,7 @@ const Routing = () => {
       <Route
         path="/admin-permissions"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute adminOnly={true}>
             <SessionExpirationWrapper>
               <Layout searchBar={true}>
                 <PermissionsPanel />
@@ -170,21 +169,9 @@ const Routing = () => {
         }
       />
       <Route
-        path="/admin-panel"
-        element={
-          <ProtectedRoute>
-            <SessionExpirationWrapper>
-              <Layout searchBar={true}>
-                <AdminPanel />
-              </Layout>
-            </SessionExpirationWrapper>
-          </ProtectedRoute>
-        }
-      />
-      <Route
         path="/admin-access"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute adminOnly={true}>
             <SessionExpirationWrapper>
               <Layout searchBar={true}>
                 <AdminAccessManagement />

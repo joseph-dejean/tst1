@@ -54,7 +54,7 @@ interface SubmitAccessProps {
   assetName: string;
   entry?: any; // Add entry data to extract contacts
   onSubmitSuccess: (assetName: string) => void;
-  previewData?: any; 
+  previewData?: any;
   isLookup?: boolean;
 }
 
@@ -71,7 +71,7 @@ const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName,
   const extractContacts = (entryData: any): any[] => {
     console.log(entryData);
     if (!entryData || !entryData.aspects) return [];
-    
+
     const number = entryData.entryType?.split('/')[1];
     if (!number) return [];
 
@@ -80,23 +80,30 @@ const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName,
 
   const extractContactEmails = (entryData: any): string[] => {
     const contacts = extractContacts(entryData);
-    
+
     return (contacts.length > 0) ? contacts.map((contact: any) => {
-      const nameValue = isLookup? contact.name : contact.structValue.fields.name.stringValue;
+      const nameValue = isLookup ? contact.name : contact.structValue.fields.name.stringValue;
+      if (!nameValue) return null;
+
       // Extract email from format like "Name <email@example.com>"
-      const emailMatch = nameValue.match(/<(.+?)>/);
-      return emailMatch ? emailMatch[1] : null;
+      const emailWithBrackets = nameValue.match(/<(.+?)>/);
+      if (emailWithBrackets) return emailWithBrackets[1];
+
+      // fallback: check if the string itself is an email
+      if (nameValue.includes('@')) return nameValue.trim();
+
+      return null;
     }).filter((email: string | null) => email !== null) : [];
   };
 
   useEffect(() => {
-    let contacts:string[] = extractContactEmails(entry);
+    let contacts: string[] = extractContactEmails(entry);
     if (contacts.length > 0) {
       setContactEmails(contacts);
-    }else{
+    } else {
       setContactEmails([]);
     }
-  }, []);
+  }, [entry]); // Dependency on entry is important
 
   const handleSubmit = async () => {
     if (!user?.email) {
@@ -111,63 +118,43 @@ const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName,
     }
 
     setIsSubmitting(true);
-    console.log(isSubmitting);
     setError(null);
     setSuccess(false);
 
     try {
-      console.log('Extracted contact emails:', contactEmails);
-      if(contactEmails.length > 0){
-        try{
-        const response = await axios.post(`${URLS.API_URL}${URLS.ACCESS_REQUEST}`, {
-            assetName,
-            message,
-            requesterEmail: user.email,
-            projectId: import.meta.env.VITE_GOOGLE_PROJECT_ID,
-            projectAdmin: contactEmails 
-          },{
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${user?.token || ''}`
-          }
-        });
+      console.log('Final contact emails for submission:', contactEmails);
 
-        const data = await response.data;
-        if (data.success) {
-          setSuccess(true);
-          console.log(success);
-          setMessage('');
-          onSubmitSuccess(assetName);
-          
-          // Close the panel after a short delay
-          setTimeout(() => {
-            onClose();
-            setSuccess(false);
-          }, 2000);
-        } else {
-          throw new Error(data.error || 'Failed to submit access request');
+      const response = await axios.post(`${URLS.API_URL}${URLS.ACCESS_REQUEST}`, {
+        assetName,
+        message,
+        requesterEmail: user.email,
+        projectId: import.meta.env.VITE_GOOGLE_PROJECT_ID,
+        projectAdmin: contactEmails // Even if empty, let backend handle it
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.token || ''}`
         }
-        
-      }catch(error){
-        console.log(error);
-        throw new Error('Failed to submit access request');
-      }
+      });
 
-      }else{
+      const data = response.data;
+      if (data.success) {
         setSuccess(true);
-        console.log(success);
-        setMessage('Contacts/Emails not available for this entry');
+        setMessage('');
         onSubmitSuccess(assetName);
-        
+
         // Close the panel after a short delay
         setTimeout(() => {
           onClose();
           setSuccess(false);
         }, 2000);
+      } else {
+        throw new Error(data.error || 'Failed to submit access request');
       }
-    } catch (error) {
-      console.error('Error submitting access request:', error);
-      setError(error instanceof Error ? error.message : 'An unexpected error occurred');
+    } catch (err: any) {
+      console.error('Error submitting access request:', err);
+      const backendError = err.response?.data?.error || err.message;
+      setError(backendError || 'An unexpected error occurred');
     } finally {
       setIsSubmitting(false);
     }
@@ -184,29 +171,40 @@ const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName,
     if (!timestamp) {
       return { date: '-', time: '' };
     }
-    
+
     const myDate = new Date(timestamp * 1000);
 
-    const date = new Intl.DateTimeFormat('en-US', { 
-      month: "short", 
-      day: "numeric", 
+    const date = new Intl.DateTimeFormat('en-US', {
+      month: "short",
+      day: "numeric",
       year: "numeric",
     }).format(myDate);
 
-    const time = new Intl.DateTimeFormat('en-US', { 
+    const time = new Intl.DateTimeFormat('en-US', {
       hour: "numeric",
       minute: "2-digit",
-      second: "2-digit", 
-      hour12: true 
+      second: "2-digit",
+      hour12: true
     }).format(myDate);
 
-    return { date, time }; 
+    return { date, time };
   };
 
-const { date: createDate, time: createTime } = isLookup ? {date : previewData?.createTime.split('T')[0], time:previewData?.createTime.split('T')[1]?.slice(0, 8)} : getFormattedDateTimeParts(previewData?.createTime?.seconds);
-const { date: updateDate, time: updateTime } = isLookup ? {date : previewData?.updateTime.split('T')[0], time:previewData?.updateTime.split('T')[1]?.slice(0, 8)} : getFormattedDateTimeParts(previewData?.updateTime?.seconds);
+  const { date: createDate, time: createTime } = isLookup
+    ? {
+      date: previewData?.createTime?.split('T')[0] || '-',
+      time: previewData?.createTime?.split('T')[1]?.slice(0, 8) || ''
+    }
+    : getFormattedDateTimeParts(previewData?.createTime?.seconds);
 
-return ((previewData != null || previewData != undefined) && entry) ?(
+  const { date: updateDate, time: updateTime } = isLookup
+    ? {
+      date: previewData?.updateTime?.split('T')[0] || '-',
+      time: previewData?.updateTime?.split('T')[1]?.slice(0, 8) || ''
+    }
+    : getFormattedDateTimeParts(previewData?.updateTime?.seconds);
+
+  return ((previewData != null || previewData != undefined) && entry) ? (
     <Box
       sx={{
         position: 'fixed',
@@ -292,7 +290,7 @@ return ((previewData != null || previewData != undefined) && entry) ?(
             sx={{
               display: 'flex',
               justifyContent: 'space-between',
-              alignItems: 'flex-start',   
+              alignItems: 'flex-start',
               gap: '16px'
             }}
           >
@@ -329,7 +327,7 @@ return ((previewData != null || previewData != undefined) && entry) ?(
                   fontFamily: '"Google Sans Text", sans-serif',
                   fontSize: '11px',
                   // Note: Original code had fontWeight 400 here, you may want 500 for consistency
-                  fontWeight: '500', 
+                  fontWeight: '500',
                   color: '#575757',
                   marginBottom: '4px'
                 }}
@@ -374,57 +372,57 @@ return ((previewData != null || previewData != undefined) && entry) ?(
             {
               extractContacts(entry).length > 0 ? (
                 extractContacts(entry).map((contact: any, index: number) => (
-                    <Box key={index} sx={{ flex: '1 1 auto' }}>
-                      <Typography
-                        sx={{
-                          fontFamily: '"Google Sans Text", sans-serif',
-                          fontSize: '11px',
-                          fontWeight: '500',
-                          color: '#575757',
-                          marginBottom: '4px'
-                        }}
-                      >
-                        {isLookup ? contact.role : contact.structValue.fields.role.stringValue}
-                      </Typography>
-                      <Typography
-                        sx={{
-                          fontFamily: '"Google Sans Text", sans-serif',
-                          fontSize: '14px',
-                          fontWeight: '400',
-                          color: '#1F1F1F'
-                        }}
-                      >
-                        {isLookup ?
-                          (contact.name.split('<').length > 1 
-                          ? contact.name.split('<')[1].slice(0, -1) 
-                          : contact.name.length > 0 
-                            ? contact.name 
+                  <Box key={index} sx={{ flex: '1 1 auto' }}>
+                    <Typography
+                      sx={{
+                        fontFamily: '"Google Sans Text", sans-serif',
+                        fontSize: '11px',
+                        fontWeight: '500',
+                        color: '#575757',
+                        marginBottom: '4px'
+                      }}
+                    >
+                      {isLookup ? contact.role : contact.structValue.fields.role.stringValue}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontFamily: '"Google Sans Text", sans-serif',
+                        fontSize: '14px',
+                        fontWeight: '400',
+                        color: '#1F1F1F'
+                      }}
+                    >
+                      {isLookup ?
+                        (contact.name.split('<').length > 1
+                          ? contact.name.split('<')[1].slice(0, -1)
+                          : contact.name.length > 0
+                            ? contact.name
                             : "--")
-                          :
+                        :
 
-                          (contact.structValue.fields.name.stringValue.split('<').length > 1 
-                          ? contact.structValue.fields.name.stringValue.split('<')[1].slice(0, -1) 
-                          : contact.structValue.fields.name.stringValue.length > 0 
-                            ? contact.structValue.fields.name.stringValue 
+                        (contact.structValue.fields.name.stringValue.split('<').length > 1
+                          ? contact.structValue.fields.name.stringValue.split('<')[1].slice(0, -1)
+                          : contact.structValue.fields.name.stringValue.length > 0
+                            ? contact.structValue.fields.name.stringValue
                             : "--")
-                        }
-                      </Typography>
+                      }
+                    </Typography>
+                  </Box>
+                ))
+              ) : (
+                <Typography
+                  sx={{
+                    fontFamily: '"Google Sans Text", sans-serif',
+                    fontSize: '14px',
+                    fontWeight: '400',
+                    color: '#1F1F1F'
+                  }}
+                >
+                  -
+                </Typography>
+              )
+            }
           </Box>
-        ))
-    ) : (
-      <Typography
-        sx={{
-          fontFamily: '"Google Sans Text", sans-serif',
-          fontSize: '14px',
-          fontWeight: '400',
-          color: '#1F1F1F'
-        }}
-      >
-        -
-      </Typography>
-    )
-  }
-</Box>
         </Box>
 
         {/* Context and Message Section */}
@@ -448,7 +446,7 @@ return ((previewData != null || previewData != undefined) && entry) ?(
               marginBottom: '16px'
             }}
           >
-            The following message will be send to the the owner of the asset. 
+            The following message will be send to the the owner of the asset.
             {/* The email will include your request justification, 
             and a link to the Google Cloud console where your data producer can address your request. */}
           </Typography>
@@ -520,31 +518,31 @@ return ((previewData != null || previewData != undefined) && entry) ?(
         >
           Cancel
         </Button>
-        <Tooltip title={extractContacts(entry).length > 0 ? "Click here to send an request access email" : "No contact information available to request access"} arrow>
-        <Button
-          //disabled = {contactEmails.length > 0 ? false : true}
-          onClick={() => {
-            if(extractContacts(entry).length > 0) handleSubmit();
-          }}
-          variant="contained"
-          style={{color: '#FFFFFF',backgroundColor: '#0E4DCA'}}
-          sx={{
-            fontSize: '14px',
-            fontWeight: '500',
-            backgroundColor: extractContacts(entry).length > 0 ? '#0E4DCA' : '#A0A0A0',
-            color: '#FFFFFF',
-            textTransform: 'none',
-            borderRadius: '100px',
-            padding: '8px 16px',
-            opacity: extractContacts(entry).length > 0 ? 1 : 0.6,
-            '&:hover': {
-              backgroundColor: extractContacts(entry).length > 0 ? '#0B3DA8' : '#909090'
-            },
-            cursor: extractContacts(entry).length > 0 ? 'pointer' : 'not-allowed',
-          }}
-        >
-          Submit
-        </Button>
+        <Tooltip title={isSubmitting ? "Submitting..." : "Click here to submit an access request"} arrow>
+          <Button
+            disabled={isSubmitting}
+            onClick={handleSubmit}
+            variant="contained"
+            style={{ color: '#FFFFFF', backgroundColor: '#0E4DCA' }}
+            sx={{
+              fontSize: '14px',
+              fontWeight: '500',
+              backgroundColor: '#0E4DCA',
+              color: '#FFFFFF',
+              textTransform: 'none',
+              borderRadius: '100px',
+              padding: '8px 16px',
+              '&:hover': {
+                backgroundColor: '#0B3DA8'
+              },
+              '&:disabled': {
+                backgroundColor: '#A0A0A0',
+                opacity: 0.6
+              }
+            }}
+          >
+            {isSubmitting ? 'Submitting...' : 'Submit'}
+          </Button>
         </Tooltip>
       </Box>
     </Box>

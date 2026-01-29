@@ -1,7 +1,7 @@
 import { Box, Tooltip, Typography } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import Tag from '../Tags/Tag';
-import { AccessTime, LocationOnOutlined } from '@mui/icons-material';
+import { AccessTime, LocationOnOutlined, Lock } from '@mui/icons-material';
 import './SearchEntriesCard.css';
 import { type SxProps, type Theme } from '@mui/material/styles';
 import DatabaseIcon from '../../assets/svg/database_icon.svg';
@@ -358,6 +358,11 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
                     {name}
                   </Typography>
                 </Tooltip>
+                {entry.userHasAccess === false && (
+                  <Tooltip title="Access Restricted" arrow placement="top">
+                    <Lock sx={{ fontSize: '16px', color: '#575757', marginLeft: '4px' }} />
+                  </Tooltip>
+                )}
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <Tag text={(() => {
                     return systemName.toLowerCase() === 'bigquery' ? 'BigQuery' : systemName.replace("_", " ").replace("-", " ").toLowerCase();
@@ -493,6 +498,39 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
                 </svg> */}
               </div>
             </div>
+            {entry.aspects && Object.keys(entry.aspects).length > 0 && (
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.75rem',
+                marginTop: '0.5rem',
+                marginLeft: '2rem' // Align with title
+              }}>
+                {Object.keys(entry.aspects)
+                  .filter(key => !key.includes('dataplex-types.global'))
+                  .map((aspectKey) => {
+                    const aspectType = aspectKey.split('/').pop() || aspectKey;
+                    const displayName = aspectType.split('.').pop()?.replace(/_/g, ' ') || aspectType;
+                    return (
+                      <span key={aspectKey} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        color: '#575757',
+                        fontSize: '0.75rem',
+                        fontWeight: 500,
+                        backgroundColor: '#F1F3F4',
+                        padding: '2px 8px',
+                        borderRadius: '12px'
+                      }}>
+                        <img src="/assets/svg/annotations-icon-blue.svg" alt="" style={{ width: '12px', height: '12px' }} />
+                        {displayName}
+                      </span>
+                    );
+                  })
+                }
+              </div>
+            )}
             <div style={{
               flex: '1 1 auto',
               minWidth: 0 // Allow content to shrink

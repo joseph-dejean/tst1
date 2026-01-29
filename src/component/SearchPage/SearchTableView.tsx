@@ -78,13 +78,13 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
   //   event.stopPropagation();
   //   const entryName = entry.name;
   //   const newFavorites = new Set(favorites);
-    
+
   //   if (newFavorites.has(entryName)) {
   //     newFavorites.delete(entryName);
   //   } else {
   //     newFavorites.add(entryName);
   //   }
-    
+
   //   setFavorites(newFavorites);
   //   onFavoriteClick(entry);
   // };
@@ -135,8 +135,8 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
   };
 
   return (
-    <TableContainer 
-      component={Paper} 
+    <TableContainer
+      component={Paper}
       sx={{
         backgroundColor: '#FFFFFF',
         borderRadius: '8px',
@@ -147,7 +147,7 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
     >
       <Table sx={{ minWidth: 800 }} aria-label="search results table">
         <TableHead>
-          <TableRow 
+          <TableRow
             sx={{
               '& .MuiTableCell-root': {
                 borderBottom: 'none',
@@ -157,7 +157,7 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
             }}
           >
             {/* Name */}
-            <TableCell 
+            <TableCell
               sx={{
                 fontSize: '11px',
                 fontWeight: '700',
@@ -172,8 +172,8 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
                   <IconButton
                     size="small"
                     onClick={handleToggleNameSort}
-                    sx={{ 
-                      padding: '2px', 
+                    sx={{
+                      padding: '2px',
                       color: '#444746',
                       opacity: (sortColumn === 'name' && nameSortOrder !== null) ? 1 : 0
                     }}
@@ -187,7 +187,7 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
             </TableCell>
 
             {/* Description */}
-            <TableCell 
+            <TableCell
               sx={{
                 fontFamily: '"Google Sans Text",sans-serif',
                 fontSize: '11px',
@@ -200,7 +200,7 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
             </TableCell>
 
             {/* Type */}
-            <TableCell 
+            <TableCell
               sx={{
                 fontFamily: '"Google Sans Text",sans-serif',
                 fontSize: '11px',
@@ -211,7 +211,7 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
             >
               Type
             </TableCell>
-            
+
             {/* Owner */}
             {/* <TableCell 
               sx={{
@@ -227,7 +227,7 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
             </TableCell> */}
 
             {/* Last Modified */}
-            <TableCell 
+            <TableCell
               sx={{
                 fontFamily: '"Google Sans Text",sans-serif',
                 fontSize: '11px',
@@ -237,14 +237,14 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
                 paddingLeft: '3px'
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' , '&:hover .MuiIconButton-root': { opacity: 1 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px', '&:hover .MuiIconButton-root': { opacity: 1 } }}>
                 <span>Last modified</span>
                 <Tooltip title="Sort" arrow>
                   <IconButton
                     size="small"
                     onClick={handleToggleDateSort}
-                    sx={{ 
-                      padding: '2px', 
+                    sx={{
+                      padding: '2px',
                       color: '#444746',
                       opacity: (sortColumn === 'date' && dateSortOrder !== null) ? 1 : 0
                     }}
@@ -262,12 +262,14 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
           {displayedResources.map((resource: any) => {
             const entry = resource.dataplexEntry;
             // const isFavorite = favorites.has(entry.name);
-            const hasLock = entry.name.includes('Sales_Dataset') || entry.name.includes('sales_reporting'); // Demo logic
-            
+            const hasLock = resource.userHasAccess === false;
+            // Include userHasAccess with entry for preview
+            const entryWithAccess = { ...entry, userHasAccess: resource.userHasAccess };
+
             return (
               <TableRow
                 key={entry.name}
-                onClick={() => handleRowClick(entry)}
+                onClick={() => handleRowClick(entryWithAccess)}
                 sx={{
                   borderBottom: '1px solid #DADCE0',
                   cursor: 'pointer',
@@ -277,20 +279,20 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
                   }
                 }}
               >
-                <TableCell 
-                   sx={{
-                     fontFamily: '"Google Sans Text",sans-serif',
-                     fontSize: '11px',
-                     color: '#1F1F1F',
-                     padding: '10px 6px',
-                     paddingLeft: '16px',
-                     display: 'flex',
-                     borderBottom: 'none',
-                     alignItems: 'center',
-                     gap: '8px',
-                     maxWidth: '200px'
-                   }}
-                 >
+                <TableCell
+                  sx={{
+                    fontFamily: '"Google Sans Text",sans-serif',
+                    fontSize: '11px',
+                    color: '#1F1F1F',
+                    padding: '10px 6px',
+                    paddingLeft: '16px',
+                    display: 'flex',
+                    borderBottom: 'none',
+                    alignItems: 'center',
+                    gap: '8px',
+                    maxWidth: '200px'
+                  }}
+                >
                   {/* <IconButton
                     onClick={(e) => handleFavoriteClick(e, entry)}
                     sx={{
@@ -325,15 +327,15 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
                     <Lock sx={{ fontSize: '12px', color: '#575757' }} />
                   )}
                 </TableCell>
-                <TableCell 
-                   sx={{
-                     fontFamily: '"Google Sans Text",sans-serif',
-                     fontSize: '0.75rem',
-                     color: '#575757',
-                     padding: '3px 12px',
-                     maxWidth: '200px'
-                   }}
-                 >
+                <TableCell
+                  sx={{
+                    fontFamily: '"Google Sans Text",sans-serif',
+                    fontSize: '0.75rem',
+                    color: '#575757',
+                    padding: '3px 12px',
+                    maxWidth: '200px'
+                  }}
+                >
                   <Typography
                     sx={{
                       fontFamily: '"Google Sans Text",sans-serif',
@@ -347,22 +349,22 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
                     {entry.entrySource?.description || 'No Description Available'}
                   </Typography>
                 </TableCell>
-                <TableCell 
-                   sx={{
-                     padding: '3px 12px'
-                   }}
-                 >
+                <TableCell
+                  sx={{
+                    padding: '3px 12px'
+                  }}
+                >
                   <Box sx={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                    <Tag 
+                    <Tag
                       text={(() => {
                         return entry.entrySource?.system.toLowerCase() === 'bigquery' ? 'BigQuery' : entry.entrySource?.system.charAt(0).toUpperCase() + entry.entrySource?.system.slice(1).toLowerCase();
-                      })()} 
+                      })()}
                       css={{
                         fontFamily: '"Google Sans Text",sans-serif',
                         backgroundColor: '#C2E7FF',
                         color: '#004A77',
                         borderRadius: '8px',
-                        height:'20px',
+                        height: '20px',
                         padding: '1px 8px',
                         fontSize: '12px',
                         fontWeight: '500',
@@ -370,13 +372,13 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
                         border: 'none'
                       }}
                     />
-                    <Tag 
-                      text={getEntryType(entry.name, '/')} 
+                    <Tag
+                      text={getEntryType(entry.name, '/')}
                       css={{
                         fontFamily: '"Google Sans Text",sans-serif',
                         backgroundColor: '#C2E7FF',
                         color: '#004A77',
-                        height:'20px',
+                        height: '20px',
                         borderRadius: '8px',
                         padding: '1px 8px',
                         fontSize: '12px',
@@ -397,17 +399,17 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
                  >
                    {entry.entrySource?.owner || '-'}
                 </TableCell> */}
-                <TableCell 
-                   sx={{
-                     fontFamily: '"Google Sans Text",sans-serif',
-                     fontSize: '12px',
-                     color: '#575757',
-                     padding: '3px 12px',
-                     paddingLeft: '3px'
-                   }}
-                 >
-                   {getFormatedDate(entry?.updateTime || entry?.createTime)}
-                 </TableCell>
+                <TableCell
+                  sx={{
+                    fontFamily: '"Google Sans Text",sans-serif',
+                    fontSize: '12px',
+                    color: '#575757',
+                    padding: '3px 12px',
+                    paddingLeft: '3px'
+                  }}
+                >
+                  {getFormatedDate(entry?.updateTime || entry?.createTime)}
+                </TableCell>
               </TableRow>
             );
           })}

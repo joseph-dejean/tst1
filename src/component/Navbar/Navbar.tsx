@@ -140,7 +140,7 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
   };
 
   useEffect(() => {
-    dispatch(searchResourcesByTerm({ term: searchTerm, id_token: id_token, semanticSearch: semanticSearch }));
+    dispatch(searchResourcesByTerm({ term: searchTerm, id_token: id_token, semanticSearch: semanticSearch, userEmail: user?.email }));
   }, []);
 
   const handleOpenNavMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -188,7 +188,7 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
 
   const handleNavSearch = (text: string) => {
     dispatch({ type: 'resources/setItemsStoreData', payload: [] });
-    dispatch(searchResourcesByTerm({ term: text, id_token: id_token, filters: searchFilters, semanticSearch: semanticSearch }));
+    dispatch(searchResourcesByTerm({ term: text, id_token: id_token, filters: searchFilters, semanticSearch: semanticSearch, userEmail: user?.email }));
     searchNavigate && navigate('/search');
   }
 

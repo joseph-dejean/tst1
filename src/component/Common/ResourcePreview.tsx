@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Alert, Box, Grid, Tooltip, IconButton, Typography, Skeleton } from '@mui/material';
 import { Close } from '@mui/icons-material';
 import { useDispatch, useSelector } from 'react-redux';
+import axios from 'axios';
 import Tag from '../Tags/Tag';
 import CTAButton from '../Buttons/CTAButton';
 import { fetchEntry } from '../../features/entry/entrySlice';
@@ -19,6 +20,7 @@ import { getName, getEntryType, generateBigQueryLink, hasValidAnnotationData, ge
 import { useAuth } from '../../auth/AuthProvider';
 import { usePreviewEntry } from '../../hooks/usePreviewEntry';
 import { useAccessRequest } from '../../contexts/AccessRequestContext';
+import { URLS } from '../../constants/urls';
 
 /**
  * @file ResourcePreview.tsx
@@ -102,7 +104,7 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
 }) => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const { setAccessPanelOpen } = useAccessRequest();
 
   // Local state
@@ -114,6 +116,7 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
   const [filteredAnnotationEntry, setFilteredAnnotationEntry] = useState<any | null>(null);
   const [viewDetailAccessable, setViewDetailAccessable] = useState<boolean>(true);
   const [expandedAnnotations, setExpandedAnnotations] = useState<Set<string>>(new Set());
+  const [checkedAccess, setCheckedAccess] = useState<boolean | null>(null); // Dynamic access check result
 
   // Use shared favorite state
   // const { isFavorite: isFavorited, toggleFavorite } = useFavorite(previewData?.name || '');
@@ -155,6 +158,10 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
   const schemaData = entry?.aspects?.[`${number}.global.schema`]?.data?.fields?.fields?.listValue?.values || [];
   const hasAnnotations = entry?.aspects ? Object.keys(entry.aspects).some(key => hasValidAnnotationData(entry.aspects[key])) : false;
 
+  // Access check: Use dynamic check result if available, otherwise fall back to previewData.userHasAccess
+  // checkedAccess is set by the API call, previewData.userHasAccess comes from search results
+  const hasAccess = checkedAccess !== null ? checkedAccess : (previewData?.userHasAccess === true);
+
 
   const { date: creationDate, time: creationTime } = getFormattedDateTimePartsByDateTime(previewData?.createTime);
   const { date: updateDate, time: updateTime } = getFormattedDateTimePartsByDateTime(previewData?.updateTime);
@@ -189,7 +196,7 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
     setIsSubmitAccessOpen(false);
     setNotificationMessage(`Request sent`);
     setIsNotificationVisible(true);
-    
+
     // Auto-hide notification after 5 seconds
     setTimeout(() => {
       setIsNotificationVisible(false);
@@ -205,25 +212,25 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
   };
 
   const handleAnnotationCollapseAll = () => {
-  setExpandedAnnotations(new Set());
+    setExpandedAnnotations(new Set());
   };
 
   const lookerUrl = useMemo(() => {
-      if (!entry) {
-        return '';
-      }
-      return generateLookerStudioLink(entry);
-    }, [entry]);
+    if (!entry) {
+      return '';
+    }
+    return generateLookerStudioLink(entry);
+  }, [entry]);
 
   const bigQueryUrl = useMemo(() => {
-      if (!entry) {
-        return '';
-      }
-      return generateBigQueryLink(entry);
-    }, [entry]);
+    if (!entry) {
+      return '';
+    }
+    return generateBigQueryLink(entry);
+  }, [entry]);
 
 
-    const getDisplayName = (contact: any) => {
+  const getDisplayName = (contact: any) => {
     try {
       const name = contact.structValue.fields.name.stringValue;
       if (!name) return "--";
@@ -237,23 +244,23 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
   };
 
   const handleAnnotationExpandAll = () => {
-  if (entry?.aspects) {
-    const number = getEntryType(entry.name, '/');
-    const annotationKeys = Object.keys(entry.aspects)
-      .filter(key =>
-        // First, filter out the non-annotation aspects as before
-        key !== `${number}.global.schema` &&
-        key !== `${number}.global.overview` &&
-        key !== `${number}.global.contacts` &&
-        key !== `${number}.global.usage`
-      )
-      .filter(key => 
-        // THEN, filter again to only keep keys that have valid data
-        hasValidAnnotationData(entry.aspects[key])
-      );
-    setExpandedAnnotations(new Set(annotationKeys));
-  }
-};
+    if (entry?.aspects) {
+      const number = getEntryType(entry.name, '/');
+      const annotationKeys = Object.keys(entry.aspects)
+        .filter(key =>
+          // First, filter out the non-annotation aspects as before
+          key !== `${number}.global.schema` &&
+          key !== `${number}.global.overview` &&
+          key !== `${number}.global.contacts` &&
+          key !== `${number}.global.usage`
+        )
+        .filter(key =>
+          // THEN, filter again to only keep keys that have valid data
+          hasValidAnnotationData(entry.aspects[key])
+        );
+      setExpandedAnnotations(new Set(annotationKeys));
+    }
+  };
   // Effects
   // Sync local panel state with global context
   useEffect(() => {
@@ -263,30 +270,75 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
   useEffect(() => {
     // Only dispatch Redux action in 'redux' mode
     if (previewData !== null && !demoMode && previewMode === 'redux') {
-       dispatch(fetchEntry({ entryName: previewData.name, id_token: id_token }));
+      dispatch(fetchEntry({ entryName: previewData.name, id_token: id_token }));
     }
     // In 'isolated' mode, the hook handles fetching automatically
   }, [previewData, dispatch, id_token, demoMode, previewMode]);
 
   // Sync filtered entries with fetched entry
   useEffect(() => {
-     if (entryStatus === 'loading') {
+    if (entryStatus === 'loading') {
       setViewDetailAccessable(false);
-     }
+    }
     if (entryStatus === 'succeeded') {
       setFilteredSchemaEntry(entry);
       setFilteredAnnotationEntry(entry);
       setViewDetailAccessable(true);
     }
     if (entryStatus === 'failed') {
-      if(entryError?.details?.toLowerCase().includes('403') || entryError?.details?.includes('PERMISSION_DENIED')) {
+      if (entryError?.details?.toLowerCase().includes('403') || entryError?.details?.includes('PERMISSION_DENIED')) {
         setViewDetailAccessable(false);
-      }else if(entryError?.details?.includes('UNAUTHENTICATED')) {
+      } else if (entryError?.details?.includes('UNAUTHENTICATED')) {
         logout();
         navigate('/login');
       }
     }
   }, [entry, entryStatus]);
+
+  // Dynamic access check - call API to verify user has access to this resource
+  useEffect(() => {
+    const checkAccess = async () => {
+      // Skip if previewData doesn't have access info and we need to check dynamically
+      if (!previewData || demoMode) {
+        setCheckedAccess(null);
+        return;
+      }
+
+      // If userHasAccess is already set (from search results), use it
+      if (previewData.userHasAccess !== undefined) {
+        setCheckedAccess(previewData.userHasAccess);
+        return;
+      }
+
+      // Otherwise, call the API to check access
+      const fqn = previewData.fullyQualifiedName;
+      const linkedResource = previewData.linkedResource;
+
+      if (!fqn && !linkedResource) {
+        setCheckedAccess(false);
+        return;
+      }
+
+      try {
+        const response = await axios.post(
+          `${URLS.API_URL}/check-access`,
+          { fullyQualifiedName: fqn, linkedResource },
+          {
+            headers: {
+              'Authorization': `Bearer ${user?.token}`,
+              'x-user-email': user?.email || ''
+            }
+          }
+        );
+        setCheckedAccess(response.data.hasAccess === true);
+      } catch (err) {
+        console.warn('Access check failed:', err);
+        setCheckedAccess(false);
+      }
+    };
+
+    checkAccess();
+  }, [previewData, user?.email, user?.token, demoMode]);
 
   // Preview content rendering logic
   let schema;
@@ -300,7 +352,7 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
         direction="column"
         alignItems="center"
         justifyContent="center"
-        sx={{ 
+        sx={{
           minHeight: '50vh',
         }}
       >
@@ -320,53 +372,53 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
       borderTopLeftRadius: '0px',
       borderTopRightRadius: '0px'
     }} isTopComponent={false}
-    expandedItems={expandedAnnotations}
-    setExpandedItems={setExpandedAnnotations}
-    isGlossary={isGlossary}
+      expandedItems={expandedAnnotations}
+      setExpandedItems={setExpandedAnnotations}
+      isGlossary={isGlossary}
     />;
   } else if (entryStatus === 'failed') {
-    if(entryError?.details?.toLowerCase().includes('403') || entryError?.details?.includes('PERMISSION_DENIED')) {
+    if (entryError?.details?.toLowerCase().includes('403') || entryError?.details?.includes('PERMISSION_DENIED')) {
       annotationTab = schema = <Alert severity="error">You do not have enough permisssion to see this entry data.</Alert>;
-    }else{
+    } else {
       annotationTab = schema = <Alert severity="error">Failed to load entry data: {entryError?.message || entryError}</Alert>;
     }
-    
+
   }
 
   let preview = (<>
-  <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
-    <Tooltip title="Close preview" arrow>
-    <IconButton
-      aria-label="close"
-      sx={{
-        position: 'absolute',
-        top: 8,
-        right: 8,
-      }}
-      onClick={() => onPreviewDataChange(null)}
-    >
-      <Close sx={{ fontSize: '1.5rem', color: '#575757' }} />
-    </IconButton>
-    </Tooltip>
-    <Grid
-      container
-      spacing={0}
-      direction="column"
-      alignItems="center"
-      justifyContent="center"
-      sx={{ minHeight: '75vh' }}
-    >
-      <img
-        src="/assets/images/asset-preview-default.png"
-        alt="Asset Preview"
-        style={{ width: "12.5rem", flex: "0 0 auto" }}
-      />
-      <span style={{ fontSize: "0.875rem", color: "#575757", fontWeight: "500", marginTop: "1.25rem", fontFamily: "Google Sans Text, sans-serif" }}>
-        Click on an item to see preview
-      </span>
-    </Grid>
-  </Box>
-</>
+    <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
+      <Tooltip title="Close preview" arrow>
+        <IconButton
+          aria-label="close"
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+          }}
+          onClick={() => onPreviewDataChange(null)}
+        >
+          <Close sx={{ fontSize: '1.5rem', color: '#575757' }} />
+        </IconButton>
+      </Tooltip>
+      <Grid
+        container
+        spacing={0}
+        direction="column"
+        alignItems="center"
+        justifyContent="center"
+        sx={{ minHeight: '75vh' }}
+      >
+        <img
+          src="/assets/images/asset-preview-default.png"
+          alt="Asset Preview"
+          style={{ width: "12.5rem", flex: "0 0 auto" }}
+        />
+        <span style={{ fontSize: "0.875rem", color: "#575757", fontWeight: "500", marginTop: "1.25rem", fontFamily: "Google Sans Text, sans-serif" }}>
+          Click on an item to see preview
+        </span>
+      </Grid>
+    </Box>
+  </>
   );
   const parentHorizontalPadding = '20px';
   if (previewData !== null && !previewData?.isPlaceholder) {
@@ -401,28 +453,28 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
               justifyContent: 'space-between',
               alignItems: 'center'
             }}>
-              <Tooltip 
+              <Tooltip
                 title={
                   previewData.entrySource?.displayName?.length > 0
-                  ? previewData.entrySource.displayName 
-                  : getName(previewData.name || '', '/')
+                    ? previewData.entrySource.displayName
+                    : getName(previewData.name || '', '/')
                 }
                 arrow placement='top'
               >
-              <label style={{
-                color: "#0E4DCA",
-                fontSize: "1.125rem",
-                fontWeight: "400",
-                fontFamily: '"Google Sans", sans-serif',
-                lineHeight: 1.33,
-                maxWidth: isGlossary ? '175px' : '200px',
-                // textTransform:"capitalize",
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                textWrap: "nowrap",
-              }}>
-                {previewData.entrySource?.displayName?.length > 0 ? previewData.entrySource.displayName : getName(previewData.name || '', '/')}
-              </label>
+                <label style={{
+                  color: "#0E4DCA",
+                  fontSize: "1.125rem",
+                  fontWeight: "400",
+                  fontFamily: '"Google Sans", sans-serif',
+                  lineHeight: 1.33,
+                  maxWidth: isGlossary ? '175px' : '200px',
+                  // textTransform:"capitalize",
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  textWrap: "nowrap",
+                }}>
+                  {previewData.entrySource?.displayName?.length > 0 ? previewData.entrySource.displayName : getName(previewData.name || '', '/')}
+                </label>
               </Tooltip>
               <div style={{
                 display: 'flex',
@@ -465,7 +517,6 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
                         />
                     )}
                   </svg>
-
                 </Tooltip> */}
                 {
                   previewData.entrySource?.system ? ((previewData.entrySource?.system.toLowerCase() === 'bigquery') ? (<>
@@ -486,36 +537,36 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
                         <img
                           src="/assets/svg/bigquery-icon.svg"
                           alt="Open in BigQuery"
-                          style={{ width: "1.2rem", height: "1.2rem", opacity: entryStatus !== 'succeeded' || !bigQueryUrl || demoMode ? 0.4 : 1    }}
+                          style={{ width: "1.2rem", height: "1.2rem", opacity: entryStatus !== 'succeeded' || !bigQueryUrl || demoMode ? 0.4 : 1 }}
                         />
                       </IconButton>
                     </Tooltip>
-                  
-                      
-                {/* Open in Looker */}
-                <Tooltip title={entryStatus !== 'succeeded' ? "Loading link..." : (demoMode ? "Disabled in Demo Mode" : "Explore with Looker Studio")} arrow>                  
-                  <IconButton
-                    size="small"
-                    disabled={entryStatus !== 'succeeded' || !lookerUrl || demoMode}
-                    onClick={() => {
-                      window.open(lookerUrl, '_blank');
-                    }}
-                    sx={{
-                      '&:hover': {
-                        backgroundColor: '#F5F5F5'
-                      }
-                    }}
-                  >
-                    <img
-                      src="/assets/svg/looker-icon.svg"
-                      alt="Open in Looker"
-                      style={{ width: "1.2rem", height: "1.2rem", opacity: entryStatus !== 'succeeded' || !lookerUrl || demoMode ? 0.4 : 1    }}
-                    />
-                  </IconButton>
-                </Tooltip>
-                </>):(<></>)) : (<></>)
+
+
+                    {/* Open in Looker */}
+                    <Tooltip title={entryStatus !== 'succeeded' ? "Loading link..." : (demoMode ? "Disabled in Demo Mode" : "Explore with Looker Studio")} arrow>
+                      <IconButton
+                        size="small"
+                        disabled={entryStatus !== 'succeeded' || !lookerUrl || demoMode}
+                        onClick={() => {
+                          window.open(lookerUrl, '_blank');
+                        }}
+                        sx={{
+                          '&:hover': {
+                            backgroundColor: '#F5F5F5'
+                          }
+                        }}
+                      >
+                        <img
+                          src="/assets/svg/looker-icon.svg"
+                          alt="Open in Looker"
+                          style={{ width: "1.2rem", height: "1.2rem", opacity: entryStatus !== 'succeeded' || !lookerUrl || demoMode ? 0.4 : 1 }}
+                        />
+                      </IconButton>
+                    </Tooltip>
+                  </>) : (<></>)) : (<></>)
                 }
-                
+
                 <div style={{ marginLeft: '-5px' }} />
 
                 {/* Close Icon */}
@@ -525,14 +576,14 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
                     onClick={() => onPreviewDataChange(null)}
                     sx={{
                       padding: '4px',
-                      position:'relative',
-                      top:'1px',
+                      position: 'relative',
+                      top: '1px',
                       '&:hover': {
                         backgroundColor: '#F5F5F5'
                       }
                     }}
                   >
-                    <Close sx={{ fontSize: '1.2rem', color: '#575757'}} />
+                    <Close sx={{ fontSize: '1.2rem', color: '#575757' }} />
                   </IconButton>
                 </Tooltip>
               </div>
@@ -549,38 +600,38 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
           flex: '0 0 auto',
           flexWrap: 'wrap'
         }}>
-          <Tag text={previewData.entrySource.system ? (previewData.entrySource.system.toLowerCase() === 'bigquery' ? 'BigQuery' : previewData.entrySource.system.replace("_", " ").replace("-", " ").toLowerCase() ) : "Custom"} css={{
+          <Tag text={previewData.entrySource.system ? (previewData.entrySource.system.toLowerCase() === 'bigquery' ? 'BigQuery' : previewData.entrySource.system.replace("_", " ").replace("-", " ").toLowerCase()) : "Custom"} css={{
             fontFamily: '"Google Sans Text", sans-serif',
-                    color: '#004A77',
-                    backgroundColor: '#C2E7FF',
-                    margin: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "0.25rem 0.5rem",
-                    fontWeight: 500,
-                    borderRadius: '8px',
-                    textTransform:'capitalize',
-                    flexShrink: 0
+            color: '#004A77',
+            backgroundColor: '#C2E7FF',
+            margin: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "0.25rem 0.5rem",
+            fontWeight: 500,
+            borderRadius: '8px',
+            textTransform: 'capitalize',
+            flexShrink: 0
           }} />
-          <Tag 
+          <Tag
             text={
               previewData.entryType.split('-').length > 1 ? previewData.entryType.split('-').pop() : previewData.name.split('/').at(-2)
             }
             css={{
-            fontFamily: '"Google Sans Text", sans-serif',
-                    color: '#004A77',
-                    backgroundColor: '#C2E7FF',
-                    margin: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "0.25rem 0.5rem",
-                    fontWeight: 500,
-                    borderRadius: '8px',
-                    textTransform:'capitalize',
-                    flexShrink: 0
-          }} />
+              fontFamily: '"Google Sans Text", sans-serif',
+              color: '#004A77',
+              backgroundColor: '#C2E7FF',
+              margin: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0.25rem 0.5rem",
+              fontWeight: 500,
+              borderRadius: '8px',
+              textTransform: 'capitalize',
+              flexShrink: 0
+            }} />
         </div>
 
         {/* CTA Buttons Section */}
@@ -592,188 +643,227 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
           flex: '0 0 auto',
           flexWrap: 'wrap'
         }}>
-          <Tooltip title={demoMode ? "Action disabled in demo mode" : (viewDetailAccessable ? "Click to view details of the entry" : "You do not have permission to view details")} arrow>
-          <CTAButton
-            //disabled={!viewDetailAccessable}
-            handleClick={() => {if(viewDetailAccessable && !demoMode) handleViewDetails(entry);}}
-            text="View Details"
-            css={{
-              fontFamily: '"Google Sans Text", sans-serif',
-              backgroundColor: '#0E4DCA',
-              color: '#FFFFFF',
-              borderRadius: '6.25rem',
-              padding: '0.5rem 1rem',
-              fontSize: '0.8rem',
-              fontWeight: '500',
-              // letterSpacing: '0.71px',
-              border: 'none',
-              height: '2.1rem',
-              maxWidth: '6rem',
-              whiteSpace: 'nowrap',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              textTransform: 'none',
-              flex: '0 0 auto',
-              opacity: viewDetailAccessable && !demoMode ? 1 : 0.6,
-            }}
-          />
+          <Tooltip title={demoMode ? "Action disabled in demo mode" : (viewDetailAccessable && hasAccess ? "Click to view details of the entry" : "You do not have permission to view details")} arrow>
+            <CTAButton
+              disabled={!hasAccess}
+              handleClick={() => { if (viewDetailAccessable && !demoMode && hasAccess) handleViewDetails(entry); }}
+              text="View Details"
+              css={{
+                fontFamily: '"Google Sans Text", sans-serif',
+                backgroundColor: hasAccess ? '#0E4DCA' : '#E0E0E0',
+                color: hasAccess ? '#FFFFFF' : '#A8A8A8',
+                borderRadius: '6.25rem',
+                padding: '0.5rem 1rem',
+                fontSize: '0.8rem',
+                fontWeight: '500',
+                // letterSpacing: '0.71px',
+                border: 'none',
+                height: '2.1rem',
+                maxWidth: '6rem',
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textTransform: 'none',
+                flex: '0 0 auto',
+                opacity: viewDetailAccessable && !demoMode ? 1 : 0.6,
+              }}
+            />
           </Tooltip>
 
           <Tooltip title={(viewDetailAccessable ? "You cannot request permission for the entries which you already have access to." : "Click to request permission for this entry")} arrow>
-          <CTAButton
-            //disabled={viewDetailAccessable}
-            handleClick={() => { if(!demoMode) handleRequestAccess(entry) }}
-            text="Request Access"
-            css={{
-              fontFamily: '"Google Sans Text", sans-serif',
-              color: '#575757', //!viewDetailAccessable ? '#575757' : '#A8A8A8',
-              backgroundColor: '#FFFFFF', //!viewDetailAccessable ? '#FFFFFF' : '#E0E0E0',
-              borderRadius: '6.25rem',
-              padding: '0.5rem 1rem',
-              fontStyle: 'bold',
-              fontSize: '0.8rem',
-              fontWeight: '500',
-              // letterSpacing: '0.71px',
-              border: '1px solid #DADCE0',
-              height: '2.1rem',
-              maxWidth: '7rem',
-              whiteSpace: 'nowrap',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              textTransform: 'none',
-              flex: '0 0 auto',
-              opacity: demoMode ? 0.6 : 1,
-            }}
-          />
+            <CTAButton
+              //disabled={viewDetailAccessable}
+              handleClick={() => { if (!demoMode) handleRequestAccess(entry) }}
+              text="Request Access"
+              css={{
+                fontFamily: '"Google Sans Text", sans-serif',
+                color: '#575757', //!viewDetailAccessable ? '#575757' : '#A8A8A8',
+                backgroundColor: '#FFFFFF', //!viewDetailAccessable ? '#FFFFFF' : '#E0E0E0',
+                borderRadius: '6.25rem',
+                padding: '0.5rem 1rem',
+                fontStyle: 'bold',
+                fontSize: '0.8rem',
+                fontWeight: '500',
+                // letterSpacing: '0.71px',
+                border: '1px solid #DADCE0',
+                height: '2.1rem',
+                maxWidth: '7rem',
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textTransform: 'none',
+                flex: '0 0 auto',
+                opacity: demoMode ? 0.6 : 1,
+              }}
+            />
           </Tooltip>
+
+          {/* Chat with Table - Only for BigQuery Tables with access */}
+          {previewData.entrySource?.system?.toLowerCase() === 'bigquery' && getEntryType(previewData.name, '/') === 'Tables' && (
+            <Tooltip title={!hasAccess ? "Request access to chat with this table" : (demoMode ? "Disabled in demo mode" : "Chat with this table using AI")} arrow>
+              <CTAButton
+                disabled={!hasAccess || demoMode}
+                handleClick={() => {
+                  if (hasAccess && !demoMode && entry?.name) {
+                    const url = `/chat-analytics?entryName=${encodeURIComponent(entry.name)}`;
+                    window.open(url, '_blank');
+                  }
+                }}
+                text="Chat"
+                css={{
+                  fontFamily: '"Google Sans Text", sans-serif',
+                  color: hasAccess && !demoMode ? '#0E4DCA' : '#A8A8A8',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '6.25rem',
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.8rem',
+                  fontWeight: '500',
+                  border: hasAccess && !demoMode ? '1px solid #0E4DCA' : '1px solid #DADCE0',
+                  height: '2.1rem',
+                  maxWidth: '5rem',
+                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  textTransform: 'none',
+                  flex: '0 0 auto',
+                  opacity: hasAccess && !demoMode ? 1 : 0.6,
+                }}
+              />
+            </Tooltip>
+          )}
         </div>
 
         {/* Tabs Section */}
         <div
-        style={{
-          display: "flex", // Main flex container
-          borderBottom: "1px solid #DADCE0",
-          position: "relative",
-          marginBottom: "20px",
-          marginLeft: `-${parentHorizontalPadding}`,
-          marginRight: `-${parentHorizontalPadding}`,
-          paddingLeft: parentHorizontalPadding,
-          paddingRight: parentHorizontalPadding,
-        }}
->
-  {/* Tab 1: Overview */}
-  <div
-    style={{
-      flex: 1,
-      display: "flex",
-      justifyContent: "center",
-      cursor: "pointer",
-      padding: "0.5rem 0",
-    }}
-    onClick={() => handleTabClick(0)}
-  >
-    <div style={{ position: "relative", display: "inline-block", padding: "0px 0px 6px", }}>
-      <span
-        style={{
-          fontFamily: '"Google Sans Text", sans-serif',
-          fontWeight: "500",
-          fontSize: "0.875rem",
-          color: tabValue === 0 ? "#0E4DCA" : "#575757",
-        }}
-      >
-        Overview
-      </span>
-      <div
-        style={{
-          position: "absolute",
-          bottom: "-0.5rem",
-          left: 0,
-          width: "100%",
-          height: "3px",
-          backgroundColor: tabValue === 0 ? "#0E4DCA" : "transparent",
-          borderRadius: "2.5px 2.5px 0 0",
-        }}
-      />
-    </div>
-  </div>
+          style={{
+            display: "flex", // Main flex container
+            borderBottom: "1px solid #DADCE0",
+            position: "relative",
+            marginBottom: "20px",
+            marginLeft: `-${parentHorizontalPadding}`,
+            marginRight: `-${parentHorizontalPadding}`,
+            paddingLeft: parentHorizontalPadding,
+            paddingRight: parentHorizontalPadding,
+          }}
+        >
+          {/* Tab 1: Overview */}
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              justifyContent: "center",
+              cursor: "pointer",
+              padding: "0.5rem 0",
+            }}
+            onClick={() => handleTabClick(0)}
+          >
+            <div style={{ position: "relative", display: "inline-block", padding: "0px 0px 6px", }}>
+              <span
+                style={{
+                  fontFamily: '"Google Sans Text", sans-serif',
+                  fontWeight: "500",
+                  fontSize: "0.875rem",
+                  color: tabValue === 0 ? "#0E4DCA" : "#575757",
+                }}
+              >
+                Overview
+              </span>
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "-0.5rem",
+                  left: 0,
+                  width: "100%",
+                  height: "3px",
+                  backgroundColor: tabValue === 0 ? "#0E4DCA" : "transparent",
+                  borderRadius: "2.5px 2.5px 0 0",
+                }}
+              />
+            </div>
+          </div>
 
-  {/* Tab 2: Schema */}
-  {getEntryType(previewData.name, '/') == 'Tables' && (<div
-    style={{
-      flex: 1,
-      display: "flex",
-      justifyContent: "center",
-      cursor: "pointer",
-      padding: "0.5rem 0",
-    }}
-    onClick={() => handleTabClick(1)}
-  >
-    <div style={{ position: "relative", display: "inline-block", padding: "0px 0px 6px", }}>
-      <span
-        style={{
-          fontFamily: '"Google Sans Text", sans-serif',
-          fontWeight: "500",
-          fontSize: "0.875rem",
-          color: tabValue === 1 ? "#0E4DCA" : "#575757",
-        }}
-      >
-        Schema
-      </span>
-      <div
-        style={{
-          position: "absolute",
-          bottom: "-0.5rem",
-          left: 0,
-          width: "100%",
-          height: "3px",
-          backgroundColor: tabValue === 1 ? "#0E4DCA" : "transparent",
-          borderRadius: "2.5px 2.5px 0 0",
-        }}
-      />
-    </div>
-  </div>)}
+          {/* Tab 2: Schema */}
+          {hasAccess && getEntryType(previewData.name, '/') == 'Tables' && (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                justifyContent: "center",
+                cursor: "pointer",
+                padding: "0.5rem 0",
+              }}
+              onClick={() => handleTabClick(1)}
+            >
+              <div style={{ position: "relative", display: "inline-block", padding: "0px 0px 6px", }}>
+                <span
+                  style={{
+                    fontFamily: '"Google Sans Text", sans-serif',
+                    fontWeight: "500",
+                    fontSize: "0.875rem",
+                    color: tabValue === 1 ? "#0E4DCA" : "#575757",
+                  }}
+                >
+                  Schema
+                </span>
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "-0.5rem",
+                    left: 0,
+                    width: "100%",
+                    height: "3px",
+                    backgroundColor: tabValue === 1 ? "#0E4DCA" : "transparent",
+                    borderRadius: "2.5px 2.5px 0 0",
+                  }}
+                />
+              </div>
+            </div>
+          )}
 
-  {/* Tab 3: Aspects */}
-  <div
-    style={{
-      flex: 1,
-      display: "flex",
-      justifyContent: "center",
-      cursor: "pointer",
-      padding: "0.5rem 0",
-    }}
-    onClick={() => handleTabClick(2)}
-  >
-    <div style={{ position: "relative", display: "inline-block", padding: "0px 0px 6px" }}>
-      <span
-        style={{
-          fontFamily: '"Google Sans Text", sans-serif',
-          fontWeight: "500",
-          fontSize: "0.875rem",
-          color: tabValue === 2 ? "#0E4DCA" : "#575757",
-        }}
-      >
-        Aspects
-      </span>
-      <div
-        style={{
-          position: "absolute",
-          bottom: "-0.5rem",
-          left: 0,
-          width: "100%",
-          height: "3px",
-          backgroundColor: tabValue === 2 ? "#0E4DCA" : "transparent",
-          borderRadius: "2.5px 2.5px 0 0",
-        }}
-      />
-    </div>
-  </div>
-</div>
+          {/* Tab 3: Aspects */}
+          {hasAccess && (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                justifyContent: "center",
+                cursor: "pointer",
+                padding: "0.5rem 0",
+              }}
+              onClick={() => handleTabClick(2)}
+            >
+              <div style={{ position: "relative", display: "inline-block", padding: "0px 0px 6px" }}>
+                <span
+                  style={{
+                    fontFamily: '"Google Sans Text", sans-serif',
+                    fontWeight: "500",
+                    fontSize: "0.875rem",
+                    color: tabValue === 2 ? "#0E4DCA" : "#575757",
+                  }}
+                >
+                  Aspects
+                </span>
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "-0.5rem",
+                    left: 0,
+                    width: "100%",
+                    height: "3px",
+                    backgroundColor: tabValue === 2 ? "#0E4DCA" : "transparent",
+                    borderRadius: "2.5px 2.5px 0 0",
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Tab Content */}
-        <div style={{ padding: 0, flex: '1 1 auto', overflow: 'auto'}}>
+        <div style={{ padding: 0, flex: '1 1 auto', overflow: 'auto' }}>
           {tabValue === 0 && (
             <div style={{ color: "#6c6c6c" }}>
               {entryStatus === 'loading' ? (
@@ -811,7 +901,7 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
                     <div style={{ color: "#575757", fontSize: "0.6875rem", fontWeight: "500" }}>Contacts</div>
                     <Skeleton variant="text" sx={{ fontSize: '0.875rem', marginTop: '6px', width: '50%' }} />
                   </div>
-                  <div style={{ borderBottom: "1px solid #DADCE0", padding: '0.875rem 0', gap: '0.25rem'}}>
+                  <div style={{ borderBottom: "1px solid #DADCE0", padding: '0.875rem 0', gap: '0.25rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
                       <div style={{ flex: '1 1 0' }}>
                         <div style={{ color: "#575757", fontSize: "0.6875rem", fontWeight: "500", fontFamily: '"Google Sans Text",sans-serif' }}>Parent</div>
@@ -822,42 +912,42 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
                         <Skeleton variant="text" sx={{ fontSize: '0.875rem', width: '60%', marginTop: "0.125rem" }} />
                       </div>
                     </div>
-                </div>
+                  </div>
                 </>
               ) : (
                 <>
-                  <div style={{ borderBottom: "1px solid #DADCE0", padding: '0rem 0rem 0.875rem 0rem', gap: '0.25rem'}}>
-                    <div style={{ color: "#575757", fontSize: "0.6875rem", fontWeight: "500"}}>Description</div>
+                  <div style={{ borderBottom: "1px solid #DADCE0", padding: '0rem 0rem 0.875rem 0rem', gap: '0.25rem' }}>
+                    <div style={{ color: "#575757", fontSize: "0.6875rem", fontWeight: "500" }}>Description</div>
                     <div style={{ color: "#1F1F1F", fontSize: "0.875rem", fontWeight: "400", marginTop: "0.125rem" }}>{previewData.entrySource.description || '-'}</div>
                   </div>
-                  <div style={{ borderBottom: "1px solid #DADCE0", padding: '0.875rem 0', gap: '0.25rem'}}>
+                  <div style={{ borderBottom: "1px solid #DADCE0", padding: '0.875rem 0', gap: '0.25rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
-                    {/* Creation Time Block */}
-                    <div style={{ flex: '1 1 0' }}>
-                      <div style={{ color: "#575757", fontSize: "0.6875rem", fontWeight: "500", fontFamily: '"Google Sans Text",sans-serif' }}>
-                        Creation Time
+                      {/* Creation Time Block */}
+                      <div style={{ flex: '1 1 0' }}>
+                        <div style={{ color: "#575757", fontSize: "0.6875rem", fontWeight: "500", fontFamily: '"Google Sans Text",sans-serif' }}>
+                          Creation Time
+                        </div>
+                        <div style={{ color: "#1F1F1F", fontSize: "0.875rem", fontWeight: "400", fontFamily: '"Google Sans Text",sans-serif', marginTop: "0.125rem" }}>
+                          {creationDate}
+                          <br />
+                          {creationTime}
+                        </div>
                       </div>
-                      <div style={{ color: "#1F1F1F", fontSize: "0.875rem", fontWeight: "400", fontFamily: '"Google Sans Text",sans-serif', marginTop: "0.125rem" }}>
-                        {creationDate}
-                        <br />
-                        {creationTime}
-                      </div>
-                    </div>
 
-                    {/* Last Modification Time Block */}
-                    <div style={{ flex: '1 1 0' }}>
-                      <div style={{ color: "#575757", fontSize: "0.6875rem", fontWeight: "500", fontFamily: '"Google Sans Text",sans-serif' }}>
-                        Last Modification Time
-                      </div>
-                      <div style={{ color: "#1F1F1F", fontSize: "0.875rem", fontWeight: "400", fontFamily: '"Google Sans Text",sans-serif', marginTop: "0.125rem" }}>
-                        {updateDate}
-                        <br />
-                        {updateTime}
+                      {/* Last Modification Time Block */}
+                      <div style={{ flex: '1 1 0' }}>
+                        <div style={{ color: "#575757", fontSize: "0.6875rem", fontWeight: "500", fontFamily: '"Google Sans Text",sans-serif' }}>
+                          Last Modification Time
+                        </div>
+                        <div style={{ color: "#1F1F1F", fontSize: "0.875rem", fontWeight: "400", fontFamily: '"Google Sans Text",sans-serif', marginTop: "0.125rem" }}>
+                          {updateDate}
+                          <br />
+                          {updateTime}
+                        </div>
                       </div>
                     </div>
                   </div>
-                  </div>
-                  <div style={{ borderBottom: "1px solid #DADCE0", padding: '0.875rem 0', gap: '0.25rem'}}>
+                  <div style={{ borderBottom: "1px solid #DADCE0", padding: '0.875rem 0', gap: '0.25rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
                       <div style={{ flex: '1 1 0' }}>
                         <div style={{ color: "#575757", fontSize: "0.6875rem", fontWeight: "500", fontFamily: '"Google Sans Text",sans-serif' }}>Location</div>
@@ -870,10 +960,10 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
                     </div>
                   </div>
                   <div style={{ borderBottom: "1px solid #DADCE0", padding: '0.875rem 0' }}>
-                  <div style={{ color: "#575757", fontSize: "0.6875rem", fontWeight: "500" }}>
-                    Contacts
-                  </div>
-                  {entryStatus === 'succeeded' && contacts.length > 0 ? (
+                    <div style={{ color: "#575757", fontSize: "0.6875rem", fontWeight: "500" }}>
+                      Contacts
+                    </div>
+                    {entryStatus === 'succeeded' && contacts.length > 0 ? (
                       <Box sx={{ display: "flex", flexDirection: "column" }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', padding: '6px 0px' }}>
                           <Box sx={{ display: "flex", flexDirection: "column" }}>
@@ -912,36 +1002,37 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
                         </Box>
                       </Box>
                     ) : (
-                    <Typography sx={{ fontFamily: '"Google Sans Text", sans-serif', fontSize: "14px", color: "#1F1F1F", marginTop: '6px' }}>
-                      -
-                    </Typography>
-                  )}
-                </div>
-                <div style={{ borderBottom: "1px solid #DADCE0", padding: '0.875rem 0', gap: '0.25rem'}}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
-                    <div style={{ flex: '1 1 0', width: '50%' }}>
-                      <div style={{ color: "#575757", fontSize: "0.6875rem", fontWeight: "500", fontFamily: '"Google Sans Text",sans-serif' }}>Parent</div>
-                      <Tooltip title={getName(previewData.parentEntry, '/') || '-'} arrow>
-                        <div style={{ color: "#1F1F1F", fontSize: "0.875rem", fontWeight: "400", fontFamily: '"Google Sans Text",sans-serif', marginTop: "0.125rem", textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                          {getName(previewData.parentEntry, '/') || '-'}
-                        </div>
-                      </Tooltip>
-                    </div>
-                    <div style={{ flex: '1 1 0', width: '50%'  }}>
-                      <div style={{ color: "#575757", fontSize: "0.6875rem", fontWeight: "500", fontFamily: '"Google Sans Text",sans-serif' }}>Project</div>
-                      <Tooltip title={ ((previewData?.fullyQualifiedName || '').split(':').pop() || '').split('.')[0] || '-' } arrow>
-                        <div style={{ color: "#1F1F1F", fontSize: "0.875rem", fontWeight: "400", fontFamily: '"Google Sans Text",sans-serif', marginTop: "0.125rem", textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                          { ((previewData?.fullyQualifiedName || '').split(':').pop() || '').split('.')[0] || '-' }
-                        </div>
-                      </Tooltip>
+                      <Typography sx={{ fontFamily: '"Google Sans Text", sans-serif', fontSize: "14px", color: "#1F1F1F", marginTop: '6px' }}>
+                        -
+                      </Typography>
+                    )}
+                  </div>
+                  <div style={{ borderBottom: "1px solid #DADCE0", padding: '0.875rem 0', gap: '0.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
+                      <div style={{ flex: '1 1 0', width: '50%' }}>
+                        <div style={{ color: "#575757", fontSize: "0.6875rem", fontWeight: "500", fontFamily: '"Google Sans Text",sans-serif' }}>Parent</div>
+                        <Tooltip title={getName(previewData.parentEntry, '/') || '-'} arrow>
+                          <div style={{ color: "#1F1F1F", fontSize: "0.875rem", fontWeight: "400", fontFamily: '"Google Sans Text",sans-serif', marginTop: "0.125rem", textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                            {getName(previewData.parentEntry, '/') || '-'}
+                          </div>
+                        </Tooltip>
+                      </div>
+                      <div style={{ flex: '1 1 0', width: '50%' }}>
+                        <div style={{ color: "#575757", fontSize: "0.6875rem", fontWeight: "500", fontFamily: '"Google Sans Text",sans-serif' }}>Project</div>
+                        <Tooltip title={((previewData?.fullyQualifiedName || '').split(':').pop() || '').split('.')[0] || '-'} arrow>
+                          <div style={{ color: "#1F1F1F", fontSize: "0.875rem", fontWeight: "400", fontFamily: '"Google Sans Text",sans-serif', marginTop: "0.125rem", textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                            {((previewData?.fullyQualifiedName || '').split(':').pop() || '').split('.')[0] || '-'}
+                          </div>
+                        </Tooltip>
+                      </div>
                     </div>
                   </div>
-                </div>
                 </>
               )}
             </div>
           )}
-          {tabValue === 1 && getEntryType(previewData.name, '/') == 'Tables' && (
+          {
+            tabValue === 1 && getEntryType(previewData.name, '/') == 'Tables' && (
               <>
                 {entryStatus === 'succeeded' ? (
                   schemaData.length > 0 ? (
@@ -954,7 +1045,7 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
                       {schema}
                     </div>
                   ) : (
-                    <div style={{padding:"30px", textAlign: "center", fontSize: "14px", color: "#575757"}}>
+                    <div style={{ padding: "30px", textAlign: "center", fontSize: "14px", color: "#575757" }}>
                       No Schema Data available for this table
                     </div>
                   )
@@ -962,8 +1053,10 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
                   schema
                 )}
               </>
-          )}
-          {tabValue === 2 && (
+            )
+          }
+          {
+            tabValue === 2 && (
               <>
                 {entryStatus === 'succeeded' ? (
                   hasAnnotations ? (
@@ -977,7 +1070,7 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
                       {annotationTab}
                     </div>
                   ) : (
-                    <div style={{padding:"30px", textAlign: "center", fontSize: "14px", color: "#575757"}}>
+                    <div style={{ padding: "30px", textAlign: "center", fontSize: "14px", color: "#575757" }}>
                       No Aspects Data available for this table
                     </div>
                   )
@@ -985,7 +1078,8 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
                   annotationTab
                 )}
               </>
-          )}
+            )
+          }
         </div>
       </div>
     );
@@ -995,10 +1089,10 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
     <>
       <div style={{
         background: "#FFF",
-        height: isGlossary ? '100%' : 'calc(100vh - 3.9rem)', 
-        padding:"1.25rem",
-        borderRadius:  "1.25rem", 
-        marginLeft: isGlossary ? "0" : "0.9375rem", 
+        height: isGlossary ? '100%' : 'calc(100vh - 3.9rem)',
+        padding: "1.25rem",
+        borderRadius: "1.25rem",
+        marginLeft: isGlossary ? "0" : "0.9375rem",
         display: "flex",
         flexDirection: "column",
         flex: "1 1 auto"

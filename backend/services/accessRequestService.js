@@ -36,8 +36,13 @@ const COLLECTION_NAME = 'access-requests';
  * Create a new access request
  */
 const createAccessRequest = async (requestData) => {
+    console.log('[ACCESS-REQUEST-SERVICE] createAccessRequest called with id:', requestData.id);
     try {
-        const docRef = getFirestore().collection(COLLECTION_NAME).doc(requestData.id);
+        const db = getFirestore();
+        console.log('[ACCESS-REQUEST-SERVICE] Firestore instance obtained, projectId:', process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID || 'auto-detect');
+
+        const docRef = db.collection(COLLECTION_NAME).doc(requestData.id);
+        console.log('[ACCESS-REQUEST-SERVICE] Document reference created for collection:', COLLECTION_NAME);
 
         // Ensure standard fields
         const newRequest = {
@@ -50,10 +55,17 @@ const createAccessRequest = async (requestData) => {
             reviewedAt: null
         };
 
+        console.log('[ACCESS-REQUEST-SERVICE] About to call docRef.set()...');
         await docRef.set(newRequest);
+        console.log('[ACCESS-REQUEST-SERVICE] docRef.set() completed successfully');
         return newRequest;
     } catch (error) {
-        console.error('Error creating access request in Firestore:', error);
+        console.error('[ACCESS-REQUEST-SERVICE] Error creating access request in Firestore:', {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            stack: error.stack
+        });
         throw error;
     }
 };
