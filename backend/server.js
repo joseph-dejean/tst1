@@ -396,14 +396,16 @@ app.post('/api/v1/chat', async (req, res) => {
               }
             }
 
-            // 3. Data (Alternative location)
-            if (msg.systemMessage.data?.result) {
-              const result = msg.systemMessage.data.result;
-              console.log(`DEBUG_MSG_${index}_DATA_FOUND`, result);
+            // 3. Data (Alternative locations)
+            // Check msg.systemMessage.data.result OR msg.systemMessage.schema.result
+            const dataResult = msg.systemMessage.data?.result || msg.systemMessage.schema?.result;
+
+            if (dataResult) {
+              console.log(`DEBUG_MSG_${index}_DATA_FOUND`, dataResult);
 
               // Format Data as Markdown Table
-              if (result.data && Array.isArray(result.data) && result.data.length > 0) {
-                const rows = result.data;
+              if (dataResult.data && Array.isArray(dataResult.data) && dataResult.data.length > 0) {
+                const rows = dataResult.data;
                 const columns = Object.keys(rows[0]);
                 const displayLimit = 10;
 
@@ -462,11 +464,16 @@ app.post('/api/v1/chat', async (req, res) => {
         "Try rephrasing your question or selecting additional related tables.";
     }
 
+    // Maintain conversation history
+    const newHistory = [...(req.body.context?.conversationHistory || [])];
+    newHistory.push({ role: 'user', content: req.body.message });
+    newHistory.push({ role: 'assistant', content: fullResponseText }); // Simplify history to just text content
+
     res.json({
       reply: fullResponseText,
       chart: finalChart,
       sql: finalSql,
-      conversationHistory: [] // Future: maintain history
+      conversationHistory: newHistory
     });
 
   } catch (err) {
@@ -3518,7 +3525,7 @@ app.use((err, req, res, next) => {
 // Start the server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server listening on port ${PORT}`);
-  console.log('--- DEPLOYMENT_VERSION: v3.2 - Troubleshooting Check ---');
+  console.log('--- DEPLOYMENT_VERSION: v3.3 - Chart & History Fix ---');
   console.log('API Endpoints:');
   console.log(`  POST /api/v1/check-iam-role`);
   console.log(`  POST /api/v1/search`);
