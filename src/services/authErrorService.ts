@@ -12,31 +12,12 @@ export const setGlobalAuthFunctions = (
   globalLogout = logout;
 };
 
-// Check if error is an authentication error
+// Check if error is an authentication error - ONLY HTTP 401
 export const isAuthenticationError = (error: AxiosError | unknown): boolean => {
-  // Check for HTTP status codes
-  if ((error as AxiosError)?.response?.status === 401) {
-    return true;
-  }
-
-  // Check for specific error messages in response data
-  const errorData = (error as AxiosError)?.response?.data || error;
-  if (errorData && typeof errorData === 'object') {
-    const message = (errorData as any).message || (errorData as any).details || '';
-    const messageStr = message.toString().toLowerCase();
-
-    return (
-      messageStr.includes('unauthenticated') ||
-      messageStr.includes('invalid authentication') ||
-      messageStr.includes('authentication credentials') ||
-      messageStr.includes('access token') ||
-      messageStr.includes('login cookie') ||
-      messageStr.includes('oauth 2') ||
-      messageStr.includes('unauthorized')
-    );
-  }
-
-  return false;
+  // Only treat HTTP 401 as an authentication error.
+  // Other codes (403, 500) should NOT trigger logout - they indicate
+  // server errors or permission issues, not expired sessions.
+  return (error as AxiosError)?.response?.status === 401;
 };
 
 // Handle authentication error with notification and redirect

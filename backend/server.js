@@ -27,6 +27,25 @@ const notificationService = require('./services/notificationService');
 const { BigQuery } = require('@google-cloud/bigquery');
 console.log('[STARTUP] All modules loaded successfully');
 
+// --- PROJECT ID RESOLUTION ---
+// Resolves the GCP project ID from multiple environment variable sources.
+// Cloud Run sets GOOGLE_CLOUD_PROJECT automatically. Other envs may use different names.
+const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT_ID
+  || process.env.GOOGLE_CLOUD_PROJECT
+  || process.env.GCP_PROJECT
+  || process.env.GCLOUD_PROJECT
+  || '';
+
+if (!PROJECT_ID) {
+  console.error('[STARTUP] CRITICAL: No GCP Project ID found in environment variables!');
+  console.error('[STARTUP] Checked: GOOGLE_CLOUD_PROJECT_ID, GOOGLE_CLOUD_PROJECT, GCP_PROJECT, GCLOUD_PROJECT');
+  console.error('[STARTUP] Some endpoints will fail. Set one of these env vars.');
+} else {
+  console.log(`[STARTUP] Project ID resolved: ${PROJECT_ID}`);
+}
+
+// Helper function for consistent project ID access throughout the codebase
+const getProjectId = () => PROJECT_ID;
 
 // Use GoogleAuth for ADC
 class AdcGoogleAuth extends GoogleAuth {
@@ -47,6 +66,10 @@ const app = express();
 app.use(cors());
 // Middleware to parse JSON request bodies
 app.use(express.json());
+
+// Mount Admin Routes (IAM Automation)
+const adminRoutes = require('./routes/adminRoutes');
+app.use('/api/v1/admin', adminRoutes);
 
 const { getOrCreateDataAgent } = require('./services/dataAgentService');
 // --- END DATA AGENT MANAGEMENT ---
@@ -131,7 +154,7 @@ app.post('/api/v1/chat', async (req, res) => {
     if (!projectId || !datasetId || !tableId) {
       // Fallback: Use Vertex AI for non-BigQuery tables or when FQN is not available
       const vertex_ai = new VertexAI({
-        project: process.env.GOOGLE_CLOUD_PROJECT_ID,
+        project: PROJECT_ID,
         location: process.env.GCP_LOCATION || 'us-central1'
       });
       const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
@@ -181,7 +204,7 @@ app.post('/api/v1/chat', async (req, res) => {
     }
 
     // Use Conversational Analytics API with inline context for BigQuery tables
-    const projectId_env = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
+    const projectId_env = PROJECT_ID;
     const location = process.env.GCP_LOCATION || 'europe-west1';
 
     if (!projectId_env) {
@@ -276,7 +299,7 @@ app.post('/api/v1/chat', async (req, res) => {
     // If no valid table references found, fall back to Vertex AI
     if (tableReferences.length === 0) {
       const vertex_ai = new VertexAI({
-        project: process.env.GOOGLE_CLOUD_PROJECT_ID,
+        project: PROJECT_ID,
         location: process.env.GCP_LOCATION || 'us-central1'
       });
       const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
@@ -527,7 +550,7 @@ const dataFilePath = path.join(__dirname, 'configData.json');
 app.post('/api/v1/ai-search', async (req, res) => {
   try {
     const { query, type = 'all' } = req.body;
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const projectId = PROJECT_ID;
     const location = process.env.GCP_LOCATION || 'europe-west1';
 
     if (!query || query.trim().length < 2) {
@@ -686,7 +709,7 @@ app.post('/api/v1/check-iam-role', async (req, res) => {
 
   const { email, role } = req.body;
   // const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-  const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID; // Use environment variable if not provided
+  const projectId = PROJECT_ID; // Use environment variable if not provided
 
   // --- Input Validation ---
   if (!projectId || typeof projectId !== 'string' || projectId.trim() === '') {
@@ -928,7 +951,7 @@ app.post('/api/v1/update-entry-aspects', async (req, res) => {
 app.post('/api/v1/data-products', async (req, res) => {
   try {
     const { displayName, description, location, entryGroupId } = req.body;
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const projectId = PROJECT_ID;
 
     if (!displayName) {
       return res.status(400).json({ message: 'Bad Request: displayName is required.' });
@@ -1031,7 +1054,7 @@ app.post('/api/v1/data-products/assets', async (req, res) => {
 
     // Update the data product with asset references
     // The exact structure depends on your data product aspect schema
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const projectId = PROJECT_ID;
     const aspectKey = `${projectId}.${dpLocation}.data-product-assets`;
 
     const assetReferences = assets.map(asset => ({
@@ -1083,7 +1106,7 @@ app.post('/api/v1/data-products/assets', async (req, res) => {
 app.get('/api/v1/entries-by-location', async (req, res) => {
   try {
     const location = req.query.location || process.env.GCP_LOCATION;
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const projectId = PROJECT_ID;
     const entryType = req.query.entryType; // Optional: filter by entry type (TABLE, VIEW, etc.)
 
     const auth = new AdcGoogleAuth();
@@ -1171,7 +1194,7 @@ app.post('/api/v1/batch-aspects', async (req, res) => {
  */
 app.get('/api/v1/aspect-types', async (req, res) => {
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
+    const projectId = PROJECT_ID;
     const configuredLocation = process.env.GCP_LOCATION || 'us-central1';
 
     if (!projectId) {
@@ -1238,7 +1261,7 @@ app.get('/api/v1/aspect-types', async (req, res) => {
  */
 app.get('/api/v1/entry-list', async (req, res) => {
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
+    const projectId = PROJECT_ID;
     const configuredLocation = process.env.GCP_LOCATION || 'us-central1';
 
     if (!projectId) {
@@ -1300,7 +1323,7 @@ app.get('/api/v1/entry-list', async (req, res) => {
  */
 app.get('/api/v1/entry-types', async (req, res) => {
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const projectId = PROJECT_ID;
     const configuredLocation = process.env.GCP_LOCATION || 'us-central1';
 
     if (!projectId) {
@@ -1418,7 +1441,7 @@ app.get('/api/v1/get-entry-by-fqn', async (req, res) => {
 
     let query = `fully_qualified_name=${req.query.fqn}`;
 
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    const projectId = PROJECT_ID;
     const location = process.env.GCP_LOCATION;
     // const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
 
@@ -1772,7 +1795,7 @@ app.get('/api/v1/projects', async (req, res) => {
  */
 app.get('/api/v1/tag-templates', async (req, res) => {
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    const projectId = PROJECT_ID;
     const location = process.env.GCP_LOCATION || 'us-central1';
 
     if (!projectId || !location) {
@@ -1909,7 +1932,7 @@ app.get('/api/v1/get-aspect', async (req, res) => {
 
 app.get('/api/v1/app-configs', async (req, res) => {
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
+    const projectId = PROJECT_ID;
     const location = process.env.GCP_LOCATION || 'us-central1';
     // ADC Auth
     const auth = new AdcGoogleAuth();
@@ -2005,7 +2028,7 @@ app.get('/api/v1/app-configs', async (req, res) => {
 
         // 2. If not in Firestore, check GCP IAM Roles (Alignment with GCP Rights)
         if (!userAdminRole) {
-          const currentProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID;
+          const currentProjectId = PROJECT_ID;
           if (currentProjectId) {
             console.log(`Checking GCP IAM roles for ${userEmail} on ${currentProjectId}`);
             const isOwner = await verifyUserAccess(currentProjectId, userEmail, 'roles/owner');
@@ -2149,7 +2172,7 @@ app.post('/api/v1/send-feedback', async (req, res) => {
 
 app.get('/api/v1/get-projects', async (req, res) => {
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
+    const projectId = PROJECT_ID;
     const location = process.env.GCP_LOCATION || 'us-central1';
 
     console.log(`[GET-PROJECTS] Using Project: ${projectId}, Location: ${location}`);
@@ -2191,7 +2214,7 @@ app.get('/api/v1/get-projects', async (req, res) => {
 app.get('/api/v1/data-scans', async (req, res) => {
   const { project } = req.query;
   try {
-    const projectId = (project != '' && project != null && project != "undefined") ? project : (process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT);
+    const projectId = (project != '' && project != null && project != "undefined") ? project : (PROJECT_ID);
     const location = process.env.GCP_LOCATION || 'us-central1';
 
     if (!projectId || !location) {
@@ -2229,7 +2252,7 @@ app.get('/api/v1/data-quality-scan-jobs/:scanId', async (req, res) => {
   }
 
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    const projectId = PROJECT_ID;
     const location = process.env.GCP_LOCATION || 'us-central1';
 
     if (!projectId || !location) {
@@ -2268,7 +2291,7 @@ app.post('/api/v1/entry-data-quality', async (req, res) => {
   }
 
   try {
-    // const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+    // const projectId = PROJECT_ID;
     // const location = process.env.GCP_LOCATION;
 
     // if (!projectId || !location) {
@@ -2414,7 +2437,7 @@ app.post('/api/batch-data-quality-scan-jobs', async (req, res) => {
     console.log(`Fetching jobs for a batch of ${scanIds.length} data quality scans.`);
 
     const promises = scanIds.map(scanId => {
-      const parent = `projects/${projectId}/locations/${location}/dataScans/${scanId}`;
+      const parent = `projects/${PROJECT_ID}/locations/${process.env.GCP_LOCATION || 'us-central1'}/dataScans/${scanId}`;
       return dataplexDataScanClientv1.listDataScanJobs({ parent });
     });
 
@@ -2485,7 +2508,7 @@ const checkUserAdminRole = async (userEmail) => {
   }
 
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    const projectId = PROJECT_ID;
     if (!projectId) return false;
 
     // Use Resource Manager to check IAM policy locally (faster/cheaper than API calls per request if cached, but for now direct)
@@ -2534,7 +2557,7 @@ app.post('/api/v1/search', async (req, res) => {
 
     // Fetch ALL results (Service Account Scope)
     const client = new CatalogServiceClient();
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
+    const projectId = PROJECT_ID;
     const location = 'global';
 
     if (!projectId) {
@@ -2874,7 +2897,8 @@ app.get('/api/v1/access-requests', async (req, res) => {
 /**
  * POST /api/v1/access-request/update
  * Approve or Reject access requests.
- * REFACTORED: Flexible payload, DB-only update (no IAM/Email for stability).
+ * On APPROVE: Grants BigQuery dataset READER access, then updates Firestore, then sends email.
+ * On REJECT: Updates Firestore, then sends email.
  */
 app.post('/api/v1/access-request/update', async (req, res) => {
   try {
@@ -2883,7 +2907,7 @@ app.post('/api/v1/access-request/update', async (req, res) => {
 
     // Flexible Field Parsing (Frontend vs Backend mismatch fix)
     const requestId = req.body.requestId || req.body.id || req.body._id;
-    const rawStatus = req.body.status || req.body.newStatus || req.body.action; // 'APPROVED', 'REJECTED'
+    const rawStatus = req.body.status || req.body.newStatus || req.body.action;
     const adminNote = req.body.adminNote || req.body.reason || '';
     const reviewerEmail = req.headers['x-user-email'] || req.body.reviewerEmail || 'system';
 
@@ -2892,24 +2916,116 @@ app.post('/api/v1/access-request/update', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing requestId or status' });
     }
 
-    // Normalize Status
-    const status = rawStatus.toUpperCase(); // APPROVED, REJECTED
+    const status = rawStatus.toUpperCase();
     if (!['APPROVED', 'REJECTED'].includes(status)) {
       return res.status(400).json({ success: false, error: 'Invalid status. Must be APPROVED or REJECTED.' });
     }
 
     console.log(`[UPDATE] Processing: ID=${requestId}, Status=${status}, Reviewer=${reviewerEmail}`);
 
-    // DB Update Only (Stability Fix)
+    // Fetch the original request to get linkedResource and requesterEmail
+    const originalRequest = await getAccessRequestById(requestId);
+    if (!originalRequest) {
+      return res.status(404).json({ success: false, error: 'Access request not found' });
+    }
+
+    // --- IAM PROVISIONING on APPROVE ---
+    let iamGranted = false;
+    if (status === 'APPROVED') {
+      const linkedResource = originalRequest.linkedResource || originalRequest.assetName || req.body.linkedResource || '';
+      const requesterEmail = originalRequest.requesterEmail || '';
+
+      if (linkedResource && requesterEmail) {
+        // Parse linkedResource to extract project and dataset
+        // Formats: //bigquery.googleapis.com/projects/{p}/datasets/{d}/tables/{t}
+        //          projects/{p}/datasets/{d}
+        //          bigquery:{project}.{dataset}.{table}
+        let iamProjectId, datasetId;
+
+        const bqMatch = linkedResource.match(/projects\/([^/]+)\/datasets\/([^/]+)/);
+        if (bqMatch && bqMatch.length >= 3) {
+          iamProjectId = bqMatch[1];
+          datasetId = bqMatch[2];
+        } else if (linkedResource.includes('bigquery:') || linkedResource.includes('bigquery://')) {
+          const fqn = linkedResource.replace('bigquery://', '').replace('bigquery:', '');
+          const parts = fqn.split('.');
+          if (parts.length >= 2) {
+            iamProjectId = parts[0];
+            datasetId = parts[1];
+          }
+        }
+
+        if (iamProjectId && datasetId) {
+          try {
+            console.log(`[UPDATE] Granting BigQuery READER access: user=${requesterEmail}, project=${iamProjectId}, dataset=${datasetId}`);
+            const bigqueryClient = new BigQuery({ projectId: iamProjectId });
+            const dataset = bigqueryClient.dataset(datasetId);
+            const [metadata] = await dataset.getMetadata();
+            const accessList = metadata.access || [];
+
+            // Check for duplicates
+            const userExists = accessList.some(entry => entry.userByEmail === requesterEmail);
+            if (!userExists) {
+              accessList.push({ role: 'READER', userByEmail: requesterEmail });
+              await dataset.setMetadata({ access: accessList });
+              console.log(`[UPDATE] IAM READER access granted to ${requesterEmail} on ${datasetId}`);
+            } else {
+              console.log(`[UPDATE] User ${requesterEmail} already has access to ${datasetId}`);
+            }
+            iamGranted = true;
+          } catch (iamError) {
+            console.error('[UPDATE] IAM grant failed:', iamError.message);
+            // Still update Firestore but note the IAM failure
+            return res.status(500).json({
+              success: false,
+              error: 'Failed to grant BigQuery access. Request not approved.',
+              details: iamError.message
+            });
+          }
+        } else {
+          console.warn('[UPDATE] Could not parse linkedResource for IAM grant:', linkedResource);
+          // Proceed with DB update even if we can't parse the resource
+        }
+      }
+    }
+
+    // --- UPDATE FIRESTORE ---
     const updatedRequest = await updateAccessRequestStatus(requestId, status, adminNote, reviewerEmail);
 
-    if (updatedRequest) {
-      console.log('[UPDATE] Success.');
-      return res.json({ success: true, data: updatedRequest });
-    } else {
+    if (!updatedRequest) {
       console.error('[UPDATE] Firestore update returned null.');
       return res.status(404).json({ success: false, error: 'Request not found or failed to update' });
     }
+
+    // --- SEND EMAIL NOTIFICATION (non-blocking) ---
+    try {
+      const requesterEmail = originalRequest.requesterEmail || '';
+      const assetName = originalRequest.assetName || originalRequest.linkedResource || 'Unknown Asset';
+      const statusMessage = status === 'APPROVED'
+        ? `Your access request for "${assetName}" has been approved.${iamGranted ? ' BigQuery READER access has been granted.' : ''}`
+        : `Your access request for "${assetName}" has been rejected.${adminNote ? ' Reason: ' + adminNote : ''}`;
+
+      if (requesterEmail) {
+        await sendAccessRequestEmail(
+          assetName,
+          statusMessage,
+          requesterEmail,
+          PROJECT_ID,
+          [reviewerEmail]
+        ).catch(emailErr => {
+          console.warn('[UPDATE] Email notification failed (non-blocking):', emailErr.message);
+        });
+      }
+    } catch (emailError) {
+      console.warn('[UPDATE] Email sending failed (non-blocking):', emailError.message);
+    }
+
+    console.log('[UPDATE] Success.');
+    return res.json({
+      success: true,
+      data: updatedRequest,
+      iamGranted: iamGranted
+    });
 
   } catch (error) {
     console.error('[UPDATE] Error:', error);
@@ -2939,7 +3055,7 @@ app.get('/api/v1/admin/check', async (req, res) => {
 
     // 2. Fallback to GCP IAM Alignment
     if (!adminRole) {
-      const currentProjectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID;
+      const currentProjectId = PROJECT_ID;
       if (currentProjectId) {
         console.log(`[ADMIN_CHECK] Falling back to GCP IAM check for ${userEmail} on ${currentProjectId}`);
         const isOwner = await verifyUserAccess(currentProjectId, userEmail, 'roles/owner');
@@ -3525,11 +3641,11 @@ app.use((err, req, res, next) => {
 // Start the server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server listening on port ${PORT}`);
-  console.log('--- DEPLOYMENT_VERSION: v3.3 - Chart & History Fix ---');
+  console.log('--- DEPLOYMENT_VERSION: v3.4 - IAM Automation Enabled ---');
   console.log('API Endpoints:');
   console.log(`  POST /api/v1/check-iam-role`);
   console.log(`  POST /api/v1/search`);
   console.log(`  GET /api/health`);
-  console.log(`process.env.GOOGLE_CLOUD_PROJECT_ID: ${process.env.GOOGLE_CLOUD_PROJECT_ID || 'Not set'}`);
+  console.log(`PROJECT_ID: ${PROJECT_ID || 'Not set'}`);
 });
 

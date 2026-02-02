@@ -206,36 +206,17 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
   
   // Note: Preview panel is managed by parent components through previewData
 
-  // Handle failed resource status - navigate to login
+  // Handle failed resource status - only logout on 401 (auth error)
   useEffect(() => {
     if (resourcesStatus === 'failed') {
-      let subString = "INVALID_ARGUMENT:";
-      if(error?.details && typeof error?.details === 'string'){
-        if(error.details.includes(subString)){
-          content = (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '200px',
-              width: '100%'
-            }}>
-              <p style={{
-                margin: 0,
-                textAlign: 'center',
-                color: '#666',
-                fontSize: '16px'
-              }}>{(error?.message || error) + ' invalid arguments passed in search params'}</p>
-          </div>);
-        }else{
-          setPageSize(20);
-          logout();
-          navigate('/login');
-        }
-      }else{
+      // Only logout if it's a genuine authentication error (401)
+      const statusCode = error?.status || error?.response?.status;
+      if (statusCode === 401) {
+        setPageSize(20);
         logout();
         navigate('/login');
       }
+      // For all other errors (500, 403, etc.), don't logout - just show inline
     }
   }, [resourcesStatus, logout, navigate]);
 
@@ -916,32 +897,24 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
       </div>
     );
   } else if (resourcesStatus === 'failed') {
-    let subString = "INVALID_ARGUMENT:";
-    if(error?.details && typeof error?.details === 'string'){
-      if(error.details.includes(subString)){
-        content = (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '200px',
-            width: '100%'
-          }}>
-            <p style={{
-              margin: 0,
-              textAlign: 'center',
-              color: '#666',
-              fontSize: '16px'
-            }}>{(error?.message || error) + ' invalid arguments passed in search params'}</p>
-        </div>);
-      }else{
-        logout();
-        navigate('/login');
-      }
-    }else{
-      logout();
-      navigate('/login');
-    }
+    // Show error inline instead of logging user out
+    const errorMessage = error?.details || error?.message || 'An error occurred while loading resources.';
+    content = (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '200px',
+        width: '100%'
+      }}>
+        <p style={{
+          margin: 0,
+          textAlign: 'center',
+          color: '#666',
+          fontSize: '16px'
+        }}>{typeof errorMessage === 'string' ? errorMessage : 'Search failed. Please try again.'}</p>
+      </div>
+    );
   }
 
   return (

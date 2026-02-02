@@ -8,11 +8,9 @@ export const handleApiResponse = (response: Response, triggerExpiration: (reason
     // Unauthorized - token expired or invalid
     triggerExpiration('token_expired');
     return true; // Indicates session was expired
-  } else if (response.status === 403) {
-    // Forbidden - insufficient permissions
-    triggerExpiration('unauthorized');
-    return true; // Indicates access was denied
   }
+  // 403 is NOT a session issue - it means the user lacks permissions for this resource.
+  // Do not trigger session expiration for 403.
   return false; // No session issues
 };
 
@@ -28,9 +26,8 @@ export const createAxiosInterceptor = (triggerExpiration: (reason: 'session_expi
           const { status } = error.response;
           if (status === 401) {
             triggerExpiration('token_expired');
-          } else if (status === 403) {
-            triggerExpiration('unauthorized');
           }
+          // 403 no longer triggers session expiration
         }
         return Promise.reject(error);
       }
