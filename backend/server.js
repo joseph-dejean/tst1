@@ -2615,6 +2615,131 @@ app.post('/api/v1/search', async (req, res) => {
 
 
 /**
+ * GET /api/v1/lineage
+ * Retrieves data lineage (relationships) for a given FQN.
+ * Performs a Breadth-First Search (BFS) to find upstream/downstream up to a specific depth.
+ */
+app.get('/api/v1/lineage', async (req, res) => {
+  try {
+    const { fqn, depth = 3 } = req.query;
+    const maxDepth = Math.min(parseInt(depth), 6); // Cap at 6 as requested
+
+    if (!fqn) {
+      return res.status(400).json({ error: 'FQN is required' });
+    }
+
+    const projectId = PROJECT_ID;
+    const location = process.env.GCP_LOCATION || 'us-central1';
+
+    // Helper: Convert Dataplex FQN to Lineage Entity ID
+    // Input: strings like "bigquery:proj.ds.tbl" or "proj.ds.tbl"
+    // Output: "//bigquery.googleapis.com/projects/proj/datasets/ds/tables/tbl"
+    const convertToLineageEntity = (rawFqn) => {
+      let clean = rawFqn.replace('bigquery:', '').replace('bigquery://', '');
+      const parts = clean.split('.');
+      if (parts.length === 3) {
+        return `//bigquery.googleapis.com/projects/${parts[0]}/datasets/${parts[1]}/tables/${parts[2]}`;
+      }
+      return null;
+    };
+
+    // Helper: Convert Lineage Entity ID back to short name
+    const convertToShortName = (entityId) => {
+      if (entityId.includes('tables/')) {
+        return entityId.split('tables/')[1];
+      }
+      return entityId.split('/').pop();
+    };
+
+    const rootEntity = convertToLineageEntity(fqn);
+    if (!rootEntity) {
+      return res.json({ relationships: [] }); // Invalid format, return empty
+    }
+
+    const lineageClient = new LineageClient(); // ADC
+
+    // BFS Structures
+    let relationships = [];
+    let visited = new Set();
+    let queue = [{ entity: rootEntity, currentDepth: 0 }];
+    visited.add(rootEntity);
+
+    // BFS Loop
+    while (queue.length > 0) {
+      const { entity, currentDepth } = queue.shift();
+
+      if (currentDepth >= maxDepth) continue;
+
+      try {
+        // Search Links (Both Upstream and Downstream)
+        const parent = `projects/${projectId}/locations/${location}`;
+        const request = {
+          parent: parent,
+          target: { fullyQualifiedName: entity },
+          pageSize: 50 // Limit per node
+        };
+
+        const [links] = await lineageClient.searchLinks(request);
+
+        for (const link of links) {
+          const source = link.source.fullyQualifiedName;
+          const target = link.target.fullyQualifiedName;
+
+          // Determine relationship direction relative to current node
+          // If current is source, then target is downstream
+          // If current is target, then source is upstream
+          let relType = 'Unknown';
+          let otherNode = '';
+
+          if (source === entity) {
+            relType = 'Downstream';
+            otherNode = target;
+          } else {
+            relType = 'Upstream';
+            otherNode = source;
+          }
+
+          // Add to result
+          relationships.push({
+            table1: convertToShortName(source),
+            table2: convertToShortName(target),
+            relationship: 'Flows To' // Directed edge
+          });
+
+          // Enqueue neighbor if not visited
+          if (!visited.has(otherNode)) {
+            visited.add(otherNode);
+            queue.push({ entity: otherNode, currentDepth: currentDepth + 1 });
+          }
+        }
+      } catch (err) {
+        console.warn(`[LINEAGE] Error searching links for ${entity}:`, err.message);
+        // Continue BFS even if one node fails
+      }
+    }
+
+    // Deduplicate relationships
+    const uniqueRels = [];
+    const relSet = new Set();
+    relationships.forEach(r => {
+      const key = `${r.table1}->${r.table2}`;
+      if (!relSet.has(key)) {
+        relSet.add(key);
+        uniqueRels.push(r);
+      }
+    });
+
+    res.json({ relationships: uniqueRels });
+
+  } catch (error) {
+    console.error('[LINEAGE] API Error:', error);
+    res.status(500).json({ error: 'Failed to fetch lineage', details: error.message });
+  }
+});
+
+
+
+/**
  * POST /api/v1/check-access
  * Check if a user has access to a specific BigQuery table/dataset
  */
