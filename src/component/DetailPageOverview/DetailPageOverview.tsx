@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import RelationshipGraph, { Relationship } from '../Insights/RelationshipGraph';
+import RelationshipGraph, { type Relationship } from '../Insights/RelationshipGraph';
 import {
     Accordion,
     AccordionSummary,
