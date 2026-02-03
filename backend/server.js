@@ -2658,13 +2658,16 @@ app.post('/api/v1/search', async (req, res) => {
       }
     }
 
+    // Filter out any null/undefined entries
+    const safeResults = (annotatedResults || []).filter(r => r && r.dataplexEntry);
+
     // Return response
     res.json({
       success: true,
-      data: annotatedResults,
-      results: annotatedResults,
+      data: safeResults,
+      results: safeResults,
       nextPageToken: searchResponse?.nextPageToken || '',
-      totalSize: searchResponse?.totalSize || annotatedResults.length
+      totalSize: searchResponse?.totalSize || safeResults.length
     });
 
   } catch (error) {

@@ -493,7 +493,7 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
             
             {filteredResources.length > 0 && (() => {
               const availableTags = typeAliases.filter((item) =>
-                filteredResources.some((resource: any) => resource.dataplexEntry.entryType.includes('-' + item.toLowerCase()))
+                filteredResources.some((resource: any) => resource?.dataplexEntry?.entryType?.includes('-' + item.toLowerCase()))
               );
               if (availableTags.length <= 0) return null;
               return availableTags.map((item) => {
