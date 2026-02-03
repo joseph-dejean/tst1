@@ -1,8 +1,17 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-const API_VERSION = import.meta.env.VITE_API_VERSION || 'v1';
+const rawUrl = import.meta.env.VITE_API_URL;
+const API_BASE_URL = (rawUrl && rawUrl !== 'undefined' && rawUrl !== '__VITE_API_URL__') ? rawUrl : '';
+const rawVersion = import.meta.env.VITE_API_VERSION;
+const API_VERSION = (rawVersion && rawVersion !== 'undefined' && rawVersion !== '__VITE_API_VERSION__') ? rawVersion : 'v1';
+
+// If API_BASE_URL is empty (relative), we want /api/v1
+// If API_BASE_URL is http://host/api, we want http://host/api/v1
+// Common pattern: Backend is at /api, so we might need /api prefix if relative.
+// But server.js typically mounts at /api/v1.
+// Let's assume relative path '/api' if empty.
+const finalBase = API_BASE_URL || '/api';
 
 export const URLS = {
-    API_URL: API_BASE_URL + '/' + API_VERSION,
+    API_URL: finalBase + '/' + API_VERSION,
     APP_CONFIG: '/app-configs',
     ADMIN_CONFIGURE: '/admin/configure',
     CHECK_IAM_ROLE: '/check-iam-role',
