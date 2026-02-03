@@ -2,13 +2,26 @@
 set -e
 
 echo "[ENTRYPOINT] Starting..."
-echo "[ENTRYPOINT] ======== ENVIRONMENT VARIABLES DEBUG ========"
+echo "[ENTRYPOINT] =============================================="
 echo "[ENTRYPOINT] VITE_API_URL=${VITE_API_URL}"
 echo "[ENTRYPOINT] VITE_API_VERSION=${VITE_API_VERSION}"
-echo "[ENTRYPOINT] SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL}"
-echo "[ENTRYPOINT] VITE_ADMIN_EMAIL=${VITE_ADMIN_EMAIL}"
-echo "[ENTRYPOINT] GOOGLE_CLOUD_PROJECT_ID=${GOOGLE_CLOUD_PROJECT_ID}"
 echo "[ENTRYPOINT] =============================================="
+
+# Aggressively sanitize the variables if they are set to literal 'undefined', 'null', or contain them
+case "$VITE_API_URL" in
+  undefined*) VITE_API_URL="/api" ;;
+  null*)      VITE_API_URL="/api" ;;
+  "")         VITE_API_URL="/api" ;;
+esac
+
+case "$VITE_API_VERSION" in
+  undefined*) VITE_API_VERSION="v1" ;;
+  null*)      VITE_API_VERSION="v1" ;;
+  "")         VITE_API_VERSION="v1" ;;
+esac
+
+echo "[ENTRYPOINT] Sanitized VITE_API_URL=${VITE_API_URL}"
+echo "[ENTRYPOINT] Sanitized VITE_API_VERSION=${VITE_API_VERSION}"
 
 ASSETS_DIR=/app/dist/assets
 

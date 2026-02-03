@@ -1,14 +1,26 @@
 const rawUrl = import.meta.env.VITE_API_URL;
-const API_BASE_URL = (rawUrl && rawUrl !== 'undefined' && rawUrl !== '__VITE_API_URL__') ? rawUrl : '';
 const rawVersion = import.meta.env.VITE_API_VERSION;
-const API_VERSION = (rawVersion && rawVersion !== 'undefined' && rawVersion !== '__VITE_API_VERSION__') ? rawVersion : 'v1';
 
-// If API_BASE_URL is empty (relative), we want /api/v1
-// If API_BASE_URL is http://host/api, we want http://host/api/v1
-// Common pattern: Backend is at /api, so we might need /api prefix if relative.
-// But server.js typically mounts at /api/v1.
-// Let's assume relative path '/api' if empty.
+const sanitize = (val: string | undefined, fallback: string) => {
+    // Aggressively catch "undefined", "null", or anything starting with "undefined/" or "__VITE_"
+    if (!val ||
+        val === 'undefined' ||
+        val === 'null' ||
+        val.startsWith('undefined/') ||
+        val.startsWith('null/') ||
+        val.includes('__VITE_')) {
+        return fallback;
+    }
+    return val.trim();
+};
+
+const API_BASE_URL = sanitize(rawUrl, '');
+const API_VERSION = sanitize(rawVersion, 'v1');
+
+// If API_BASE_URL is empty or relative, ensure it starts with /api
 const finalBase = API_BASE_URL || '/api';
+
+console.log(`[URLS] Constructed API_URL: ${finalBase}/${API_VERSION}`);
 
 export const URLS = {
     API_URL: finalBase + '/' + API_VERSION,
