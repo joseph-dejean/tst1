@@ -2582,16 +2582,49 @@ app.post('/api/v1/search', async (req, res) => {
     const [searchResults, searchRequest, searchResponse] = await client.searchEntries(request);
     console.log(`[SEARCH] Fetched ${searchResults ? searchResults.length : 0} results from Data Catalog`);
 
-    // Annotate Access
+    // Annotate Access - check admin role AND user's granted accesses
+    let userGrantedAssets = new Set();
+    if (!isAdmin && userEmail) {
+      try {
+        // Fetch this user's ACTIVE granted accesses from Firestore
+        const grants = await grantedAccessService.getGrantedAccesses({
+          userEmail: userEmail,
+          status: 'ACTIVE'
+        });
+        grants.forEach(g => {
+          if (g.assetName) userGrantedAssets.add(g.assetName);
+        });
+
+        // Also check approved access-requests
+        const approvedRequests = await getAccessRequests({
+          requesterEmail: userEmail,
+          status: 'APPROVED'
+        });
+        approvedRequests.forEach(r => {
+          if (r.assetName) userGrantedAssets.add(r.assetName);
+        });
+
+        console.log(`[SEARCH] User ${userEmail} has ${userGrantedAssets.size} granted assets`);
+      } catch (grantErr) {
+        console.warn('[SEARCH] Could not fetch granted accesses:', grantErr.message);
+      }
+    }
+
     const annotatedResults = (searchResults || []).map(entry => {
-      // Logic: 
-      // 1. If Admin -> Has Access
-      // 2. If Not Admin -> No Access (Request Access flow)
-      //    (This simplifies the "partial access" logic which was buggy/slow)
-      return {
-        ...entry,
-        userHasAccess: isAdmin
-      };
+      // Admin has access to everything
+      if (isAdmin) return { ...entry, userHasAccess: true };
+
+      // Check if user has been granted access to this specific asset
+      const entryName = entry.dataplexEntry?.name || entry.name || '';
+      const entryFqn = entry.dataplexEntry?.fullyQualifiedName || entry.fullyQualifiedName || '';
+      const hasGrantedAccess = userGrantedAssets.has(entryName)
+        || userGrantedAssets.has(entryFqn)
+        || [...userGrantedAssets].some(asset =>
+          (entryName && entryName.includes(asset)) || (asset && asset.includes(entryName)) ||
+          (entryFqn && entryFqn.includes(asset)) || (asset && asset.includes(entryFqn))
+        );
+
+      return { ...entry, userHasAccess: hasGrantedAccess };
     });
 
     // Return response
@@ -3098,6 +3131,21 @@ app.post('/api/v1/access-request/update', async (req, res) => {
               console.log(`[UPDATE] User ${requesterEmail} already has access to ${datasetId}`);
             }
             iamGranted = true;
+
+            // Record the granted access in Firestore so the lock icon updates
+            try {
+              await grantedAccessService.createGrantedAccess({
+                userEmail: requesterEmail,
+                assetName: linkedResource,
+                gcpProjectId: iamProjectId,
+                role: 'roles/bigquery.dataViewer',
+                grantedBy: reviewerEmail,
+                originalRequestId: requestId
+              });
+              console.log(`[UPDATE] Granted access record created in Firestore for ${requesterEmail}`);
+            } catch (grantRecordErr) {
+              console.warn('[UPDATE] Failed to create granted access record (non-blocking):', grantRecordErr.message);
+            }
           } catch (iamError) {
             console.error('[UPDATE] IAM grant failed:', iamError.message);
             // Still update Firestore but note the IAM failure
