@@ -3270,23 +3270,44 @@ app.post('/api/v1/access-request/update', async (req, res) => {
 /**
  * POST /api/v1/access/revoke
  * Revoke a previously granted access.
- * 1. Remove from BigQuery IAM.
- * 2. Update Firestore `granted_access` status to 'REVOKED'.
+ * 1. Look up the grant record from Firestore by grantId.
+ * 2. Verify the revoker is an admin for the project.
+ * 3. Remove BigQuery dataset-level READER access.
+ * 4. Update Firestore status to 'REVOKED'.
  */
 app.post('/api/v1/access/revoke', async (req, res) => {
   try {
-    const { grantId, userEmail, assetName, grantedBy } = req.body;
-    console.log(`[REVOKE] Request for grantId=${grantId}, user=${userEmail}`);
+    const { grantId } = req.body;
+    const revokerEmail = req.headers['x-user-email'];
+    console.log(`[REVOKE] Request for grantId=${grantId} by ${revokerEmail}`);
 
     if (!grantId) {
-      return res.status(400).json({ error: 'Grant ID is required' });
+      return res.status(400).json({ success: false, error: 'Grant ID is required' });
     }
 
-    // 2. Remove from BigQuery (if assetName provided)
-    let revokeStatus = 'NOT_ATTEMPTED';
-    let iamProjectId, datasetId;
+    // 1. Look up the grant record
+    const grant = await grantedAccessService.getGrantedAccessById(grantId);
+    if (!grant) {
+      return res.status(404).json({ success: false, error: 'Grant not found' });
+    }
+
+    if (grant.status === 'REVOKED') {
+      return res.status(400).json({ success: false, error: 'Access already revoked' });
+    }
+
+    // 2. Check if revoker is admin for this project
+    const isAdmin = await adminService.isProjectAdmin(revokerEmail, grant.gcpProjectId);
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, error: 'Not authorized to revoke access for this project' });
+    }
+
+    // 3. Remove from BigQuery dataset-level IAM (matching how we grant)
+    let revokeIamStatus = 'NOT_ATTEMPTED';
+    const assetName = grant.assetName;
+    const userEmail = grant.userEmail;
 
     if (assetName) {
+      let iamProjectId, datasetId;
       const bqMatch = assetName.match(/projects\/([^/]+)\/datasets\/([^/]+)/);
       if (bqMatch) {
         iamProjectId = bqMatch[1];
@@ -3305,36 +3326,39 @@ app.post('/api/v1/access/revoke', async (req, res) => {
           let accessList = metadata.access || [];
 
           const initialLength = accessList.length;
-          accessList = accessList.filter(a => a.userByEmail !== userEmail);
+          accessList = accessList.filter(a => a.userByEmail?.toLowerCase() !== userEmail.toLowerCase());
 
           if (accessList.length < initialLength) {
             await dataset.setMetadata({ access: accessList });
-            revokeStatus = 'SUCCESS';
+            revokeIamStatus = 'SUCCESS';
             console.log(`[REVOKE] IAM access removed for ${userEmail} on ${datasetId}`);
           } else {
-            revokeStatus = 'NOT_FOUND_IN_IAM';
+            revokeIamStatus = 'NOT_FOUND_IN_IAM';
+            console.log(`[REVOKE] User ${userEmail} not found in dataset ${datasetId} IAM`);
           }
         } catch (iamErr) {
           console.warn('[REVOKE] IAM removal failed:', iamErr.message);
-          revokeStatus = 'FAILED';
+          revokeIamStatus = 'FAILED';
         }
       }
     }
 
-    // 3. Update Firestore
-    const db = new Firestore();
-    await db.collection('granted_access').doc(grantId).update({
-      status: 'REVOKED',
-      revokedAt: Firestore.Timestamp.now(),
-      revokedBy: grantedBy || 'admin',
-      revokeIamStatus: revokeStatus
-    });
+    // 4. Update Firestore via grantedAccessService (uses correct 'granted-accesses' collection)
+    const revokedGrant = await grantedAccessService.revokeAccess(grantId, revokerEmail);
 
-    res.json({ success: true, revokeStatus });
+    // 5. Send notification (non-blocking)
+    try {
+      await notificationService.notifyAccessRevoked(grant, revokerEmail);
+      console.log(`[REVOKE] Notification sent to ${userEmail}`);
+    } catch (notifErr) {
+      console.warn('[REVOKE] Notification failed:', notifErr.message);
+    }
+
+    res.json({ success: true, revokeIamStatus, data: revokedGrant });
 
   } catch (err) {
     console.error('[REVOKE] Error:', err);
-    res.status(500).json({ error: 'Revocation failed', details: err.message });
+    res.status(500).json({ success: false, error: 'Revocation failed', details: err.message });
   }
 });
 
@@ -3576,56 +3600,8 @@ app.get('/api/v1/access/asset/{*assetPath}', async (req, res) => {
   }
 });
 
-/**
- * POST /api/v1/access/revoke
- * Revoke access from a user
- */
-app.post('/api/v1/access/revoke', async (req, res) => {
-  try {
-    const { grantId } = req.body;
-    const revokerEmail = req.headers['x-user-email'];
-
-    if (!grantId) {
-      return res.status(400).json({ success: false, error: 'Grant ID is required' });
-    }
-
-    // Get the grant to check project
-    const grant = await grantedAccessService.getGrantedAccessById(grantId);
-    if (!grant) {
-      return res.status(404).json({ success: false, error: 'Grant not found' });
-    }
-
-    if (grant.status === 'REVOKED') {
-      return res.status(400).json({ success: false, error: 'Access already revoked' });
-    }
-
-    // Check if revoker is admin for this project
-    const isAdmin = await adminService.isProjectAdmin(revokerEmail, grant.gcpProjectId);
-    if (!isAdmin) {
-      return res.status(403).json({ success: false, error: 'Not authorized to revoke access for this project' });
-    }
-
-    // 1. Revoke IAM access
-    await revokeIamAccess(grant.gcpProjectId, grant.userEmail, grant.role);
-    console.log(`Revoked IAM role ${grant.role} from ${grant.userEmail} on ${grant.gcpProjectId}`);
-
-    // 2. Update grant record
-    const revokedGrant = await grantedAccessService.revokeAccess(grantId, revokerEmail);
-
-    // 3. Send notification
-    await notificationService.notifyAccessRevoked(grant, revokerEmail);
-    console.log(`Sent revocation notification to ${grant.userEmail}`);
-
-    return res.status(200).json({
-      success: true,
-      message: 'Access revoked successfully',
-      data: revokedGrant
-    });
-  } catch (error) {
-    console.error('Error revoking access:', error);
-    return res.status(500).json({ success: false, error: error.message });
-  }
-});
+// NOTE: POST /api/v1/access/revoke is defined above (line ~3276) - single endpoint handles
+// grant lookup, admin auth check, dataset-level IAM removal, and Firestore update.
 
 /**
  * POST /api/v1/access/bulk-approve
