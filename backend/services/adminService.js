@@ -126,7 +126,7 @@ const deleteAdminRole = async (email) => {
  * @returns {boolean}
  */
 const isAdmin = async (email) => {
-    const role = await getAdminRole(email);
+    const role = await resolveAdminRole(email);
     return role !== null;
 };
 
@@ -136,7 +136,7 @@ const isAdmin = async (email) => {
  * @returns {boolean}
  */
 const isSuperAdmin = async (email) => {
-    const role = await getAdminRole(email);
+    const role = await resolveAdminRole(email);
     return role?.role === 'super-admin';
 };
 
@@ -147,7 +147,7 @@ const isSuperAdmin = async (email) => {
  * @returns {boolean}
  */
 const isProjectAdmin = async (email, projectId) => {
-    const role = await getAdminRole(email);
+    const role = await resolveAdminRole(email);
 
     if (!role) return false;
 
@@ -272,6 +272,58 @@ const removeProjectFromAdmin = async (email, projectId) => {
     }
 };
 
+/**
+ * Resolve admin role with fallbacks (Firestore -> Super Admin Env -> GCP IAM)
+ * @param {string} email - User email
+ * @returns {Object|null}
+ */
+const resolveAdminRole = async (email) => {
+    if (!email) return null;
+
+    // 1. Check Firestore (Primary Source of Truth)
+    const firestoreRole = await getAdminRole(email);
+    if (firestoreRole) return firestoreRole;
+
+    // 2. Check SUPER_ADMIN_EMAIL environment variable
+    const SUPER_ADMIN = process.env.SUPER_ADMIN_EMAIL || process.env.VITE_ADMIN_EMAIL;
+    if (SUPER_ADMIN && email.toLowerCase() === SUPER_ADMIN.toLowerCase()) {
+        console.log(`[ADMIN-RESOLVE] User ${email} matches SUPER_ADMIN env`);
+        return {
+            email: email,
+            role: 'super-admin',
+            assignedProjects: [],
+            isActive: true,
+            isEnvAligned: true
+        };
+    }
+
+    // 3. Optional: Check GCP IAM (Fallback for Project Owners/Editors)
+    // This is useful for "first-time" setup without manual Firestore entry
+    try {
+        const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID;
+        if (projectId) {
+            const { verifyUserAccess } = require('./gcpIamService');
+            const isOwner = await verifyUserAccess(projectId, email, 'roles/owner');
+            const isEditor = await verifyUserAccess(projectId, email, 'roles/editor');
+
+            if (isOwner || isEditor) {
+                console.log(`[ADMIN-RESOLVE] User ${email} recognized as admin via IAM on ${projectId}`);
+                return {
+                    email: email,
+                    role: 'project-admin',
+                    assignedProjects: [projectId],
+                    isActive: true,
+                    isGcpAligned: true
+                };
+            }
+        }
+    } catch (err) {
+        console.warn('[ADMIN-RESOLVE] IAM fallback check failed:', err.message);
+    }
+
+    return null;
+};
+
 module.exports = {
     getAdminRole,
     setAdminRole,
@@ -282,5 +334,6 @@ module.exports = {
     getAllAdmins,
     getProjectAdmins,
     addProjectToAdmin,
-    removeProjectFromAdmin
+    removeProjectFromAdmin,
+    resolveAdminRole
 };

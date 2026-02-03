@@ -2496,47 +2496,10 @@ app.post('/api/v1/get-dataset-entries', async (req, res) => {
  * Proxy Dataplex Search with Permission Filtering
  */
 
-// Helper: Check actual GCP IAM Admin Role
+// Helper: Check actual admin status using resolved logic
 const checkUserAdminRole = async (userEmail) => {
-  if (!userEmail) return false;
-
-  // SUPER_ADMIN bypass
-  const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL;
-  if (SUPER_ADMIN_EMAIL && userEmail.toLowerCase().includes(SUPER_ADMIN_EMAIL.toLowerCase())) {
-    console.log(`[IAM-CHECK] ${userEmail} matches SUPER_ADMIN`);
-    return true;
-  }
-
-  try {
-    const projectId = PROJECT_ID;
-    if (!projectId) return false;
-
-    // Use Resource Manager to check IAM policy locally (faster/cheaper than API calls per request if cached, but for now direct)
-    const resourceManager = new ProjectsClient();
-    const [policy] = await resourceManager.getIamPolicy({
-      resource: `projects/${projectId}`
-    });
-
-    const adminRoles = [
-      'roles/owner',
-      'roles/editor',
-      'roles/dataplex.admin',
-      'roles/bigquery.admin'
-    ];
-
-    const userMember = `user:${userEmail}`;
-    // Also check group membership if needed, but for now user-direct
-    const hasRole = policy.bindings.some(binding =>
-      adminRoles.includes(binding.role) && binding.members.includes(userMember)
-    );
-
-    console.log(`[IAM-CHECK] User ${userEmail} has admin role? ${hasRole}`);
-    return hasRole;
-
-  } catch (err) {
-    console.error('[IAM-CHECK] Failed to check IAM policy:', err);
-    return false;
-  }
+  const role = await adminService.resolveAdminRole(userEmail);
+  return !!role;
 };
 
 /**
@@ -2590,9 +2553,9 @@ app.post('/api/v1/search', async (req, res) => {
     let annotatedResults;
 
     if (isAdmin) {
-      annotatedResults = (searchResults || []).map(entry => ({ ...entry, userHasAccess: true }));
+      annotatedResults = (searchResults || []).map(entry => ({ dataplexEntry: entry, userHasAccess: true }));
     } else if (!userEmail) {
-      annotatedResults = (searchResults || []).map(entry => ({ ...entry, userHasAccess: false }));
+      annotatedResults = (searchResults || []).map(entry => ({ dataplexEntry: entry, userHasAccess: false }));
     } else {
       // Step 1: Check project-level BigQuery roles
       let hasProjectAccess = false;
@@ -2615,7 +2578,7 @@ app.post('/api/v1/search', async (req, res) => {
 
       if (hasProjectAccess) {
         // User has project-level access → all results are accessible
-        annotatedResults = (searchResults || []).map(entry => ({ ...entry, userHasAccess: true }));
+        annotatedResults = (searchResults || []).map(entry => ({ dataplexEntry: entry, userHasAccess: true }));
       } else {
         // Step 2: Extract unique datasets from results and check IAM per dataset
         const datasetAccessCache = new Map(); // key: "project.dataset" → boolean
@@ -2668,14 +2631,29 @@ app.post('/api/v1/search', async (req, res) => {
         });
 
         await Promise.all(datasetChecks);
-        console.log(`[SEARCH] Checked ${uniqueDatasets.size} datasets, access map:`,
-          Object.fromEntries(datasetAccessCache));
+        // Step 3: Overlay Firestore Accesses (Important: catching things BigQuery IAM misses or sync delays)
+        const firestoreAccesses = await grantedAccessService.getAccessesByUser(userEmail);
+        const firestoreAssetSet = new Set(firestoreAccesses.map(a => a.assetName));
 
         // Annotate each result
         annotatedResults = (searchResults || []).map(entry => {
           const ds = parseDataset(entry);
-          const hasAccess = ds ? (datasetAccessCache.get(ds.key) || false) : false;
-          return { ...entry, userHasAccess: hasAccess };
+
+          // Check BigQuery IAM access
+          const hasIamAccess = ds ? (datasetAccessCache.get(ds.key) || false) : false;
+
+          // Check if this specific resource was granted in our app (check FQN, Resource, and Name)
+          const cleanFqn = entry.dataplexEntry?.fullyQualifiedName || entry.fullyQualifiedName || '';
+          const linkedRes = entry.dataplexEntry?.entrySource?.resource || '';
+          const entryName = entry.dataplexEntry?.name || entry.name || '';
+
+          const hasFirestoreAccess = firestoreAssetSet.has(cleanFqn) ||
+            firestoreAssetSet.has(linkedRes) ||
+            firestoreAssetSet.has(entryName);
+
+          const hasAccess = hasIamAccess || hasFirestoreAccess;
+
+          return { dataplexEntry: entry, userHasAccess: hasAccess };
         });
       }
     }
@@ -3378,26 +3356,8 @@ app.get('/api/v1/admin/check', async (req, res) => {
       return res.status(400).json({ success: false, error: 'User email is required' });
     }
 
-    // 1. Check Firestore first
-    let adminRole = await adminService.getAdminRole(userEmail);
-
-    // 2. Fallback to GCP IAM Alignment
-    if (!adminRole) {
-      const currentProjectId = PROJECT_ID;
-      if (currentProjectId) {
-        console.log(`[ADMIN_CHECK] Falling back to GCP IAM check for ${userEmail} on ${currentProjectId}`);
-        const isOwner = await verifyUserAccess(currentProjectId, userEmail, 'roles/owner');
-        const isEditor = await verifyUserAccess(currentProjectId, userEmail, 'roles/editor');
-        if (isOwner || isEditor) {
-          console.log(`[ADMIN_CHECK] User ${userEmail} recognized as admin via IAM (${isOwner ? 'Owner' : 'Editor'})`);
-          adminRole = {
-            role: 'project-admin',
-            assignedProjects: [currentProjectId],
-            isGcpAligned: true
-          };
-        }
-      }
-    }
+    // Use centralized resolution logic (Firestore -> Env -> IAM)
+    const adminRole = await adminService.resolveAdminRole(userEmail);
 
     return res.status(200).json({
       success: true,
@@ -3539,8 +3499,8 @@ app.get('/api/v1/access/granted', async (req, res) => {
     const userEmail = req.headers['x-user-email'];
     const { status, projectId, userEmail: filterEmail } = req.query;
 
-    // Check if requester is admin
-    const adminRole = await adminService.getAdminRole(userEmail);
+    // Check if requester is admin using resolved logic
+    const adminRole = await adminService.resolveAdminRole(userEmail);
 
     const filters = {};
     if (status) filters.status = status;

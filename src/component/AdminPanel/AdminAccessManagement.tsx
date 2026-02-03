@@ -383,7 +383,6 @@ const AdminAccessManagement = () => {
                   <TableCell><strong>Asset</strong></TableCell>
                   <TableCell><strong>Requester</strong></TableCell>
                   <TableCell><strong>Project</strong></TableCell>
-                  <TableCell><strong>Role</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
                   <TableCell><strong>Submitted</strong></TableCell>
                   <TableCell><strong>Actions</strong></TableCell>
@@ -392,7 +391,7 @@ const AdminAccessManagement = () => {
               <TableBody>
                 {filteredRequests.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">No access requests found</TableCell>
+                    <TableCell colSpan={7} align="center">No access requests found</TableCell>
                   </TableRow>
                 ) : (
                   filteredRequests.map((request) => (
@@ -414,9 +413,6 @@ const AdminAccessManagement = () => {
                       </TableCell>
                       <TableCell>{request.requesterEmail}</TableCell>
                       <TableCell>{request.projectId || request.gcpProjectId}</TableCell>
-                      <TableCell>
-                        <Chip label={request.requestedRole || 'dataViewer'} size="small" variant="outlined" />
-                      </TableCell>
                       <TableCell>{getStatusChip(request.status)}</TableCell>
                       <TableCell>{formatDate(request.submittedAt)}</TableCell>
                       <TableCell>
@@ -453,7 +449,6 @@ const AdminAccessManagement = () => {
                   <TableCell><strong>User</strong></TableCell>
                   <TableCell><strong>Asset</strong></TableCell>
                   <TableCell><strong>Project</strong></TableCell>
-                  <TableCell><strong>Role</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
                   <TableCell><strong>Granted</strong></TableCell>
                   <TableCell><strong>Granted By</strong></TableCell>
@@ -463,7 +458,7 @@ const AdminAccessManagement = () => {
               <TableBody>
                 {grantedAccesses.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">No active accesses found</TableCell>
+                    <TableCell colSpan={7} align="center">No active accesses found</TableCell>
                   </TableRow>
                 ) : (
                   grantedAccesses.map((access) => (
@@ -477,9 +472,6 @@ const AdminAccessManagement = () => {
                         </Tooltip>
                       </TableCell>
                       <TableCell>{access.gcpProjectId}</TableCell>
-                      <TableCell>
-                        <Chip label={access.role?.split('/').pop() || access.role} size="small" variant="outlined" />
-                      </TableCell>
                       <TableCell>{getStatusChip(access.status)}</TableCell>
                       <TableCell>{formatDate(access.grantedAt)}</TableCell>
                       <TableCell>{access.grantedBy}</TableCell>
