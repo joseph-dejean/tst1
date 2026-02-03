@@ -2614,15 +2614,10 @@ app.post('/api/v1/search', async (req, res) => {
       // Admin has access to everything
       if (isAdmin) return { ...entry, userHasAccess: true };
 
-      // Check if user has been granted access to this specific asset
+      // Check if user has been granted access to this specific asset (exact match only)
       const entryName = entry.dataplexEntry?.name || entry.name || '';
       const entryFqn = entry.dataplexEntry?.fullyQualifiedName || entry.fullyQualifiedName || '';
-      const hasGrantedAccess = userGrantedAssets.has(entryName)
-        || userGrantedAssets.has(entryFqn)
-        || [...userGrantedAssets].some(asset =>
-          (entryName && entryName.includes(asset)) || (asset && asset.includes(entryName)) ||
-          (entryFqn && entryFqn.includes(asset)) || (asset && asset.includes(entryFqn))
-        );
+      const hasGrantedAccess = userGrantedAssets.has(entryName) || userGrantedAssets.has(entryFqn);
 
       return { ...entry, userHasAccess: hasGrantedAccess };
     });
