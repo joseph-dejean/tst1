@@ -2582,45 +2582,103 @@ app.post('/api/v1/search', async (req, res) => {
     const [searchResults, searchRequest, searchResponse] = await client.searchEntries(request);
     console.log(`[SEARCH] Fetched ${searchResults ? searchResults.length : 0} results from Data Catalog`);
 
-    // Annotate Access - check admin role AND user's granted accesses
-    let userGrantedAssets = new Set();
-    if (!isAdmin && userEmail) {
+    // --- ACCESS ANNOTATION ---
+    // For admins: everything is accessible.
+    // For regular users: check actual BigQuery IAM roles on the dataset/table.
+    //   1. Check project-level roles first (one API call).
+    //   2. If no project-level access, check per-dataset IAM (one call per unique dataset).
+    let annotatedResults;
+
+    if (isAdmin) {
+      annotatedResults = (searchResults || []).map(entry => ({ ...entry, userHasAccess: true }));
+    } else if (!userEmail) {
+      annotatedResults = (searchResults || []).map(entry => ({ ...entry, userHasAccess: false }));
+    } else {
+      // Step 1: Check project-level BigQuery roles
+      let hasProjectAccess = false;
       try {
-        // Fetch this user's ACTIVE granted accesses from Firestore
-        const grants = await grantedAccessService.getGrantedAccesses({
-          userEmail: userEmail,
-          status: 'ACTIVE'
-        });
-        grants.forEach(g => {
-          if (g.assetName) userGrantedAssets.add(g.assetName);
+        const resourceManager = new ProjectsClient();
+        const [policy] = await resourceManager.getIamPolicy({ resource: `projects/${projectId}` });
+        const userMember = `user:${userEmail}`;
+        const accessRoles = [
+          'roles/owner', 'roles/editor', 'roles/viewer',
+          'roles/bigquery.dataViewer', 'roles/bigquery.metadataViewer',
+          'roles/bigquery.dataEditor', 'roles/bigquery.dataOwner', 'roles/bigquery.admin'
+        ];
+        hasProjectAccess = policy.bindings?.some(binding =>
+          accessRoles.includes(binding.role) && binding.members?.includes(userMember)
+        ) || false;
+        console.log(`[SEARCH] User ${userEmail} has project-level BQ access? ${hasProjectAccess}`);
+      } catch (iamErr) {
+        console.warn('[SEARCH] Project IAM check failed:', iamErr.message);
+      }
+
+      if (hasProjectAccess) {
+        // User has project-level access → all results are accessible
+        annotatedResults = (searchResults || []).map(entry => ({ ...entry, userHasAccess: true }));
+      } else {
+        // Step 2: Extract unique datasets from results and check IAM per dataset
+        const datasetAccessCache = new Map(); // key: "project.dataset" → boolean
+
+        // Parse FQN to get project+dataset
+        const parseDataset = (entry) => {
+          const fqn = entry.dataplexEntry?.fullyQualifiedName || entry.fullyQualifiedName || '';
+          // Format: bigquery:{project}.{dataset}.{table}
+          const cleanFqn = fqn.replace('bigquery:', '');
+          const parts = cleanFqn.split('.');
+          if (parts.length >= 2) {
+            return { project: parts[0], dataset: parts[1], key: `${parts[0]}.${parts[1]}` };
+          }
+          // Try linkedResource format: //bigquery.googleapis.com/projects/{p}/datasets/{d}/...
+          const linked = entry.dataplexEntry?.entrySource?.resource || '';
+          const bqMatch = linked.match(/projects\/([^/]+)\/datasets\/([^/]+)/);
+          if (bqMatch) {
+            return { project: bqMatch[1], dataset: bqMatch[2], key: `${bqMatch[1]}.${bqMatch[2]}` };
+          }
+          return null;
+        };
+
+        // Collect unique datasets
+        const uniqueDatasets = new Map();
+        (searchResults || []).forEach(entry => {
+          const ds = parseDataset(entry);
+          if (ds && !uniqueDatasets.has(ds.key)) {
+            uniqueDatasets.set(ds.key, ds);
+          }
         });
 
-        // Also check approved access-requests
-        const approvedRequests = await getAccessRequests({
-          requesterEmail: userEmail,
-          status: 'APPROVED'
-        });
-        approvedRequests.forEach(r => {
-          if (r.assetName) userGrantedAssets.add(r.assetName);
+        // Check IAM for each unique dataset (parallel, with error handling)
+        const datasetChecks = Array.from(uniqueDatasets.values()).map(async (ds) => {
+          try {
+            const bq = new BigQuery({ projectId: ds.project });
+            const dataset = bq.dataset(ds.dataset);
+            const [metadata] = await dataset.getMetadata();
+            const accessList = metadata.access || [];
+            const hasAccess = accessList.some(entry =>
+              entry.userByEmail?.toLowerCase() === userEmail.toLowerCase() ||
+              (entry.role === 'READER' && entry.specialGroup === 'projectReaders') ||
+              (entry.role === 'WRITER' && entry.specialGroup === 'projectWriters')
+            );
+            datasetAccessCache.set(ds.key, hasAccess);
+          } catch (dsErr) {
+            // If we can't check, assume no access
+            console.warn(`[SEARCH] Dataset IAM check failed for ${ds.key}: ${dsErr.message}`);
+            datasetAccessCache.set(ds.key, false);
+          }
         });
 
-        console.log(`[SEARCH] User ${userEmail} has ${userGrantedAssets.size} granted assets`);
-      } catch (grantErr) {
-        console.warn('[SEARCH] Could not fetch granted accesses:', grantErr.message);
+        await Promise.all(datasetChecks);
+        console.log(`[SEARCH] Checked ${uniqueDatasets.size} datasets, access map:`,
+          Object.fromEntries(datasetAccessCache));
+
+        // Annotate each result
+        annotatedResults = (searchResults || []).map(entry => {
+          const ds = parseDataset(entry);
+          const hasAccess = ds ? (datasetAccessCache.get(ds.key) || false) : false;
+          return { ...entry, userHasAccess: hasAccess };
+        });
       }
     }
-
-    const annotatedResults = (searchResults || []).map(entry => {
-      // Admin has access to everything
-      if (isAdmin) return { ...entry, userHasAccess: true };
-
-      // Check if user has been granted access to this specific asset (exact match only)
-      const entryName = entry.dataplexEntry?.name || entry.name || '';
-      const entryFqn = entry.dataplexEntry?.fullyQualifiedName || entry.fullyQualifiedName || '';
-      const hasGrantedAccess = userGrantedAssets.has(entryName) || userGrantedAssets.has(entryFqn);
-
-      return { ...entry, userHasAccess: hasGrantedAccess };
-    });
 
     // Return response
     res.json({
