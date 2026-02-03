@@ -4,6 +4,7 @@ import { ArrowBack, Refresh } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import MultiSelect from '../MultiSelect/MultiSelect';
 import axios from 'axios';
+import AccessHistory from './AccessHistory';
 import { URLS } from '../../constants/urls';
 import { useAuth } from '../../auth/AuthProvider';
 
@@ -489,6 +490,11 @@ const AdminPanel = () => {
               Manage Permissions Dashboard
             </Button>
           </Box>
+        </Box>
+
+        {/* Access History Section */}
+        <Box sx={{ mb: 6, px: { xs: 0, sm: '160px' }, maxWidth: '1400px' }}>
+          <AccessHistory />
         </Box>
 
         {/* Action Buttons */}

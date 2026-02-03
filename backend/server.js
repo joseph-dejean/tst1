@@ -3164,6 +3164,13 @@ app.post('/api/v1/access-request/update', async (req, res) => {
             iamProjectId = parts[0];
             datasetId = parts[1];
           }
+        } else {
+          // Fallback for FQNs like //bigquery.googleapis.com/projects/p/datasets/d
+          const deepMatch = linkedResource.match(/projects\/([^/]+)\/datasets\/([^/]+)/);
+          if (deepMatch) {
+            iamProjectId = deepMatch[1];
+            datasetId = deepMatch[2];
+          }
         }
 
         if (iamProjectId && datasetId) {
@@ -3259,6 +3266,77 @@ app.post('/api/v1/access-request/update', async (req, res) => {
   }
 });
 
+
+/**
+ * POST /api/v1/access/revoke
+ * Revoke a previously granted access.
+ * 1. Remove from BigQuery IAM.
+ * 2. Update Firestore `granted_access` status to 'REVOKED'.
+ */
+app.post('/api/v1/access/revoke', async (req, res) => {
+  try {
+    const { grantId, userEmail, assetName, grantedBy } = req.body;
+    console.log(`[REVOKE] Request for grantId=${grantId}, user=${userEmail}`);
+
+    if (!grantId) {
+      return res.status(400).json({ error: 'Grant ID is required' });
+    }
+
+    // 2. Remove from BigQuery (if assetName provided)
+    let revokeStatus = 'NOT_ATTEMPTED';
+    let iamProjectId, datasetId;
+
+    if (assetName) {
+      const bqMatch = assetName.match(/projects\/([^/]+)\/datasets\/([^/]+)/);
+      if (bqMatch) {
+        iamProjectId = bqMatch[1];
+        datasetId = bqMatch[2];
+      } else if (assetName.includes('bigquery:') || assetName.includes('.')) {
+        const clean = assetName.replace('bigquery:', '').replace('bigquery://', '');
+        const parts = clean.split('.');
+        if (parts.length >= 2) { iamProjectId = parts[0]; datasetId = parts[1]; }
+      }
+
+      if (iamProjectId && datasetId) {
+        try {
+          const bq = new BigQuery({ projectId: iamProjectId });
+          const dataset = bq.dataset(datasetId);
+          const [metadata] = await dataset.getMetadata();
+          let accessList = metadata.access || [];
+
+          const initialLength = accessList.length;
+          accessList = accessList.filter(a => a.userByEmail !== userEmail);
+
+          if (accessList.length < initialLength) {
+            await dataset.setMetadata({ access: accessList });
+            revokeStatus = 'SUCCESS';
+            console.log(`[REVOKE] IAM access removed for ${userEmail} on ${datasetId}`);
+          } else {
+            revokeStatus = 'NOT_FOUND_IN_IAM';
+          }
+        } catch (iamErr) {
+          console.warn('[REVOKE] IAM removal failed:', iamErr.message);
+          revokeStatus = 'FAILED';
+        }
+      }
+    }
+
+    // 3. Update Firestore
+    const db = new Firestore();
+    await db.collection('granted_access').doc(grantId).update({
+      status: 'REVOKED',
+      revokedAt: Firestore.Timestamp.now(),
+      revokedBy: grantedBy || 'admin',
+      revokeIamStatus: revokeStatus
+    });
+
+    res.json({ success: true, revokeStatus });
+
+  } catch (err) {
+    console.error('[REVOKE] Error:', err);
+    res.status(500).json({ error: 'Revocation failed', details: err.message });
+  }
+});
 
 // ============================================
 // ADMIN ROLE MANAGEMENT ENDPOINTS
