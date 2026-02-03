@@ -4,6 +4,7 @@ import type { User } from '../types/User';
 import axios from 'axios';
 import { useDispatch } from 'react-redux';
 import { setCredentials } from '../features/user/userSlice';
+import { URLS } from '../constants/urls';
 import { clearPersistedState } from '../utils/persistence';
 import { useNotification } from '../contexts/NotificationContext';
 import { setGlobalAuthFunctions } from '../services/authErrorService';
@@ -44,7 +45,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const res = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo');
         const decoded: { name: string; email: string; picture: string } = res.data;
         // Fetch app config and role info
-        const configRes = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/v1/app-configs?email=${decoded.email}`);
+        const configRes = await axios.get(`${URLS.API_URL}${URLS.APP_CONFIG}?email=${decoded.email}`);
         const userRole = configRes.data.userRole;
 
         const userData: User = {

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { URLS } from '../../constants/urls';
 import {
     Box,
     Typography,
@@ -31,7 +32,7 @@ const AccessHistory = () => {
 
     const fetchGrants = async () => {
         try {
-            const response = await axios.get(`${import.meta.env.VITE_API_URL}/access/granted`, {
+            const response = await axios.get(`${URLS.API_URL}${URLS.GRANTED_ACCESSES}`, {
                 params: { status: 'ACTIVE' }
             });
             if (response.data) {
@@ -48,7 +49,7 @@ const AccessHistory = () => {
         if (!window.confirm(`Are you sure you want to revoke access for ${grant.userEmail} on ${grant.assetName}?`)) return;
 
         try {
-            const response = await axios.post(`${import.meta.env.VITE_API_URL}/access/revoke`, {
+            const response = await axios.post(`${URLS.API_URL}${URLS.REVOKE_ACCESS}`, {
                 grantId: grant.id, // Firestore ID
                 userEmail: grant.userEmail,
                 assetName: grant.assetName,

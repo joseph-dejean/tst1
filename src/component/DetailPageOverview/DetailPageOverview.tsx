@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { URLS } from '../../constants/urls';
 import RelationshipGraph, { type Relationship } from '../Insights/RelationshipGraph';
 import {
     Accordion,
@@ -163,7 +164,7 @@ const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTa
         const fetchLineage = async () => {
             if (!entry?.fullyQualifiedName) return;
             try {
-                const response = await axios.get(`${import.meta.env.VITE_API_URL}/lineage`, {
+                const response = await axios.get(`${URLS.API_URL}${URLS.LINEAGE_SEARCH}`, {
                     params: { fqn: entry.fullyQualifiedName, depth: 3 }
                 });
                 if (response.data && response.data.relationships) {
