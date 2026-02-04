@@ -232,7 +232,8 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
   // };
   const capitalizeFirstLetter = (string: string) => {
     if (!string) return string;
-    return string.charAt(0).toUpperCase() + string.slice(1);
+    const lower = string.toLowerCase();
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
   };
   useEffect(() => {
     // getNames(entry.name, '/');
