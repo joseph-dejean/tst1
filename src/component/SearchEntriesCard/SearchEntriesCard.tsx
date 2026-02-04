@@ -185,7 +185,6 @@ const getAssetIcon = (assetName: string) => {
   }
 };
 const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSelected = false, onDoubleClick, disableHoverEffect = false, hideTopBorderOnHover = false, index }) => {
-  const entryData = entry;//useState<any>(entry);
   //const [parentName, setParentName] = useState<string>('');
   const [name, setName] = useState<string>('');
   const [entryType, setEntryType] = useState<string>('');
