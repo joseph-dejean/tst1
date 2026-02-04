@@ -2552,10 +2552,18 @@ app.post('/api/v1/search', async (req, res) => {
       const coreEntry = entry.dataplexEntry || entry;
       const source = coreEntry.entrySource || {};
 
-      // Calculate a usable display name
+      // Calculate a usable display name (Robust fallbacks for "Unknown Asset" issue)
+      const nameFromFQN = coreEntry.fullyQualifiedName?.split('.').pop() || coreEntry.fullyQualifiedName?.split(':').pop();
+      const nameFromLR = (entry.linkedResource || '').split('/').pop();
+      const nameFromRRN = (entry.relativeResourceName || '').split('/').pop();
+      const nameFromPath = (coreEntry.name || entry.name || '').split('/').pop();
+
       const calculatedDisplayName = source.displayName
-        || coreEntry.fullyQualifiedName?.split('.').pop()
-        || (entry.linkedResource || '').split('/').pop()
+        || coreEntry.displayName
+        || nameFromFQN
+        || nameFromLR
+        || nameFromRRN
+        || nameFromPath
         || 'Unknown Asset';
 
       const normalized = {
