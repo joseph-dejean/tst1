@@ -102,8 +102,10 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
 
     if (nameSortOrder) {
       const sortedByName = [...resources].sort((a: any, b: any) => {
-        const aName = (a?.dataplexEntry?.name || '').split('/').pop() || '';
-        const bName = (b?.dataplexEntry?.name || '').split('/').pop() || '';
+        const aEntry = a?.dataplexEntry || a;
+        const bEntry = b?.dataplexEntry || b;
+        const aName = (aEntry?.name || '').split('/').pop() || '';
+        const bName = (bEntry?.name || '').split('/').pop() || '';
         return aName.localeCompare(bName, undefined, { sensitivity: 'base' });
       });
       return nameSortOrder === 'asc' ? sortedByName : sortedByName.reverse();
@@ -260,11 +262,12 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
         </TableHead>
         <TableBody>
           {displayedResources.map((resource: any) => {
-            const entry = resource.dataplexEntry;
+            const entry = resource.dataplexEntry || resource;
             // const isFavorite = favorites.has(entry.name);
-            const hasLock = resource.userHasAccess === false;
+            const userHasAccess = resource.userHasAccess ?? entry.userHasAccess ?? true;
+            const hasLock = userHasAccess === false;
             // Include userHasAccess with entry for preview
-            const entryWithAccess = { ...entry, userHasAccess: resource.userHasAccess };
+            const entryWithAccess = { ...entry, userHasAccess };
 
             return (
               <TableRow

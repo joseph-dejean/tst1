@@ -239,19 +239,27 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
     // getNames(entry.name, '/');
     // setName(entry.entrySource.displayName.length > 0 ? entry.entrySource.displayName : getNames(entry.name || '', '/'));
     let calculatedName = '';
-    if (entry.entrySource.displayName && entry.entrySource.displayName.length > 0) {
-      calculatedName = entry.entrySource.displayName;
+    const entrySource = entry?.entrySource || {};
+
+    if (entrySource.displayName && entrySource.displayName.length > 0) {
+      calculatedName = entrySource.displayName;
     } else if (entry.name) {
       const segments = entry.name.split('/');
       calculatedName = segments[segments.length - 1];
     }
     setName(calculatedName);
-    setSystemName(entry.entrySource.system ?? 'Custom');
-    setEntryType(entry.entryType.split('-').length > 1 ? entry.entryType.split('-').pop() : entry.name.split('/').at(-2).charAt(0).toUpperCase() + entry.name.split('/').at(-2).slice(1));
-    const myDate = (typeof entry.updateTime !== 'string') ? new Date(entry.updateTime.seconds * 1000) : new Date(entry.updateTime);
+    setSystemName(entrySource.system ?? 'Custom');
+
+    // Safety check for entryType and name before split
+    const typeValue = entry.entryType || '';
+    const nameValue = entry.name || '';
+    setEntryType(typeValue.split('-').length > 1 ? typeValue.split('-').pop() : (nameValue.split('/').at(-2)?.charAt(0).toUpperCase() + nameValue.split('/').at(-2)?.slice(1) || 'Unknown'));
+
+    const updateTime = entry.updateTime || entry.createTime || new Date();
+    const myDate = (typeof updateTime !== 'string') ? new Date(updateTime.seconds * 1000) : new Date(updateTime);
     const formattedDate = new Intl.DateTimeFormat('en-US', { month: "short", day: "numeric", year: "numeric" }).format(myDate);
     setModifiedDate(formattedDate);
-    setDescription(entry.entrySource.description ?? '');
+    setDescription(entrySource.description ?? '');
 
     // Generate random avatar colors for this card
     //setAvatarColors(generateRandomColors());
@@ -407,7 +415,7 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
                     <span>{modifiedDate}</span>
                   </span>
                 </Tooltip>
-                <Tooltip title={`Location - ${entryData.entrySource.location}`} arrow placement='top'>
+                <Tooltip title={`Location - ${entry?.entrySource?.location || 'Unknown'}`} arrow placement='top'>
                   <span style={{
                     color: "#575757",
                     fontSize: "0.875rem",
@@ -424,7 +432,7 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap'
                     }}>
-                      {entryData.entrySource.location}
+                      {entry?.entrySource?.location || 'Unknown'}
                     </span>
                   </span>
                 </Tooltip>

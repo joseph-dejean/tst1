@@ -111,24 +111,24 @@ interface ResourceViewerProps {
   // Data props
   resources: any[];
   resourcesStatus: 'idle' | 'loading' | 'succeeded' | 'failed';
-  error?: any|string;
-  
+  error?: any | string;
+
   // Preview props
   previewData: any | null;
   onPreviewDataChange: (data: any | null) => void;
-  
+
   // Filter props
   selectedTypeFilter: string | null;
   onTypeFilterChange: (filter: string | null) => void;
   typeAliases: string[];
-  
+
   // View mode props
   viewMode: 'list' | 'table';
   onViewModeChange: (mode: 'list' | 'table') => void;
-  
+
   // Access control props
   id_token: string;
-  
+
   // Layout props
   showFilters?: boolean;
   showSortBy?: boolean;
@@ -137,26 +137,26 @@ interface ResourceViewerProps {
   customFilters?: React.ReactNode;
   selectedFilters?: any[];
   onFiltersChange?: (filters: any[]) => void;
-  
+
   // Styling props
   containerStyle?: React.CSSProperties;
   contentStyle?: React.CSSProperties;
-  
+
   // Event handlers
   onViewDetails?: (entry: any) => void; // Optional, may be used in future
   onRequestAccess?: (entry: any) => void;
   onFavoriteClick?: (entry: any) => void;
-  
+
   // Preview rendering
   renderPreview?: boolean;
 
   // Pagination props
-  pageSize : number;
+  pageSize: number;
   setPageSize: (size: number) => void;
   startIndex?: number;
   requestItemStore: any[]; // Store for all fetched items
   resourcesTotalSize: number;
-  handlePagination: (direction: 'next' | 'previous', size: number, sizeChange:boolean) => void;
+  handlePagination: (direction: 'next' | 'previous', size: number, sizeChange: boolean) => void;
 }
 
 const ResourceViewer: React.FC<ResourceViewerProps> = ({
@@ -195,7 +195,7 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
 
   const dispatch = useDispatch<AppDispatch>();
   const searchFilters = useSelector((state: any) => state.search.searchFilters);
-  const semanticSearch = useSelector((state:any) => state.search.semanticSearch);
+  const semanticSearch = useSelector((state: any) => state.search.semanticSearch);
   const entryStatus = useSelector((state: any) => state.entry.status);
 
   // Sort state
@@ -203,7 +203,7 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
   const [sortMenuAnchor, setSortMenuAnchor] = useState<null | HTMLElement>(null);
   const [hoveredIndex, setHoveredIndex] = React.useState<number | null>(null);
   const [isScrolled, setIsScrolled] = useState(false);
-  
+
   // Note: Preview panel is managed by parent components through previewData
 
   // Handle failed resource status - only logout on 401 (auth error)
@@ -243,45 +243,45 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
       const isBProduct = b._isDataProduct || b.dataplexEntry?._isDataProduct;
       const productA = a._dataProduct || a.dataplexEntry?._dataProduct;
       const productB = b._dataProduct || b.dataplexEntry?._dataProduct;
-      
+
       if (sortBy === 'name') {
         let nameA = '';
         let nameB = '';
-        
+
         if (isAProduct && productA) {
           nameA = productA.displayName?.toLowerCase() || '';
         } else {
           nameA = a.dataplexEntry?.entrySource?.displayName?.toLowerCase() || a.dataplexEntry?.displayName?.toLowerCase() || '';
         }
-        
+
         if (isBProduct && productB) {
           nameB = productB.displayName?.toLowerCase() || '';
         } else {
           nameB = b.dataplexEntry?.entrySource?.displayName?.toLowerCase() || b.dataplexEntry?.displayName?.toLowerCase() || '';
         }
-        
+
         // Handle entries with no display name - put them at the bottom
         if (!nameA && !nameB) return 0;
         if (!nameA) return 1;  // Put entries with no name at the bottom
         if (!nameB) return -1; // Put entries with no name at the bottom
-        
+
         return nameA.localeCompare(nameB);
       } else if (sortBy === 'lastModified') {
         let dateA = 0;
         let dateB = 0;
-        
+
         if (isAProduct && productA?.updatedAt) {
           dateA = parseInt(productA.updatedAt) || 0;
         } else {
           dateA = a.dataplexEntry?.updateTime?.seconds || 0;
         }
-        
+
         if (isBProduct && productB?.updatedAt) {
           dateB = parseInt(productB.updatedAt) || 0;
         } else {
           dateB = b.dataplexEntry?.updateTime?.seconds || 0;
         }
-        
+
         return dateB - dateA; // Descending order (newest first)
       }
       return 0;
@@ -293,7 +293,7 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
   // Utility functions
   const getFormatedDate = (date: any) => {
     if (!date) return '-';
-    
+
     const myDate = new Date(date);
 
     if (isNaN(myDate.getTime())) {
@@ -314,7 +314,7 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
   const handleRemoveFilterTag = (filter: any) => {
     if (!onFiltersChange) return;
     const updated = selectedFilters.filter((f: any) => !(f.name === filter.name && f.type === filter.type));
-    if(filter.type === "system"){
+    if (filter.type === "system") {
       const systemFilters = updated.filter((f: any) => f.type === 'system');
       if (systemFilters.length === 0) {
         // No system filters selected, set search type to 'All'
@@ -337,8 +337,8 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
       if (!name) return undefined;
       if (type === 'typealiases') {
         //const key = name.replace(' ', '_').replace('/','').toLowerCase();
-        if(selectedFilters.length === 1){
-          return selectedFilters.find((f: any) => f.name === name && f.type === 'typeAliases') ? ""+resourcesTotalSize : undefined;
+        if (selectedFilters.length === 1) {
+          return selectedFilters.find((f: any) => f.name === name && f.type === 'typeAliases') ? "" + resourcesTotalSize : undefined;
         }
         // return resources.filter((r: any) => (r?.dataplexEntry?.entryType || '').split('-').pop() === key).length > 0 ? 
         // `${resources.filter((r: any) => (r?.dataplexEntry?.entryType || '').split('-').pop() === key).length}+`
@@ -346,8 +346,8 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
       }
       if (type === 'system') {
         //const key = name.replace(' ', '_').replace('/','').toLowerCase();
-        if(selectedFilters.length === 1){
-          return selectedFilters.find((f: any) => f.name === name && f.type === 'system') ? ""+resourcesTotalSize : undefined;
+        if (selectedFilters.length === 1) {
+          return selectedFilters.find((f: any) => f.name === name && f.type === 'system') ? "" + resourcesTotalSize : undefined;
         }
         // return resources.filter((r: any) => (r?.dataplexEntry?.entrySource?.system || '').split('-').pop() === key).length > 0 ?
         // `${resources.filter((r: any) => String(r?.dataplexEntry?.entrySource?.system || '').toLowerCase() === key).length}+` 
@@ -365,7 +365,7 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
       ? selectedFilters.filter((f: any) => !(f.name === type && f.type === 'typeAliases'))
       : [...selectedFilters, { name: type, type: 'typeAliases' }];
     onTypeFilterChange(null);
-    if(onFiltersChange) onFiltersChange(updated);
+    if (onFiltersChange) onFiltersChange(updated);
     dispatch({ type: 'search/setSearchFilters', payload: { searchFilters: updated } });
   };
 
@@ -411,21 +411,24 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
   };
 
   const selectedIndex = filteredResources?.findIndex(
-  r => previewData && previewData.name === r.dataplexEntry.name
-);
+    r => {
+      const entry = r.dataplexEntry || r;
+      return previewData && previewData.name === entry.name;
+    }
+  );
 
   let filterChips;
 
-  if(searchFilters.length > 0){
+  if (searchFilters.length > 0) {
     filterChips = (
-      <FilterChips 
-        selectedFilters={selectedFilters} 
-        getCount={(f)=>{ return getFilterResultCount(f)}}
+      <FilterChips
+        selectedFilters={selectedFilters}
+        getCount={(f) => { return getFilterResultCount(f) }}
         handleRemoveFilterTag={(f) => handleRemoveFilterTag(f)}
       />
     );
-  }else{
-    filterChips=(<></>);
+  } else {
+    filterChips = (<></>);
   }
 
   // Main content rendering
@@ -433,7 +436,7 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
 
   if (resourcesStatus === 'loading') {
     content = (
-      <div style={{ background: "#FFF", height:'calc(100vh - 3.9rem)', padding: "0px", borderRadius: "20px", margin: '0rem 1.25rem' }}>
+      <div style={{ background: "#FFF", height: 'calc(100vh - 3.9rem)', padding: "0px", borderRadius: "20px", margin: '0rem 1.25rem' }}>
         <div style={{
           display: 'block',
           alignItems: 'center',
@@ -468,81 +471,81 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
           overflowY: 'auto',
           overflowX: 'hidden',
           ...contentStyle
-      }}>
-        <div style={{ 
-            position: 'sticky', 
-            top: 0, 
-            zIndex: 10, 
-            backgroundColor: '#ffffff'
         }}>
-        {/* Custom Header */}
-        {customHeader}
+        <div style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          backgroundColor: '#ffffff'
+        }}>
+          {/* Custom Header */}
+          {customHeader}
 
-        {/* Filters Section */}
-        {showFilters && (
-          <div style={{
-            padding: "10px 10px",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            flexWrap: "wrap"
-          }}>
-            {customFilters}
-            {/* Selected filters from sidebar as tags */}
-            {filterChips}
-            
-            {filteredResources.length > 0 && (() => {
-              const availableTags = typeAliases.filter((item) =>
-                filteredResources.some((resource: any) => resource?.dataplexEntry?.entryType?.includes('-' + item.toLowerCase()))
-              );
-              if (availableTags.length <= 0) return null;
-              return availableTags.map((item) => {
-                return selectedFilters.find((f) => f.name == item) ? (<></>) : (
-                  <FilterTag
-                    key={`type-${item}`}
-                    handleClick={() => handleTypeFilterClick(item)}
-                    handleClose={() => onTypeFilterChange(null)}
-                    showCloseButton={selectedTypeFilter === item}
-                    css={{
-                      margin: "0px",
-                      textTransform: "capitalize",
-                      fontFamily: '"Google Sans Text", sans-serif',
-                      fontWeight: 400,
-                      fontSize: '12px',
-                      letterSpacing: '0.83%',
-                      padding: '8px 13px',
-                      borderRadius: '59px',
-                      gap: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      backgroundColor: selectedTypeFilter === item ? '#E7F0FE' : 'transparent',
-                      color: selectedTypeFilter === item ? '#0E4DCA' : '#1F1F1F',
-                      border: selectedTypeFilter === item ? 'none' : '1px solid #DADCE0',
-                      height: '32px',
-                      whiteSpace: 'nowrap'
-                    }}
-                    text={`${item}`+ 
-                      (selectedFilters.length === 1 
-                        && selectedFilters.find((f: any) => f.name.toLowerCase() === item.toLowerCase()) 
-                        ? " ("+ resourcesTotalSize +")"  : ""
-                        // : "("+ filteredResources.filter((r: any) => r.dataplexEntry.entryType.split('-').pop() == item.toLowerCase()).length +"+)"
-                      )} />
-                )
-              });
-            })()}
-          </div>
-        )}
+          {/* Filters Section */}
+          {showFilters && (
+            <div style={{
+              padding: "10px 10px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              flexWrap: "wrap"
+            }}>
+              {customFilters}
+              {/* Selected filters from sidebar as tags */}
+              {filterChips}
 
-        {/* Results and Sort Section */}
-        {(showResultsCount || showSortBy) && (
-          <div style={{
-            padding: "0px 10px 10px 10px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center"
-          }}>
-            <div style={{ display: "flex", alignItems: "center" }}>
-              {/* {showResultsCount && (
+              {filteredResources.length > 0 && (() => {
+                const availableTags = typeAliases.filter((item) =>
+                  filteredResources.some((resource: any) => resource?.dataplexEntry?.entryType?.includes('-' + item.toLowerCase()))
+                );
+                if (availableTags.length <= 0) return null;
+                return availableTags.map((item) => {
+                  return selectedFilters.find((f) => f.name == item) ? (<></>) : (
+                    <FilterTag
+                      key={`type-${item}`}
+                      handleClick={() => handleTypeFilterClick(item)}
+                      handleClose={() => onTypeFilterChange(null)}
+                      showCloseButton={selectedTypeFilter === item}
+                      css={{
+                        margin: "0px",
+                        textTransform: "capitalize",
+                        fontFamily: '"Google Sans Text", sans-serif',
+                        fontWeight: 400,
+                        fontSize: '12px',
+                        letterSpacing: '0.83%',
+                        padding: '8px 13px',
+                        borderRadius: '59px',
+                        gap: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        backgroundColor: selectedTypeFilter === item ? '#E7F0FE' : 'transparent',
+                        color: selectedTypeFilter === item ? '#0E4DCA' : '#1F1F1F',
+                        border: selectedTypeFilter === item ? 'none' : '1px solid #DADCE0',
+                        height: '32px',
+                        whiteSpace: 'nowrap'
+                      }}
+                      text={`${item}` +
+                        (selectedFilters.length === 1
+                          && selectedFilters.find((f: any) => f.name.toLowerCase() === item.toLowerCase())
+                          ? " (" + resourcesTotalSize + ")" : ""
+                          // : "("+ filteredResources.filter((r: any) => r.dataplexEntry.entryType.split('-').pop() == item.toLowerCase()).length +"+)"
+                        )} />
+                  )
+                });
+              })()}
+            </div>
+          )}
+
+          {/* Results and Sort Section */}
+          {(showResultsCount || showSortBy) && (
+            <div style={{
+              padding: "0px 10px 10px 10px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <div style={{ display: "flex", alignItems: "center" }}>
+                {/* {showResultsCount && (
                 <>
                   <Typography component="span" style={{ margin: "0px 5px", fontSize: "14px", fontWeight: "500" }}>
                     {filteredResources.length} results
@@ -552,33 +555,33 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
                   </Typography>
                 </>
               )} */}
-              {showSortBy && (
-                <>
-                  <Typography component="span" style={{ margin: "0px 5px", fontSize: "12px", fontWeight: "500" }}>
-                    Sort by:
-                  </Typography>
-                  <Typography 
-                    component="span" 
-                    style={{ 
-                      margin: "0px 5px", 
-                      fontSize: "12px", 
-                      fontWeight: "500", 
-                      display: "flex", 
-                      alignItems: "center",
-                      cursor: "pointer",
-                      color: "#1F1F1F"
-                    }}
-                    onClick={handleSortMenuClick}
-                  >
-                    {sortBy === 'name' ? 'Name' : 'Last Modified'} 
-                    <KeyboardArrowDown style={{ marginLeft: "2px" }} />
-                  </Typography>
-                </>
-              )}
-            </div>
+                {showSortBy && (
+                  <>
+                    <Typography component="span" style={{ margin: "0px 5px", fontSize: "12px", fontWeight: "500" }}>
+                      Sort by:
+                    </Typography>
+                    <Typography
+                      component="span"
+                      style={{
+                        margin: "0px 5px",
+                        fontSize: "12px",
+                        fontWeight: "500",
+                        display: "flex",
+                        alignItems: "center",
+                        cursor: "pointer",
+                        color: "#1F1F1F"
+                      }}
+                      onClick={handleSortMenuClick}
+                    >
+                      {sortBy === 'name' ? 'Name' : 'Last Modified'}
+                      <KeyboardArrowDown style={{ marginLeft: "2px" }} />
+                    </Typography>
+                  </>
+                )}
+              </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              {/* <TablePagination
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                {/* <TablePagination
                 component="div"
                 count={100}
                 page={page}
@@ -586,7 +589,7 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
                 rowsPerPage={rowsPerPage}
                 onRowsPerPageChange={handleChangeRowsPerPage}
               /> */}
-              {/* <span style={{
+                {/* <span style={{
                 fontFamily: '"Google Sans Text", sans-serif',
                 fontWeight: "500",
                 fontSize: "14px",
@@ -607,246 +610,248 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
                   ))}
                 </Select>
               </span> */}
-              {semanticSearch === true ? (<>
-                <span style={{
-                  fontFamily: '"Google Sans Text", sans-serif',
-                  fontWeight: "500",
-                  fontSize: "14px",
-                  lineHeight: "1.5",
-                }}>
-                  Top 100 results
-                </span>
-              </>) : (<>
-              <IconButton
-                style={{padding: '0px', fontFamily: '"Google Sans Text", sans-serif',}}
-                disabled={requestItemStore.length > 0 && startIndex > 0 ? false : true}
-                onClick={() => {
-                  console.log("previos page clicked");
-                  handlePagination("previous", pageSize, false);
-                }}
-              >
-                <ChevronLeftOutlined style={{ color: '#0E4DCA', opacity: (requestItemStore.length > 0 && startIndex > 0) ? 1 : 0.5 }} />
-              </IconButton>
-              <span style={{
-                fontFamily: '"Google Sans Text", sans-serif',
-                fontWeight: "500",
-                fontSize: "14px",
-                lineHeight: "1.5",
-              }}>{`${startIndex+1} to ${startIndex + pageSize < resourcesTotalSize ? startIndex + pageSize : resourcesTotalSize} of ${resourcesTotalSize < 100 ? resourcesTotalSize : 'many'}`}</span>
-              <IconButton
-                style={{padding: '0px', fontFamily: '"Google Sans Text", sans-serif',}}
-                disabled={(startIndex + pageSize >= resourcesTotalSize) ? true : false}
-                onClick={() => {
-                  console.log("Next page clicked");
-                  handlePagination("next", pageSize, false);
-                }}
-              >
-                <ChevronRightOutlined style={{ color: '#0E4DCA' , opacity: (startIndex + pageSize >= resourcesTotalSize) ? 0.5 : 1 }} />
-              </IconButton>
-              </>)}
-
-              {/* View Mode Toggle */}
-              <ToggleButtonGroup
-                value={viewMode}
-                exclusive
-                onChange={handleViewModeChange}
-                aria-label="view mode"
-                size="small"
-                sx={{
-                  width: '5rem', // 80px total width as per Figma
-                  height: '1.5rem', // 24px height as per Figma
-                  borderRadius: '1rem', // 16px - fully rounded
-                  border: '1px solid #E2E8F0',
-                  backgroundColor: '#FFFFFF',
-                  overflow: 'hidden',
-                  display: 'flex',
-                  alignItems: 'center',
-                  flexShrink: 0,
-                  padding: 0,
-                  '& .MuiToggleButton-root': {
-                    border: 'none',
-                    borderRadius: '1rem', // 16px - fully rounded
-                    padding: '0px', // No padding as per Figma
-                    fontSize: 0, // Hide text, only show icons
-                    fontWeight: 500,
+                {semanticSearch === true ? (<>
+                  <span style={{
                     fontFamily: '"Google Sans Text", sans-serif',
-                    lineHeight: 1,
-                    minWidth: 'auto',
-                    height: '1.5rem', // 24px
-                    margin: 0,
-                    backgroundColor: 'transparent',
-                    color: '#64748B',
+                    fontWeight: "500",
+                    fontSize: "14px",
+                    lineHeight: "1.5",
+                  }}>
+                    Top 100 results
+                  </span>
+                </>) : (<>
+                  <IconButton
+                    style={{ padding: '0px', fontFamily: '"Google Sans Text", sans-serif', }}
+                    disabled={requestItemStore.length > 0 && startIndex > 0 ? false : true}
+                    onClick={() => {
+                      console.log("previos page clicked");
+                      handlePagination("previous", pageSize, false);
+                    }}
+                  >
+                    <ChevronLeftOutlined style={{ color: '#0E4DCA', opacity: (requestItemStore.length > 0 && startIndex > 0) ? 1 : 0.5 }} />
+                  </IconButton>
+                  <span style={{
+                    fontFamily: '"Google Sans Text", sans-serif',
+                    fontWeight: "500",
+                    fontSize: "14px",
+                    lineHeight: "1.5",
+                  }}>{`${startIndex + 1} to ${startIndex + pageSize < resourcesTotalSize ? startIndex + pageSize : resourcesTotalSize} of ${resourcesTotalSize < 100 ? resourcesTotalSize : 'many'}`}</span>
+                  <IconButton
+                    style={{ padding: '0px', fontFamily: '"Google Sans Text", sans-serif', }}
+                    disabled={(startIndex + pageSize >= resourcesTotalSize) ? true : false}
+                    onClick={() => {
+                      console.log("Next page clicked");
+                      handlePagination("next", pageSize, false);
+                    }}
+                  >
+                    <ChevronRightOutlined style={{ color: '#0E4DCA', opacity: (startIndex + pageSize >= resourcesTotalSize) ? 0.5 : 1 }} />
+                  </IconButton>
+                </>)}
+
+                {/* View Mode Toggle */}
+                <ToggleButtonGroup
+                  value={viewMode}
+                  exclusive
+                  onChange={handleViewModeChange}
+                  aria-label="view mode"
+                  size="small"
+                  sx={{
+                    width: '5rem', // 80px total width as per Figma
+                    height: '1.5rem', // 24px height as per Figma
+                    borderRadius: '1rem', // 16px - fully rounded
+                    border: '1px solid #E2E8F0',
+                    backgroundColor: '#FFFFFF',
+                    overflow: 'hidden',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.125rem', // 2px gap between check and icon
-                    transition: 'all 0.2s ease-in-out',
-                    '&:first-of-type': {
-                      borderTopRightRadius: 0,
-                      borderBottomRightRadius: 0,
-                    },
-                    '&:last-of-type': {
-                      borderTopLeftRadius: 0,
-                      borderBottomLeftRadius: 0,
-                    },
-                    '&.Mui-selected': {
-                      width: '3.125rem', // 50px when selected (fits check + icon)
-                      backgroundColor: '#E8F0FE',
-                      color: '#0B57D0',
-                      borderColor: 'transparent',
-                      padding: '0 0.25rem', // 4px horizontal padding when selected
-                      '& svg': {
-                        fill: '#0B57D0'
-                      }
-                    },
-                    '&:not(.Mui-selected)': {
-                      width: '1.875rem', // 30px when not selected (icon only)
+                    flexShrink: 0,
+                    padding: 0,
+                    '& .MuiToggleButton-root': {
+                      border: 'none',
+                      borderRadius: '1rem', // 16px - fully rounded
+                      padding: '0px', // No padding as per Figma
+                      fontSize: 0, // Hide text, only show icons
+                      fontWeight: 500,
+                      fontFamily: '"Google Sans Text", sans-serif',
+                      lineHeight: 1,
+                      minWidth: 'auto',
+                      height: '1.5rem', // 24px
+                      margin: 0,
                       backgroundColor: 'transparent',
                       color: '#64748B',
-                      borderColor: 'transparent',
-                      padding: '0', // No padding when not selected
-                      '& svg': {
-                        fill: '#64748B'
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.125rem', // 2px gap between check and icon
+                      transition: 'all 0.2s ease-in-out',
+                      '&:first-of-type': {
+                        borderTopRightRadius: 0,
+                        borderBottomRightRadius: 0,
                       },
-                      '&:hover': {
-                        backgroundColor: '#F8FAFC',
-                        color: '#475569'
+                      '&:last-of-type': {
+                        borderTopLeftRadius: 0,
+                        borderBottomLeftRadius: 0,
+                      },
+                      '&.Mui-selected': {
+                        width: '3.125rem', // 50px when selected (fits check + icon)
+                        backgroundColor: '#E8F0FE',
+                        color: '#0B57D0',
+                        borderColor: 'transparent',
+                        padding: '0 0.25rem', // 4px horizontal padding when selected
+                        '& svg': {
+                          fill: '#0B57D0'
+                        }
+                      },
+                      '&:not(.Mui-selected)': {
+                        width: '1.875rem', // 30px when not selected (icon only)
+                        backgroundColor: 'transparent',
+                        color: '#64748B',
+                        borderColor: 'transparent',
+                        padding: '0', // No padding when not selected
+                        '& svg': {
+                          fill: '#64748B'
+                        },
+                        '&:hover': {
+                          backgroundColor: '#F8FAFC',
+                          color: '#475569'
+                        }
                       }
-                    }
-                  }
-                }}
-              >
-                <ToggleButton value="table" aria-label="table view">
-                  {viewMode === 'table' && (
-                    <img src="/assets/svg/check.svg" alt="Check" style={{ width: '16px', height: '16px', marginRight: '2px' }} />
-                  )}
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M13.1368 13.1369V10.4486H2.86285V13.1369H13.1368ZM13.1368 9.42119V6.57872H2.86285V9.42119H13.1368ZM13.1368 5.55132V2.86297H2.86285V5.55132H13.1368ZM2.86285 14.1643C2.58887 14.1643 2.34915 14.0616 2.14367 13.8561C1.93819 13.6506 1.83545 13.4109 1.83545 13.1369V2.86297C1.83545 2.589 1.93819 2.34927 2.14367 2.14379C2.34915 1.93831 2.58887 1.83557 2.86285 1.83557H13.1368C13.4108 1.83557 13.6505 1.93831 13.856 2.14379C14.0615 2.34927 14.1642 2.589 14.1642 2.86297V13.1369C14.1642 13.4109 14.0615 13.6506 13.856 13.8561C13.6505 14.0616 13.4108 14.1643 13.1368 14.1643H2.86285Z" fill={viewMode === 'table' ? '#0B57D0' : '#64748B'}/>
-                    <rect x="5" y="2" width="1" height="12" fill={viewMode === 'table' ? '#0B57D0' : '#64748B'}/>
-                  </svg>
-                </ToggleButton>
-                <ToggleButton value="list" aria-label="list view">
-                  {viewMode === 'list' && (
-                    <img src="/assets/svg/check.svg" alt="Check" style={{ width: '16px', height: '16px', marginRight: '2px' }} />
-                  )}
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M2 13V11H14V13H2ZM2 9V7H14V9H2ZM2 5V3H14V5H2Z" fill={viewMode === 'list' ? '#0B57D0' : '#64748B'}/>
-                  </svg>
-                </ToggleButton>
-              </ToggleButtonGroup>
-              
-              {/* Info Icon */}
-              <Tooltip 
-                title={previewData ? "Close Preview" : "Open Preview"}
-                placement="bottom"
-                arrow
-              >
-                <IconButton
-                  onClick={() => {
-                    if (previewData) {
-                      // Close the side panel
-                      onPreviewDataChange(null);
-                    } else {
-                      // Open preview panel with placeholder data to show empty state
-                      onPreviewDataChange({ isPlaceholder: true });
-                    }
-                  }}
-                  sx={{
-                    width: '24px',
-                    height: '24px',
-                    padding: '0',
-                    borderRadius: '50%',
-                    backgroundColor: previewData ? '#E7F0FE' : '#FFFFFF',
-                    minWidth: '20px',
-                    cursor: 'pointer',
-                    marginRight: '0.5rem',
-                    '&:hover': {
-                      backgroundColor: '#F8FAFC'
                     }
                   }}
                 >
-                  <InfoOutlined 
-                    sx={{ 
-                      fontSize: '20px',
-                      color: previewData ? '#0B57D0' : '#1f1f1f'
-                    }} 
-                  />
-                </IconButton>
-              </Tooltip>
-            </div>
-          </div>
-        )}
+                  <ToggleButton value="table" aria-label="table view">
+                    {viewMode === 'table' && (
+                      <img src="/assets/svg/check.svg" alt="Check" style={{ width: '16px', height: '16px', marginRight: '2px' }} />
+                    )}
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M13.1368 13.1369V10.4486H2.86285V13.1369H13.1368ZM13.1368 9.42119V6.57872H2.86285V9.42119H13.1368ZM13.1368 5.55132V2.86297H2.86285V5.55132H13.1368ZM2.86285 14.1643C2.58887 14.1643 2.34915 14.0616 2.14367 13.8561C1.93819 13.6506 1.83545 13.4109 1.83545 13.1369V2.86297C1.83545 2.589 1.93819 2.34927 2.14367 2.14379C2.34915 1.93831 2.58887 1.83557 2.86285 1.83557H13.1368C13.4108 1.83557 13.6505 1.93831 13.856 2.14379C14.0615 2.34927 14.1642 2.589 14.1642 2.86297V13.1369C14.1642 13.4109 14.0615 13.6506 13.856 13.8561C13.6505 14.0616 13.4108 14.1643 13.1368 14.1643H2.86285Z" fill={viewMode === 'table' ? '#0B57D0' : '#64748B'} />
+                      <rect x="5" y="2" width="1" height="12" fill={viewMode === 'table' ? '#0B57D0' : '#64748B'} />
+                    </svg>
+                  </ToggleButton>
+                  <ToggleButton value="list" aria-label="list view">
+                    {viewMode === 'list' && (
+                      <img src="/assets/svg/check.svg" alt="Check" style={{ width: '16px', height: '16px', marginRight: '2px' }} />
+                    )}
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M2 13V11H14V13H2ZM2 9V7H14V9H2ZM2 5V3H14V5H2Z" fill={viewMode === 'list' ? '#0B57D0' : '#64748B'} />
+                    </svg>
+                  </ToggleButton>
+                </ToggleButtonGroup>
 
-        {/* Sort Menu */}
-        <Menu
-          anchorEl={sortMenuAnchor}
-          open={Boolean(sortMenuAnchor)}
-          onClose={handleSortMenuClose}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'left',
-          }}
-          transformOrigin={{
-            vertical: 'top',
-            horizontal: 'left',
-          }}
-          PaperProps={{
-            style: {
-              marginTop: '4px',
-              borderRadius: '8px',
-              boxShadow: '0px 4px 6px -1px rgba(0, 0, 0, 0.1), 0px 2px 4px -1px rgba(0, 0, 0, 0.06)',
-              minWidth: '140px'
-            }
-          }}
-        >
-          <MenuItem 
-            onClick={() => handleSortOptionSelect('name')}
-            style={{
-              fontSize: '12px',
-              fontWeight: sortBy === 'name' ? '500' : '400',
-              color: sortBy === 'name' ? '#0B57D0' : '#1F1F1F',
-              backgroundColor: sortBy === 'name' ? '#F8FAFD' : 'transparent'
+                {/* Info Icon */}
+                <Tooltip
+                  title={previewData ? "Close Preview" : "Open Preview"}
+                  placement="bottom"
+                  arrow
+                >
+                  <IconButton
+                    onClick={() => {
+                      if (previewData) {
+                        // Close the side panel
+                        onPreviewDataChange(null);
+                      } else {
+                        // Open preview panel with placeholder data to show empty state
+                        onPreviewDataChange({ isPlaceholder: true });
+                      }
+                    }}
+                    sx={{
+                      width: '24px',
+                      height: '24px',
+                      padding: '0',
+                      borderRadius: '50%',
+                      backgroundColor: previewData ? '#E7F0FE' : '#FFFFFF',
+                      minWidth: '20px',
+                      cursor: 'pointer',
+                      marginRight: '0.5rem',
+                      '&:hover': {
+                        backgroundColor: '#F8FAFC'
+                      }
+                    }}
+                  >
+                    <InfoOutlined
+                      sx={{
+                        fontSize: '20px',
+                        color: previewData ? '#0B57D0' : '#1f1f1f'
+                      }}
+                    />
+                  </IconButton>
+                </Tooltip>
+              </div>
+            </div>
+          )}
+
+          {/* Sort Menu */}
+          <Menu
+            anchorEl={sortMenuAnchor}
+            open={Boolean(sortMenuAnchor)}
+            onClose={handleSortMenuClose}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'left',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'left',
+            }}
+            PaperProps={{
+              style: {
+                marginTop: '4px',
+                borderRadius: '8px',
+                boxShadow: '0px 4px 6px -1px rgba(0, 0, 0, 0.1), 0px 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                minWidth: '140px'
+              }
             }}
           >
-            Name
-          </MenuItem>
-          <MenuItem 
-            onClick={() => handleSortOptionSelect('lastModified')}
+            <MenuItem
+              onClick={() => handleSortOptionSelect('name')}
+              style={{
+                fontSize: '12px',
+                fontWeight: sortBy === 'name' ? '500' : '400',
+                color: sortBy === 'name' ? '#0B57D0' : '#1F1F1F',
+                backgroundColor: sortBy === 'name' ? '#F8FAFD' : 'transparent'
+              }}
+            >
+              Name
+            </MenuItem>
+            <MenuItem
+              onClick={() => handleSortOptionSelect('lastModified')}
+              style={{
+                fontSize: '12px',
+                fontWeight: sortBy === 'lastModified' ? '500' : '400',
+                color: sortBy === 'lastModified' ? '#0B57D0' : '#1F1F1F',
+                backgroundColor: sortBy === 'lastModified' ? '#F8FAFD' : 'transparent'
+              }}
+            >
+              Last Modified
+            </MenuItem>
+          </Menu>
+          <div
             style={{
-              fontSize: '12px',
-              fontWeight: sortBy === 'lastModified' ? '500' : '400',
-              color: sortBy === 'lastModified' ? '#0B57D0' : '#1F1F1F',
-              backgroundColor: sortBy === 'lastModified' ? '#F8FAFD' : 'transparent'
+              position: 'absolute',
+              bottom: '-1px',
+              left: '-10px',
+              right: '-10px',
+              height: '1.5px',
+              background: 'linear-gradient(to bottom, rgba(0, 0, 0, 0.35), transparent)',
+              filter: 'blur(1px)',
+              opacity: isScrolled ? 1 : 0,
+              transition: 'opacity 0.2s ease-in-out',
             }}
-          >
-            Last Modified
-          </MenuItem>
-        </Menu>
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '-1px',
-            left: '-10px',
-            right: '-10px',
-            height: '1.5px',
-            background: 'linear-gradient(to bottom, rgba(0, 0, 0, 0.35), transparent)',
-            filter: 'blur(1px)',
-            opacity: isScrolled ? 1 : 0,
-            transition: 'opacity 0.2s ease-in-out',
-          }}
-        />
+          />
         </div>
         {/* Resources List */}
         {filteredResources.length > 0 ? (
           viewMode === 'list' ? (
             filteredResources.map((resource: any, index: number) => {
-              const isSelected = previewData && previewData.name === resource.dataplexEntry.name;
+              const entry = resource.dataplexEntry || resource;
+              const userHasAccess = resource.userHasAccess ?? entry.userHasAccess ?? true;
+              const isSelected = previewData && previewData.name === entry.name;
               const disableHoverEffect = selectedIndex !== -1 && selectedIndex === index - 1;
               const hideTopBorder = hoveredIndex === index - 1;
               return (
                 <Box
-                  key={resource.dataplexEntry.name}
-                  onClick={() => handleSearchEntriesClick({ ...resource.dataplexEntry, userHasAccess: resource.userHasAccess })}
+                  key={entry.name}
+                  onClick={() => handleSearchEntriesClick({ ...entry, userHasAccess })}
                   onMouseEnter={() => setHoveredIndex(index)}
                   onMouseLeave={() => setHoveredIndex(null)}
                   sx={{
@@ -859,9 +864,9 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
                 >
                   <SearchEntriesCard
                     index={index}
-                    entry={{ ...resource.dataplexEntry, userHasAccess: resource.userHasAccess }}
+                    entry={{ ...entry, userHasAccess }}
                     hideTopBorderOnHover={hideTopBorder}
-                    sx={{ backgroundColor: 'transparent', borderRadius: isSelected ? '8px' : '0px', marginTop: isSelected ? '-1px' : '0px',  marginBottom: isSelected ? '-2px' : '0px' }}
+                    sx={{ backgroundColor: 'transparent', borderRadius: isSelected ? '8px' : '0px', marginTop: isSelected ? '-1px' : '0px', marginBottom: isSelected ? '-2px' : '0px' }}
                     isSelected={isSelected}
                     onDoubleClick={handleSearchEntriesDoubleClick}
                     disableHoverEffect={disableHoverEffect}
