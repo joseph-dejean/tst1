@@ -2545,6 +2545,44 @@ app.post('/api/v1/search', async (req, res) => {
     const [searchResults, searchRequest, searchResponse] = await client.searchEntries(request);
     console.log(`[SEARCH] Fetched ${searchResults ? searchResults.length : 0} results from Data Catalog`);
 
+    // Helper for data normalization (used in all access paths) - as requested
+    const normalizeEntry = (entry, hasAccess) => {
+      // Dataplex results are often nested in 'dataplexEntry' or 'entry'
+      const coreEntry = entry.dataplexEntry || entry;
+      const source = coreEntry.entrySource || {};
+
+      // Calculate a usable display name
+      const calculatedDisplayName = source.displayName
+        || coreEntry.fullyQualifiedName?.split('.').pop()
+        || (entry.linkedResource || '').split('/').pop()
+        || 'Unknown Asset';
+
+      return {
+        ...entry, // Keep original fields
+        userHasAccess: hasAccess,
+
+        // Pull nested fields to the top level for the frontend
+        name: entry.name,
+        displayName: calculatedDisplayName,
+        description: source.description || coreEntry.description || 'No description available',
+        fullyQualifiedName: coreEntry.fullyQualifiedName || entry.fullyQualifiedName,
+
+        // Ensure entrySource exists and has data (Frontend looks here specifically)
+        entrySource: {
+          ...source,
+          displayName: calculatedDisplayName,
+          description: source.description || coreEntry.description || '',
+          system: source.system || entry.integratedSystem || 'BIGQUERY' // Default to BigQuery if missing
+        },
+
+        // Normalize type
+        entryType: coreEntry.entryType || entry.entryType || 'Unknown',
+
+        // Helper for the location pill
+        location: (entry.name || '').split('/locations/')[1]?.split('/')[0] || 'global'
+      };
+    };
+
     // --- ACCESS ANNOTATION ---
     // For admins: everything is accessible.
     // For regular users: check actual BigQuery IAM roles on the dataset/table.
@@ -2553,9 +2591,9 @@ app.post('/api/v1/search', async (req, res) => {
     let annotatedResults;
 
     if (isAdmin) {
-      annotatedResults = (searchResults || []).map(entry => ({ dataplexEntry: entry, userHasAccess: true }));
+      annotatedResults = (searchResults || []).map(entry => normalizeEntry(entry, true));
     } else if (!userEmail) {
-      annotatedResults = (searchResults || []).map(entry => ({ dataplexEntry: entry, userHasAccess: false }));
+      annotatedResults = (searchResults || []).map(entry => normalizeEntry(entry, false));
     } else {
       // Step 1: Check project-level BigQuery roles
       let hasProjectAccess = false;
@@ -2578,7 +2616,7 @@ app.post('/api/v1/search', async (req, res) => {
 
       if (hasProjectAccess) {
         // User has project-level access → all results are accessible
-        annotatedResults = (searchResults || []).map(entry => ({ dataplexEntry: entry, userHasAccess: true }));
+        annotatedResults = (searchResults || []).map(entry => normalizeEntry(entry, true));
       } else {
         // Step 2: Extract unique datasets from results and check IAM per dataset
         const datasetAccessCache = new Map(); // key: "project.dataset" → boolean
@@ -2640,7 +2678,7 @@ app.post('/api/v1/search', async (req, res) => {
         annotatedResults = (searchResults || []).map(entry => {
           const ds = parseDataset(entry);
           const hasAccess = ds ? (datasetAccessCache.get(ds.key) || false) : false;
-          return { dataplexEntry: entry, userHasAccess: hasAccess };
+          return normalizeEntry(entry, hasAccess);
         });
       }
     }
