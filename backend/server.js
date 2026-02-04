@@ -378,9 +378,11 @@ app.post('/api/v1/chat', async (req, res) => {
     let finalChart = null;
     let finalSql = null;
     let accumulatedJson = chatResponse.data.toString('utf-8'); // Convert buffer to string properly
+    let hasConversationalText = false;
+    let extractedRows = []; // Store rows for AI summarization
 
     console.log('DEBUG_RAW_RESPONSE_LENGTH:', accumulatedJson.length);
-    console.log('DEBUG_FULL_RAW_RESPONSE:', accumulatedJson); // Log EVERYTHING to find hidden data
+    // console.log('DEBUG_FULL_RAW_RESPONSE:', accumulatedJson); // Log EVERYTHING to find hidden data
 
     // Parse the full accumulated JSON
     try {
@@ -406,7 +408,9 @@ app.post('/api/v1/chat', async (req, res) => {
             if (msg.systemMessage.text) {
               const t = msg.systemMessage.text;
               if (t.textType === 'FINAL_RESPONSE') {
-                fullResponseText += t.text || t.content || '';
+                const content = t.text || t.content || '';
+                fullResponseText += content;
+                if (content.trim().length > 0) hasConversationalText = true;
               } else if (t.textType === 'THOUGHT' && t.parts && t.parts[0]?.text) {
                 fullResponseText += `\n*Thought: ${t.parts[0].text}*\n`;
               }
@@ -417,6 +421,7 @@ app.post('/api/v1/chat', async (req, res) => {
               // Add instruction text if present, but avoid duplication if it looks like a prompt
               if (finalChart.query?.instructions && !fullResponseText.includes(finalChart.query.instructions)) {
                 fullResponseText += `\n\n**Visual Analysis:** ${finalChart.query.instructions}`;
+                hasConversationalText = true;
               }
             }
 
@@ -430,6 +435,7 @@ app.post('/api/v1/chat', async (req, res) => {
               // Format Data as Markdown Table
               if (dataResult.data && Array.isArray(dataResult.data) && dataResult.data.length > 0) {
                 const rows = dataResult.data;
+                extractedRows = rows; // Save for AI summary
                 const columns = Object.keys(rows[0]);
                 const displayLimit = 10;
 
@@ -469,8 +475,51 @@ app.post('/api/v1/chat', async (req, res) => {
       const matches = accumulatedJson.match(/"text":\s*"([^"]+)"/g);
       if (matches) {
         fullResponseText = matches.map(m => m.split(':')[1].replace(/"/g, '').trim()).join(' ');
+        hasConversationalText = true;
       } else {
         fullResponseText = "Received response but failed to parse. Check server logs.";
+      }
+    }
+
+    // --- AI SUMMARIZATION LAYER ---
+    // If we have data/SQL but NO conversational text, ask Gemini to summarize
+    if (!hasConversationalText && (extractedRows.length > 0 || finalSql)) {
+      console.log('[CHAT] Missing conversational text. Triggering AI Summary...');
+      try {
+        const vertex_ai_summary = new VertexAI({
+          project: PROJECT_ID,
+          location: process.env.GCP_LOCATION || 'us-central1'
+        });
+        const summaryModel = vertex_ai_summary.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
+
+        const summaryPrompt = `
+          You are a data analyst assistant. The user asked a question, and the specific database returned raw data or a query.
+          The previous system failed to provide a natural language explanation.
+
+          User Question: "${message}"
+
+          Captured Data (First ${Math.min(extractedRows.length, 20)} rows):
+          ${JSON.stringify(extractedRows.slice(0, 20))}
+
+          Executed SQL:
+          ${finalSql || "N/A"}
+
+          Task: Provide a friendly, concise natural language summary of this data to answer the user's question.
+          Do NOT output the table again (it is already shown to the user). Just explain what the data shows in 2-3 sentences.
+        `;
+
+        const summaryResult = await summaryModel.generateContent(summaryPrompt);
+        const summaryText = summaryResult.response.candidates[0].content.parts[0].text;
+
+        // Prepend the summary to the (already appended) table
+        // We want: Summary + \n\n + Table
+        // Currently fullResponseText is just the Table (starts with \n\n**Data Results:...)
+        fullResponseText = summaryText + "\n" + fullResponseText;
+
+        console.log('[CHAT] Added AI Summary length:', summaryText.length);
+      } catch (sumErr) {
+        console.error('[CHAT] AI Summarization failed:', sumErr);
+        // Fallback: just leave as is
       }
     }
 

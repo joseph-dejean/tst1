@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { VegaEmbed as Vega } from 'react-vega';
 import { Box, TextField, Button, Paper, Typography, CircularProgress, Alert } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import axios from 'axios';
@@ -435,6 +436,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
                       <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
                         {msg.content}
                       </Typography>
+                    )}
+                    {msg.chart && (
+                      <Box sx={{ mt: 2, width: '100%', overflowX: 'auto' }}>
+                        <Vega spec={msg.chart} />
+                      </Box>
                     )}
                     <Typography
                       variant="caption"
