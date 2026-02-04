@@ -254,9 +254,26 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
     const nameValue = entry.name || '';
     setEntryType(typeValue.split('-').length > 1 ? typeValue.split('-').pop() : (nameValue.split('/').at(-2)?.charAt(0).toUpperCase() + nameValue.split('/').at(-2)?.slice(1) || 'Unknown'));
 
-    const updateTime = entry.updateTime || entry.createTime || new Date();
-    const myDate = (typeof updateTime !== 'string') ? new Date(updateTime.seconds * 1000) : new Date(updateTime);
-    const formattedDate = new Intl.DateTimeFormat('en-US', { month: "short", day: "numeric", year: "numeric" }).format(myDate);
+    // Robust Date Parsing
+    let dateToFormat = new Date();
+    const timeSource = entry.updateTime || entry.createTime;
+
+    if (timeSource) {
+      if (timeSource instanceof Date) {
+        dateToFormat = timeSource;
+      } else if (typeof timeSource === 'object' && timeSource.seconds) {
+        dateToFormat = new Date(timeSource.seconds * 1000);
+      } else if (typeof timeSource === 'string') {
+        dateToFormat = new Date(timeSource);
+      }
+    }
+
+    // Fallback if date is invalid
+    if (isNaN(dateToFormat.getTime())) {
+      dateToFormat = new Date();
+    }
+
+    const formattedDate = new Intl.DateTimeFormat('en-US', { month: "short", day: "numeric", year: "numeric" }).format(dateToFormat);
     setModifiedDate(formattedDate);
     setDescription(entrySource.description ?? '');
 
