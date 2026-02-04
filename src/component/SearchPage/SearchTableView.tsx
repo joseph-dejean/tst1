@@ -384,7 +384,7 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
                     />
                     <Tag
                       text={(() => {
-                        const rawType = entry.searchResultType || entry.entryType || 'Unknown';
+                        const rawType = (entry.searchResultType || entry.entryType || 'Unknown').toLowerCase();
                         return rawType.split('_').pop() || rawType;
                       })()}
                       css={{
