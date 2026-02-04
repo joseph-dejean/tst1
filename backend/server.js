@@ -2631,28 +2631,12 @@ app.post('/api/v1/search', async (req, res) => {
         });
 
         await Promise.all(datasetChecks);
-        // Step 3: Overlay Firestore Accesses (Important: catching things BigQuery IAM misses or sync delays)
-        const firestoreAccesses = await grantedAccessService.getAccessesByUser(userEmail);
-        const firestoreAssetSet = new Set(firestoreAccesses.map(a => a.assetName));
+        console.log(`[SEARCH] Checked ${uniqueDatasets.size} datasets, access map:`, Object.fromEntries(datasetAccessCache));
 
-        // Annotate each result
+        // Annotate each result based on BigQuery IAM only (single source of truth)
         annotatedResults = (searchResults || []).map(entry => {
           const ds = parseDataset(entry);
-
-          // Check BigQuery IAM access
-          const hasIamAccess = ds ? (datasetAccessCache.get(ds.key) || false) : false;
-
-          // Check if this specific resource was granted in our app (check FQN, Resource, and Name)
-          const cleanFqn = entry.dataplexEntry?.fullyQualifiedName || entry.fullyQualifiedName || '';
-          const linkedRes = entry.dataplexEntry?.entrySource?.resource || '';
-          const entryName = entry.dataplexEntry?.name || entry.name || '';
-
-          const hasFirestoreAccess = firestoreAssetSet.has(cleanFqn) ||
-            firestoreAssetSet.has(linkedRes) ||
-            firestoreAssetSet.has(entryName);
-
-          const hasAccess = hasIamAccess || hasFirestoreAccess;
-
+          const hasAccess = ds ? (datasetAccessCache.get(ds.key) || false) : false;
           return { dataplexEntry: entry, userHasAccess: hasAccess };
         });
       }
