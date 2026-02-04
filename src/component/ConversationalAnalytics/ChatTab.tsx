@@ -56,7 +56,7 @@ const markdownStyles = {
 };
 
 interface ChatTabProps {
-  entry: any;
+  entry?: any; // Optional for Global Chat mode
   tables?: any[]; // Optional list of tables for Data Products/Datasets
 }
 
@@ -137,7 +137,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
         });
 
         // Filter to only tables and exclude current entry
-        const currentName = entry.name || '';
+        const currentName = entry?.name || '';
         const tableResults = (response.data?.results || [])
           .filter((r: any) => {
             const isTable = r.dataplexEntry?.entryType?.toLowerCase().includes('table');
@@ -179,7 +179,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
   const effectiveTables = useMemo(() => {
     if (tables && tables.length > 0) return tables; // Use provided tables if available
 
-    const baseTables = [entry];
+    const baseTables = entry ? [entry] : [];
     if (selectedRelatedTables.length > 0) {
       return [...baseTables, ...selectedRelatedTables.map(t => ({
         entrySource: { displayName: t.displayName, description: t.description },
@@ -188,7 +188,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
         entryType: t.entryType
       }))];
     }
-    return undefined; // Single table mode
+    return baseTables.length > 0 ? baseTables : undefined; // Single table mode
   }, [entry, tables, selectedRelatedTables]);
 
   // Auto-scroll to bottom when new messages arrive
@@ -216,14 +216,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
       // Check if this is a Data Product or if multiple tables are selected (including related tables)
       const activeTables = effectiveTables || tables;
       const hasMultipleTables = activeTables && activeTables.length > 1;
-      const isDataProduct = entry._isDataProduct || entry.entryType === 'DATA_PRODUCT' || hasMultipleTables;
+      const isDataProduct = entry?._isDataProduct || entry?.entryType === 'DATA_PRODUCT' || hasMultipleTables;
 
       let contextData: any;
 
       if (isDataProduct || hasMultipleTables) {
         // Prepare context for all tables
         // Use effectiveTables (which includes selected related tables) or tables prop
-        const tableList = activeTables || (entry._dataProduct?.tables) || [entry];
+        const tableList = activeTables || (entry?._dataProduct?.tables) || (entry ? [entry] : []);
 
         const tablesContext = tableList.map((t: any) => {
           // Handle structure from resourcesEntryList (dataplexEntry) or direct table object
@@ -243,10 +243,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
 
         contextData = {
           name: hasMultipleTables ? `${primaryName} + ${tableList.length - 1} related tables` : primaryName,
-          description: entry.entrySource?.description || entry.description || "Multi-table conversation",
+          description: entry?.entrySource?.description || entry?.description || "Multi-table conversation",
           isDataProduct: true, // Enable multi-table handling in backend
           tables: tablesContext,
-          fullyQualifiedName: entry.fullyQualifiedName || entry.name || '',
+          fullyQualifiedName: entry?.fullyQualifiedName || entry?.name || '',
           entryType: isDataProduct ? 'DATA_PRODUCT' : 'MULTI_TABLE',
           conversationHistory: conversationHistory
         };
@@ -287,11 +287,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
         });
 
         contextData = {
-          name: entry.entrySource?.displayName || entry.displayName || entry.name || 'Unknown',
-          description: entry.entrySource?.description || entry.description || "No description available.",
+          name: entry?.entrySource?.displayName || entry?.displayName || entry?.name || 'Unknown',
+          description: entry?.entrySource?.description || entry?.description || "No description available.",
           schema: formattedSchema,
-          fullyQualifiedName: entry.fullyQualifiedName || entry.name || '',
-          entryType: entry.entryType || entry.entrySource?.system || 'Unknown',
+          fullyQualifiedName: entry?.fullyQualifiedName || entry?.name || '',
+          entryType: entry?.entryType || entry?.entrySource?.system || 'Unknown',
           conversationHistory: conversationHistory
         };
       }

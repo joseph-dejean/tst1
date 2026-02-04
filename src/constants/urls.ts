@@ -43,6 +43,7 @@ export const URLS = {
     GET_PROJECTS: '/get-projects',
     SEND_FEEDBACK: '/send-feedback',
     CHAT: '/chat',
+    ACCESSIBLE_TABLES: '/accessible-tables',
     GET_ASPECT: '/aspect',
     GET_ACCESS_REQUESTS: '/access-requests',
     UPDATE_ACCESS_REQUEST: '/access-request/update',

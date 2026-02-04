@@ -2740,6 +2740,211 @@ app.post('/api/v1/search', async (req, res) => {
 
 
 /**
+ * GET /api/v1/accessible-tables
+ * Returns all tables/views the user has access to, grouped by dataset.
+ * Reuses the same IAM-checking logic as /search.
+ */
+/**
+ * GET /api/v1/accessible-tables
+ * Returns all tables/views the user has access to, grouped by dataset.
+ * Reuses the same IAM-checking logic as /search but iterates through ALL configured projects.
+ */
+app.get('/api/v1/accessible-tables', async (req, res) => {
+  try {
+    const userEmail = req.headers['x-user-email'];
+    console.log('======== [ACCESSIBLE-TABLES START] ========');
+    console.log(`[ACCESSIBLE-TABLES] User: ${userEmail}`);
+
+    const isAdmin = await checkUserAdminRole(userEmail); // Check if user is a Dataplex Admin
+
+    // 1. Fetch all configured projects (mirroring app-configs logic)
+    const resourceManagerClient = new ProjectsClient();
+    let projects = [];
+    try {
+      const [projectList] = await resourceManagerClient.searchProjects({ pageSize: 2000 }, { autoPaginate: false });
+      // Ensure current PROJECT_ID is included if not in search results
+      const currentExists = projectList.find(p => p.projectId === PROJECT_ID);
+      projects = currentExists ? projectList : [...projectList, { projectId: PROJECT_ID }];
+    } catch (err) {
+      console.warn('[ACCESSIBLE-TABLES] Failed to list projects, falling back to current project:', err.message);
+      projects = [{ projectId: PROJECT_ID }];
+    }
+
+    console.log(`[ACCESSIBLE-TABLES] Searching across ${projects.length} projects: ${projects.map(p => p.projectId).join(', ')}`);
+
+    // 2. Search for TABLE and VIEW entries in EACH project
+    const client = new CatalogServiceClient();
+    let allResults = [];
+    const location = 'global';
+
+    // Helper to search a single project
+    const searchProjectEntries = async (projId) => {
+      let projResults = [];
+      let pageToken = undefined;
+      try {
+        do {
+          const request = {
+            name: `projects/${projId}/locations/${location}`,
+            query: 'type=TABLE OR type=VIEW',
+            pageSize: 100,
+            pageToken: pageToken
+          };
+          const [results, , response] = await client.searchEntries(request);
+          if (results && results.length > 0) {
+            projResults = projResults.concat(results);
+          }
+          pageToken = response?.nextPageToken || null;
+        } while (pageToken && projResults.length < 500); // Cap per project
+      } catch (err) {
+        // Ignore project permission errors (e.g. if service account can't list entries in that project)
+        // console.warn(`[ACCESSIBLE-TABLES] Warning: Could not search project ${projId}: ${err.message}`);
+      }
+      return projResults;
+    };
+
+    // Run searches in parallel (with some concurrency control if needed, but Promise.all is okay for < 20 projects)
+    const projectSearchPromises = projects.map(p => searchProjectEntries(p.projectId));
+    const searchResultsArrays = await Promise.all(projectSearchPromises);
+    allResults = searchResultsArrays.flat();
+
+    console.log(`[ACCESSIBLE-TABLES] Fetched ${allResults.length} total table/view entries across all projects`);
+
+    // --- ACCESS ANNOTATION ---
+    const normalizeTableEntry = (entry, hasAccess) => {
+      const coreEntry = entry.dataplexEntry || entry;
+      const source = coreEntry.entrySource || {};
+      const nameFromFQN = coreEntry.fullyQualifiedName?.split('.').pop();
+      const nameFromPath = (coreEntry.name || entry.name || '').split('/').pop();
+      const displayName = source.displayName || coreEntry.displayName || nameFromFQN || nameFromPath || 'Unknown';
+      const fqn = coreEntry.fullyQualifiedName || '';
+      const cleanFqn = fqn.replace('bigquery:', '');
+      const parts = cleanFqn.split('.');
+      const dataset = parts.length >= 2 ? `${parts[0]}.${parts[1]}` : 'unknown';
+
+      const rawType = coreEntry.entryType || entry.entryType || '';
+      const upper = (typeof rawType === 'string' ? rawType : '').toUpperCase();
+      let entryType = 'Table';
+      if (upper.includes('VIEW')) entryType = 'View';
+
+      return {
+        name: coreEntry.name || entry.name,
+        displayName,
+        fullyQualifiedName: fqn,
+        entryType,
+        description: source.description || coreEntry.description || '',
+        dataset, // Format: project.dataset
+        userHasAccess: hasAccess,
+        entrySource: {
+          displayName,
+          description: source.description || coreEntry.description || '',
+          system: source.system || 'BIGQUERY'
+        }
+      };
+    };
+
+    let accessibleTables = [];
+
+    if (isAdmin) {
+      accessibleTables = allResults.map(e => normalizeTableEntry(e, true));
+    } else if (!userEmail) {
+      // If no email, returning empty list (or could return 400, but empty is safer for UI)
+      accessibleTables = [];
+    } else {
+      // Collect unique projects and datasets to check access
+      const uniqueProjects = new Set();
+      const uniqueDatasets = new Map(); // key: "project.dataset" -> { project, dataset }
+
+      const parseDataset = (entry) => {
+        const fqn = (entry.dataplexEntry || entry).fullyQualifiedName || '';
+        const parts = fqn.replace('bigquery:', '').split('.');
+        if (parts.length >= 2) return { project: parts[0], dataset: parts[1], key: `${parts[0]}.${parts[1]}` };
+        return null;
+      };
+
+      allResults.forEach(entry => {
+        const ds = parseDataset(entry);
+        if (ds) {
+          uniqueProjects.add(ds.project);
+          if (!uniqueDatasets.has(ds.key)) uniqueDatasets.set(ds.key, ds);
+        }
+      });
+
+      // 1. Check Project-Level Access (Bulk Check)
+      const projectAccessMap = new Map(); // projectId -> boolean
+      const resourceManager = new ProjectsClient();
+      const accessRoles = [
+        'roles/owner', 'roles/editor', 'roles/viewer',
+        'roles/bigquery.dataViewer', 'roles/bigquery.metadataViewer',
+        'roles/bigquery.dataEditor', 'roles/bigquery.dataOwner', 'roles/bigquery.admin'
+      ];
+      const userMember = `user:${userEmail}`;
+
+      await Promise.all(Array.from(uniqueProjects).map(async (pId) => {
+        try {
+          const [policy] = await resourceManager.getIamPolicy({ resource: `projects/${pId}` });
+          const hasProjectAccess = policy.bindings?.some(binding =>
+            accessRoles.includes(binding.role) && binding.members?.includes(userMember)
+          ) || false;
+          projectAccessMap.set(pId, hasProjectAccess);
+        } catch (err) {
+          // console.warn(`[ACCESSIBLE-TABLES] Project IAM check failed for ${pId}:`, err.message);
+          projectAccessMap.set(pId, false);
+        }
+      }));
+
+      // 2. Check Dataset-Level Access (for projects where user lacks project-level access)
+      const datasetAccessCache = new Map(); // dsKey -> boolean
+
+      await Promise.all(Array.from(uniqueDatasets.values()).map(async (ds) => {
+        // If user has project access, they have dataset access
+        if (projectAccessMap.get(ds.project)) {
+          datasetAccessCache.set(ds.key, true);
+          return;
+        }
+
+        // Otherwise, check specific dataset IAM
+        try {
+          const bq = new BigQuery({ projectId: ds.project });
+          const dataset = bq.dataset(ds.dataset);
+          const [metadata] = await dataset.getMetadata();
+          const hasAccess = (metadata.access || []).some(entry =>
+            entry.userByEmail?.toLowerCase() === userEmail.toLowerCase()
+          );
+          datasetAccessCache.set(ds.key, hasAccess);
+        } catch (dsErr) {
+          datasetAccessCache.set(ds.key, false);
+        }
+      }));
+
+      // Filter and Normalize
+      accessibleTables = allResults
+        .map(entry => {
+          const ds = parseDataset(entry);
+          const hasAccess = ds ? (datasetAccessCache.get(ds.key) || false) : false;
+          return normalizeTableEntry(entry, hasAccess);
+        })
+        .filter(t => t.userHasAccess);
+    }
+
+    // Filter to only accessible and group by dataset
+    const tables = (accessibleTables || []).filter(t => t.userHasAccess);
+    const groupedByDataset = {};
+    tables.forEach(t => {
+      if (!groupedByDataset[t.dataset]) groupedByDataset[t.dataset] = [];
+      groupedByDataset[t.dataset].push(t);
+    });
+
+    console.log(`[ACCESSIBLE-TABLES] Returning ${tables.length} accessible tables across ${Object.keys(groupedByDataset).length} datasets`);
+    res.json({ tables, groupedByDataset });
+
+  } catch (error) {
+    console.error('[ACCESSIBLE-TABLES] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch accessible tables', message: error.message });
+  }
+});
+
+
+/**
  * GET /api/v1/lineage
  * Retrieves data lineage (relationships) for a given FQN.
  * Performs a Breadth-First Search (BFS) to find upstream/downstream up to a specific depth.

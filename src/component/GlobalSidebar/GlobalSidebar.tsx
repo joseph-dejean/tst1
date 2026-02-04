@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, AdminPanelSettings } from '@mui/icons-material';
+import { Search, AdminPanelSettings, ChatBubbleOutline } from '@mui/icons-material';
 import SidebarMenuItem from './SidebarMenuItem';
 import BrowsePopover from './BrowsePopover';
 import { useAccessRequest } from '../../contexts/AccessRequestContext';
@@ -26,6 +26,7 @@ const GlobalSidebar: React.FC<GlobalSidebarProps> = ({ isHomePage = false }) => 
   const isSearchActive = ['/home', '/search', '/view-details'].includes(location.pathname);
   const isBrowseActive = ['/glossaries', '/browse-by-annotation'].includes(location.pathname) || isBrowseOpen;
   const isDataProductsActive = location.pathname.startsWith('/data-products');
+  const isChatActive = location.pathname === '/global-chat';
   const dispatch = useDispatch<AppDispatch>();
   const { user } = useAuth();
 
@@ -107,6 +108,14 @@ const GlobalSidebar: React.FC<GlobalSidebarProps> = ({ isHomePage = false }) => 
           disabled={false}
           multiLine={false}
           onClick={() => { handleDataProducts(); }}
+        />
+
+        {/* Chat */}
+        <SidebarMenuItem
+          icon={<ChatBubbleOutline sx={{ fontSize: 20 }} />}
+          label="Chat"
+          isActive={isChatActive}
+          onClick={() => navigate('/global-chat')}
         />
 
         {/* Access Management */}

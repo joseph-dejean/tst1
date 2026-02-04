@@ -29,6 +29,7 @@ import DataProducts from '../component/DataProducts/DataProducts';
 import DataProductsDetailView from '../component/DataProducts/DataProductsDetailView';
 import AccessRequestsDashboard from '../component/AccessRequests/AccessRequestsDashboard';
 import AdminAccessManagement from '../component/AdminPanel/AdminAccessManagement';
+import GlobalChatPage from '../component/GlobalChat/GlobalChatPage';
 
 const Routing = () => {
   // state to hold the user object
@@ -282,6 +283,18 @@ const Routing = () => {
             <SessionExpirationWrapper>
               <Layout searchBar={true}>
                 <ChatPage />
+              </Layout>
+            </SessionExpirationWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/global-chat"
+        element={
+          <ProtectedRoute>
+            <SessionExpirationWrapper>
+              <Layout searchBar={true}>
+                <GlobalChatPage />
               </Layout>
             </SessionExpirationWrapper>
           </ProtectedRoute>

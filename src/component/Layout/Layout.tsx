@@ -10,6 +10,8 @@ interface LayoutProps {
   searchNavigate?: boolean;
 }
 
+import FloatingChatButton from '../GlobalChat/FloatingChatButton';
+
 const Layout: React.FC<LayoutProps> = ({
   children,
   searchBar = false,
@@ -31,6 +33,7 @@ const Layout: React.FC<LayoutProps> = ({
             {children}
           </div>
         </div>
+        <FloatingChatButton />
       </div>
     );
   }
@@ -45,6 +48,7 @@ const Layout: React.FC<LayoutProps> = ({
           {children}
         </div>
       </div>
+      <FloatingChatButton />
     </div>
   );
 };
