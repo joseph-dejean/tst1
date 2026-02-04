@@ -2557,12 +2557,11 @@ app.post('/api/v1/search', async (req, res) => {
         || (entry.linkedResource || '').split('/').pop()
         || 'Unknown Asset';
 
-      return {
-        ...entry, // Keep original fields
-        userHasAccess: hasAccess,
+      const normalized = {
+        ...coreEntry, // Keep original fields
 
         // Pull nested fields to the top level for the frontend
-        name: entry.name,
+        name: coreEntry.name || entry.name,
         displayName: calculatedDisplayName,
         description: source.description || coreEntry.description || 'No description available',
         fullyQualifiedName: coreEntry.fullyQualifiedName || entry.fullyQualifiedName,
@@ -2576,10 +2575,15 @@ app.post('/api/v1/search', async (req, res) => {
         },
 
         // Normalize type
-        entryType: coreEntry.entryType || entry.entryType || 'Unknown',
+        entryType: coreEntry.entryType || entry.entryType || entry.searchResultType || 'Unknown',
 
         // Helper for the location pill
-        location: (entry.name || '').split('/locations/')[1]?.split('/')[0] || 'global'
+        location: (coreEntry.name || entry.name || '').split('/locations/')[1]?.split('/')[0] || 'global'
+      };
+
+      return {
+        dataplexEntry: normalized,
+        userHasAccess: hasAccess
       };
     };
 
