@@ -2545,6 +2545,7 @@ app.post('/api/v1/search', async (req, res) => {
     const [searchResults, searchRequest, searchResponse] = await client.searchEntries(request);
     console.log(`[SEARCH] Fetched ${searchResults ? searchResults.length : 0} results from Data Catalog`);
 
+
     // Helper for data normalization (used in all access paths) - as requested
     const normalizeEntry = (entry, hasAccess) => {
       // Dataplex results are often nested in 'dataplexEntry' or 'entry'
@@ -2563,25 +2564,39 @@ app.post('/api/v1/search', async (req, res) => {
         // Pull nested fields to the top level for the frontend
         name: coreEntry.name || entry.name,
         displayName: calculatedDisplayName,
-        description: source.description || coreEntry.description || 'No description available',
+        description: source.description || coreEntry.description || entry.description || 'No description available',
         fullyQualifiedName: coreEntry.fullyQualifiedName || entry.fullyQualifiedName,
 
         // Ensure entrySource exists and has data (Frontend looks here specifically)
         entrySource: {
           ...source,
           displayName: calculatedDisplayName,
-          description: source.description || coreEntry.description || '',
-          system: source.system || entry.integratedSystem || 'BIGQUERY' // Default to BigQuery if missing
+          description: source.description || coreEntry.description || entry.description || '',
+          system: source.system || entry.integratedSystem || 'BIGQUERY', // Default to BigQuery if missing
+          location: source.location || (entry.linkedResource?.includes('/locations/') ? entry.linkedResource.split('/locations/')[1].split('/')[0] : 'global')
         },
 
-        // Normalize type
-        entryType: coreEntry.entryType || entry.entryType || entry.searchResultType || 'Unknown',
+        // Normalize type for icons
+        entryType: (() => {
+          const raw = (coreEntry.entryType || entry.entryType || entry.searchResultType || 'Unknown').toUpperCase();
+          let display = raw.split('_').pop();
+          if (display === 'DATASET') return 'Dataset';
+          if (display === 'TABLE') return 'Table';
+          if (display === 'BUCKET') return 'Bucket';
+          if (display === 'PRODUCT') return 'Product';
+          return display.charAt(0).toUpperCase() + display.slice(1).toLowerCase();
+        })(),
 
         // Helper for the location pill
-        location: (coreEntry.name || entry.name || '').split('/locations/')[1]?.split('/')[0] || 'global'
+        location: source.location || (coreEntry.name || entry.name || '').split('/locations/')[1]?.split('/')[0] || 'global',
+
+        // Metadata for sorting/date
+        modifyTime: entry.modifyTime || coreEntry.modifyTime,
+        updateTime: entry.updateTime || coreEntry.updateTime || entry.modifyTime || coreEntry.modifyTime
       };
 
       return {
+        ...normalized,
         dataplexEntry: normalized,
         userHasAccess: hasAccess
       };
