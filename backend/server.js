@@ -2617,7 +2617,10 @@ app.post('/api/v1/search', async (req, res) => {
             const dataset = bq.dataset(ds.dataset);
             const [metadata] = await dataset.getMetadata();
             const accessList = metadata.access || [];
-            // Only check for direct user access in Step 2. 
+            // Log all userByEmail entries for debugging
+            const userEntries = accessList.filter(e => e.userByEmail).map(e => `${e.role}:${e.userByEmail}`);
+            console.log(`[SEARCH] Dataset ${ds.key} userByEmail entries:`, userEntries);
+            // Only check for direct user access in Step 2.
             // Broad project-level roles (like projectReaders) were already checked in Step 1.
             const hasAccess = accessList.some(entry =>
               entry.userByEmail?.toLowerCase() === userEmail.toLowerCase()
