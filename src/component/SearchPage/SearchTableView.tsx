@@ -50,10 +50,17 @@ interface SearchTableViewProps {
 
 const getNameFromEntry = (entry: any) => {
   var calculatedName = '';
-  if (entry?.entrySource?.displayName && entry.entrySource.displayName.length > 0) {
+  // Check for SearchResult displayName
+  if (entry.displayName) {
+    calculatedName = entry.displayName;
+  } else if (entry?.entrySource?.displayName && entry.entrySource.displayName.length > 0) {
     calculatedName = entry.entrySource.displayName;
   } else if (entry.name) {
     const segments = entry.name.split('/');
+    calculatedName = segments[segments.length - 1];
+  } else if (entry.linkedResource) {
+    // Fallback for SearchResult
+    const segments = entry.linkedResource.split('/');
     calculatedName = segments[segments.length - 1];
   }
   return calculatedName;
@@ -62,8 +69,7 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
   resources,
   onRowClick,
   // onFavoriteClick,
-  getFormatedDate,
-  getEntryType
+  getFormatedDate
 }) => {
   // const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [nameSortOrder, setNameSortOrder] = useState<'asc' | 'desc' | null>(null);
@@ -349,7 +355,7 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
                       whiteSpace: 'nowrap'
                     }}
                   >
-                    {entry.entrySource?.description || 'No Description Available'}
+                    {entry.description || entry.entrySource?.description || 'No Description Available'}
                   </Typography>
                 </TableCell>
                 <TableCell
@@ -360,7 +366,8 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
                   <Box sx={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                     <Tag
                       text={(() => {
-                        return entry.entrySource?.system.toLowerCase() === 'bigquery' ? 'BigQuery' : entry.entrySource?.system.charAt(0).toUpperCase() + entry.entrySource?.system.slice(1).toLowerCase();
+                        const system = entry.integratedSystem || entry.entrySource?.system || 'Custom';
+                        return system.toLowerCase() === 'bigquery' ? 'BigQuery' : system.charAt(0).toUpperCase() + system.slice(1).toLowerCase();
                       })()}
                       css={{
                         fontFamily: '"Google Sans Text",sans-serif',
@@ -376,7 +383,10 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
                       }}
                     />
                     <Tag
-                      text={getEntryType(entry.name, '/')}
+                      text={(() => {
+                        const rawType = entry.searchResultType || entry.entryType || 'Unknown';
+                        return rawType.split('_').pop() || rawType;
+                      })()}
                       css={{
                         fontFamily: '"Google Sans Text",sans-serif',
                         backgroundColor: '#C2E7FF',
@@ -411,7 +421,7 @@ const SearchTableView: React.FC<SearchTableViewProps> = ({
                     paddingLeft: '3px'
                   }}
                 >
-                  {getFormatedDate(entry?.updateTime || entry?.createTime)}
+                  {getFormatedDate(entry?.modifyTime || entry?.updateTime || entry?.createTime)}
                 </TableCell>
               </TableRow>
             );

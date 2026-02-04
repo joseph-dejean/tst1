@@ -237,26 +237,42 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
   useEffect(() => {
     // getNames(entry.name, '/');
     // setName(entry.entrySource.displayName.length > 0 ? entry.entrySource.displayName : getNames(entry.name || '', '/'));
+    // Map Data Catalog SearchResult structure to Component expected structure
+    // SearchResult has: linkedResource, relativeResourceName, integratedSystem, modifyTime
+    // Dataplex Entry has: entrySource, entryType, updateTime
+
     let calculatedName = '';
     const entrySource = entry?.entrySource || {};
 
-    if (entrySource.displayName && entrySource.displayName.length > 0) {
+    // Check for SearchResult displayName or fallback to parsing name
+    if (entry.displayName) {
+      calculatedName = entry.displayName;
+    } else if (entrySource.displayName && entrySource.displayName.length > 0) {
       calculatedName = entrySource.displayName;
     } else if (entry.name) {
       const segments = entry.name.split('/');
       calculatedName = segments[segments.length - 1];
+    } else if (entry.linkedResource) {
+      // Fallback for SearchResult: parse from linkedResource
+      const segments = entry.linkedResource.split('/');
+      calculatedName = segments[segments.length - 1];
     }
+
     setName(calculatedName);
-    setSystemName(entrySource.system ?? 'Custom');
 
-    // Safety check for entryType and name before split
-    const typeValue = entry.entryType || '';
-    const nameValue = entry.name || '';
-    setEntryType(typeValue.split('-').length > 1 ? typeValue.split('-').pop() : (nameValue.split('/').at(-2)?.charAt(0).toUpperCase() + nameValue.split('/').at(-2)?.slice(1) || 'Unknown'));
+    // Map System: integratedSystem (SearchResult) OR entrySource.system (Entry)
+    const systemVal = entry.integratedSystem || entrySource.system || 'Custom';
+    setSystemName(systemVal);
 
+    // Map Type: searchResultType (SearchResult) OR entryType (Entry)
+    // Simplify type display
+    const rawType = entry.searchResultType || entry.entryType || 'Unknown';
+    setEntryType(rawType.split('_').pop() || rawType);
+
+    // Map Date: modifyTime (SearchResult) OR updateTime (Entry)
     // Robust Date Parsing
     let dateToFormat = new Date();
-    const timeSource = entry.updateTime || entry.createTime;
+    const timeSource = entry.modifyTime || entry.updateTime || entry.createTime;
 
     if (timeSource) {
       if (timeSource instanceof Date) {
@@ -275,7 +291,25 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
 
     const formattedDate = new Intl.DateTimeFormat('en-US', { month: "short", day: "numeric", year: "numeric" }).format(dateToFormat);
     setModifiedDate(formattedDate);
-    setDescription(entrySource.description ?? '');
+
+    // Map Description: description (SearchResult) OR entrySource.description (Entry)
+    setDescription(entry.description || entrySource.description || '');
+
+    // Map Location: try to parse from linkedResource if entrySource.location is missing
+    let locationVal = entrySource.location;
+    if (!locationVal && entry.linkedResource) {
+      // Try key locations from resource path
+      if (entry.linkedResource.includes('/locations/')) {
+        locationVal = entry.linkedResource.split('/locations/')[1].split('/')[0];
+      } else {
+        locationVal = 'global'; // default for many cloud resources
+      }
+    }
+    // We'll use a local state for location to use it in JSX
+    // But wait, existing code uses entry.entrySource?.location in JSX directly.
+    // We should probably normalize the entry object at the start of component or just handle it in JSX?
+    // Let's attach our resolved location to a constant we can use, or update the entry object? 
+    // Updating props is bad. Let's create a derived object.
 
     // Generate random avatar colors for this card
     //setAvatarColors(generateRandomColors());
@@ -431,24 +465,23 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
                     <span>{modifiedDate}</span>
                   </span>
                 </Tooltip>
-                <Tooltip title={`Location - ${entry?.entrySource?.location || 'Unknown'}`} arrow placement='top'>
+                <Tooltip title={`Location - ${entry?.entrySource?.location || (entry.linkedResource?.includes('/locations/') ? entry.linkedResource.split('/locations/')[1].split('/')[0] : 'global')}`} arrow placement='top'>
                   <span style={{
                     color: "#575757",
                     fontSize: "0.875rem",
-                    fontWeight: 500,
-                    display: "flex",
-                    alignItems: "center",
-                    flex: '0 1 auto', // Allow shrinking for location text
-                    gap: '0.125rem',
-                    minWidth: 0
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    marginLeft: '8px',
+                    width: '120px'
                   }}>
-                    <LocationOnOutlined style={{ fontSize: 14, flexShrink: 0 }} />
+                    <LocationOnOutlined sx={{ fontSize: '16px' }} />
                     <span style={{
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap'
                     }}>
-                      {entry?.entrySource?.location || 'Unknown'}
+                      {entry?.entrySource?.location || (entry.linkedResource?.includes('/locations/') ? entry.linkedResource.split('/locations/')[1].split('/')[0] : 'global')}
                     </span>
                   </span>
                 </Tooltip>
