@@ -266,9 +266,21 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
     setSystemName(systemVal);
 
     // Map Type: searchResultType (SearchResult) OR entryType (Entry)
-    // Simplify type display
-    const rawType = entry.searchResultType || entry.entryType || 'Unknown';
-    setEntryType(rawType.split('_').pop() || rawType);
+    // Simplify type display: handle paths and compound names
+    const rawType = (entry.searchResultType || entry.entryType || 'Unknown');
+    const typeSegment = rawType.split('/').pop() || rawType;
+    const upperType = typeSegment.toUpperCase();
+
+    let friendlyType = typeSegment;
+    if (upperType.includes('TABLE')) friendlyType = 'Table';
+    else if (upperType.includes('DATASET')) friendlyType = 'Dataset';
+    else if (upperType.includes('BUCKET')) friendlyType = 'Bucket';
+    else if (upperType.includes('PRODUCT')) friendlyType = 'Product';
+    else {
+      const part = typeSegment.split(/[_-]/).pop() || typeSegment;
+      friendlyType = part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+    }
+    setEntryType(friendlyType);
 
     // Map Date: modifyTime (SearchResult) OR updateTime (Entry)
     // Robust Date Parsing

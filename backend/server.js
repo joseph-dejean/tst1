@@ -2576,14 +2576,23 @@ app.post('/api/v1/search', async (req, res) => {
           location: source.location || (entry.linkedResource?.includes('/locations/') ? entry.linkedResource.split('/locations/')[1].split('/')[0] : 'global')
         },
 
-        // Normalize type for icons
+        // Normalize type for icons - handle full resource paths
         entryType: (() => {
-          const raw = (coreEntry.entryType || entry.entryType || entry.searchResultType || 'Unknown').toUpperCase();
-          let display = raw.split('_').pop();
-          if (display === 'DATASET') return 'Dataset';
-          if (display === 'TABLE') return 'Table';
-          if (display === 'BUCKET') return 'Bucket';
-          if (display === 'PRODUCT') return 'Product';
+          const raw = (coreEntry.entryType || entry.entryType || entry.searchResultType || 'Unknown');
+          // 1. Get last segment if it's a path (slashes)
+          let display = raw.split('/').pop();
+          // 2. Identify common types from strings like 'bigquery-table' or 'BIGQUERY_DATASET'
+          const upper = display.toUpperCase();
+          if (upper.includes('TABLE')) return 'Table';
+          if (upper.includes('DATASET')) return 'Dataset';
+          if (upper.includes('BUCKET')) return 'Bucket';
+          if (upper.includes('PRODUCT')) return 'Product';
+          if (upper.includes('VIEW')) return 'View';
+          if (upper.includes('ROUTINE')) return 'Routine';
+          if (upper.includes('MODEL')) return 'Model';
+
+          // 3. Fallback: split by _ or - and get last part
+          display = display.split(/[_-]/).pop();
           return display.charAt(0).toUpperCase() + display.slice(1).toLowerCase();
         })(),
 
