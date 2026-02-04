@@ -151,7 +151,8 @@ app.post('/api/v1/chat', async (req, res) => {
     const isDataProduct = context.isDataProduct === true;
 
     // If we can't extract BigQuery reference, fall back to metadata-only mode
-    if (!projectId || !datasetId || !tableId) {
+    // UNLESS it is a Data Product (multi-table), which is handled later
+    if ((!projectId || !datasetId || !tableId) && !isDataProduct) {
       // Fallback: Use Vertex AI for non-BigQuery tables or when FQN is not available
       const vertex_ai = new VertexAI({
         project: PROJECT_ID,
