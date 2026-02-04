@@ -18,7 +18,7 @@ const axios = require('axios');
 console.log('[STARTUP] Loading custom modules...');
 const authMiddleware = require('./middlewares/authMiddleware');
 const { querySampleFromBigQuery } = require('./utility');
-const { sendAccessRequestEmail, sendFeedbackEmail } = require('./services/emailService');
+const { sendAccessRequestEmail, sendApprovalEmail, sendRejectionEmail, sendFeedbackEmail } = require('./services/emailService');
 const { createAccessRequest, getAccessRequests, updateAccessRequestStatus, getAccessRequestById } = require('./services/accessRequestService');
 const { grantIamAccess, revokeIamAccess, getIamBindings, verifyUserAccess } = require('./services/gcpIamService');
 const adminService = require('./services/adminService');
@@ -2110,12 +2110,9 @@ app.post('/api/v1/send-feedback', async (req, res) => {
       timestamp: new Date().toISOString()
     });
 
-    const accessToken = req.headers.authorization?.split(' ')[1]; // Expect
-
     // Send feedback email
     console.log('About to send feedback email...');
     const emailResult = await sendFeedbackEmail(
-      accessToken,
       message || '',
       requesterEmail,
       projectId,
@@ -3276,25 +3273,18 @@ app.post('/api/v1/access-request/update', async (req, res) => {
 
     // --- SEND EMAIL NOTIFICATION (non-blocking) ---
     try {
-      const requesterEmail = originalRequest.requesterEmail || '';
-      const assetName = originalRequest.assetName || originalRequest.linkedResource || 'Unknown Asset';
-      const statusMessage = status === 'APPROVED'
-        ? `Your access request for "${assetName}" has been approved.${iamGranted ? ' BigQuery READER access has been granted.' : ''}`
-        : `Your access request for "${assetName}" has been rejected.${adminNote ? ' Reason: ' + adminNote : ''}`;
+      const reqEmail = originalRequest.requesterEmail || '';
+      const asset = originalRequest.assetName || originalRequest.linkedResource || 'Unknown Asset';
 
-      if (requesterEmail) {
-        await sendAccessRequestEmail(
-          assetName,
-          statusMessage,
-          requesterEmail,
-          PROJECT_ID,
-          [reviewerEmail]
-        ).catch(emailErr => {
-          console.warn('[UPDATE] Email notification failed (non-blocking):', emailErr.message);
-        });
+      if (reqEmail) {
+        if (status === 'APPROVED') {
+          await sendApprovalEmail(asset, reqEmail, PROJECT_ID, adminNote, reviewerEmail);
+        } else {
+          await sendRejectionEmail(asset, reqEmail, PROJECT_ID, adminNote, reviewerEmail);
+        }
       }
     } catch (emailError) {
-      console.warn('[UPDATE] Email sending failed (non-blocking):', emailError.message);
+      console.warn('[UPDATE] Email notification failed (non-blocking):', emailError.message);
     }
 
     console.log('[UPDATE] Success.');
