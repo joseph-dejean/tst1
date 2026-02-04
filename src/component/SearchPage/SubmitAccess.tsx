@@ -124,8 +124,12 @@ const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName,
     try {
       console.log('Final contact emails for submission:', contactEmails);
 
+      // Extract full resource path from entry for IAM provisioning
+      const linkedResource = entry?.fullyQualifiedName || entry?.entrySource?.resource || '';
+
       const response = await axios.post(`${URLS.API_URL}${URLS.ACCESS_REQUEST}`, {
         assetName,
+        linkedResource,
         message,
         requesterEmail: user.email,
         projectId: import.meta.env.VITE_GOOGLE_PROJECT_ID,

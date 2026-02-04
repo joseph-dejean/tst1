@@ -2617,10 +2617,10 @@ app.post('/api/v1/search', async (req, res) => {
             const dataset = bq.dataset(ds.dataset);
             const [metadata] = await dataset.getMetadata();
             const accessList = metadata.access || [];
+            // Only check for direct user access in Step 2. 
+            // Broad project-level roles (like projectReaders) were already checked in Step 1.
             const hasAccess = accessList.some(entry =>
-              entry.userByEmail?.toLowerCase() === userEmail.toLowerCase() ||
-              (entry.role === 'READER' && entry.specialGroup === 'projectReaders') ||
-              (entry.role === 'WRITER' && entry.specialGroup === 'projectWriters')
+              entry.userByEmail?.toLowerCase() === userEmail.toLowerCase()
             );
             datasetAccessCache.set(ds.key, hasAccess);
           } catch (dsErr) {
@@ -2889,7 +2889,7 @@ app.post('/api/v1/check-access', async (req, res) => {
 
 app.post('/api/v1/access-request', async (req, res) => {
   try {
-    const { assetName, message, requesterEmail, projectId, projectAdmin } = req.body;
+    const { assetName, linkedResource, message, requesterEmail, projectId, projectAdmin } = req.body;
 
     // Validation
     if (!assetName || typeof assetName !== 'string' || assetName.trim() === '') {
@@ -2932,6 +2932,7 @@ app.post('/api/v1/access-request', async (req, res) => {
 
     console.log('Access request received:', {
       assetName,
+      linkedResource: linkedResource || 'NOT PROVIDED',
       message: message ? 'Message provided' : 'No message',
       requesterEmail,
       projectId,
@@ -2947,6 +2948,7 @@ app.post('/api/v1/access-request', async (req, res) => {
     const requestData = {
       id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       assetName,
+      linkedResource: linkedResource || '', // Full resource path for IAM provisioning
       message: message || '',
       requesterEmail,
       projectId,
