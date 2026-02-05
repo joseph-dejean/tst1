@@ -207,7 +207,9 @@ app.post('/api/v1/chat', async (req, res) => {
 
     // Use Conversational Analytics API with inline context for BigQuery tables
     const projectId_env = PROJECT_ID;
-    const location = process.env.GCP_LOCATION || 'europe-west1';
+    // CA API requires a specific region (not multi-region like 'us' or 'eu'), default to us-central1
+    const rawLocation = process.env.GCP_LOCATION || 'us-central1';
+    const location = rawLocation.includes('-') ? rawLocation : 'us-central1';
 
     if (!projectId_env) {
       console.error('[CHAT] CRITICAL: No project ID found in environment variables!');
@@ -343,7 +345,8 @@ app.post('/api/v1/chat', async (req, res) => {
     const adcAuth = new AdcGoogleAuth();
     const adcClient = await adcAuth.getClient();
     const adcToken = (await adcClient.getAccessToken()).token;
-    console.log('Using ADC service account token for CA API call');
+    const adcEmail = adcClient.email || 'unknown';
+    console.log(`Using ADC service account token for CA API call (SA: ${adcEmail}, location: ${location})`);
 
     // Force Inline Context for stability (bypassing Data Agent creation to avoid permission issues)
     chatPayload = {
