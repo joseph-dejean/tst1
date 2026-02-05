@@ -24,6 +24,7 @@ const { grantIamAccess, revokeIamAccess, getIamBindings, verifyUserAccess } = re
 const adminService = require('./services/adminService');
 const grantedAccessService = require('./services/grantedAccessService');
 const notificationService = require('./services/notificationService');
+const datasetRelationshipService = require('./services/datasetRelationshipService');
 const { BigQuery } = require('@google-cloud/bigquery');
 console.log('[STARTUP] All modules loaded successfully');
 
@@ -3108,6 +3109,209 @@ app.get('/api/v1/lineage', async (req, res) => {
   }
 });
 
+
+/**
+ * GET /api/v1/dataset-relationships
+ * Get inferred relationships between tables in a dataset.
+ * Uses schema analysis to detect FK-like columns and caches results in Firestore.
+ *
+ * Query params:
+ * - project: GCP project ID (required)
+ * - dataset: BigQuery dataset ID (required)
+ * - refresh: Set to 'true' to force cache refresh
+ */
+app.get('/api/v1/dataset-relationships', async (req, res) => {
+  try {
+    const { project, dataset, refresh } = req.query;
+
+    if (!project || !dataset) {
+      return res.status(400).json({
+        error: 'Missing required parameters',
+        required: ['project', 'dataset']
+      });
+    }
+
+    console.log(`[RELATIONSHIPS] Fetching relationships for ${project}.${dataset}`);
+
+    // Check cache first (unless refresh requested)
+    if (refresh !== 'true') {
+      const cached = await datasetRelationshipService.getCachedRelationships(project, dataset);
+      if (cached) {
+        return res.json({
+          relationships: cached,
+          source: 'cache',
+          project,
+          dataset
+        });
+      }
+    }
+
+    // Fetch all tables in the dataset using Data Catalog search
+    console.log(`[RELATIONSHIPS] Cache miss, fetching tables from Data Catalog...`);
+
+    const catalogClient = new CatalogServiceClient();
+    const location = 'global';
+    const parent = `projects/${PROJECT_ID}/locations/${location}`;
+
+    // Search for all tables in this dataset
+    const searchQuery = `system=bigquery type=TABLE parent:${project}.${dataset}`;
+
+    const [searchResults] = await catalogClient.searchCatalog({
+      scope: {
+        includeProjectIds: [project, PROJECT_ID],
+        includeGcpPublicDatasets: false
+      },
+      query: searchQuery,
+      pageSize: 100
+    });
+
+    console.log(`[RELATIONSHIPS] Found ${searchResults.length} tables in ${project}.${dataset}`);
+
+    if (!searchResults || searchResults.length === 0) {
+      return res.json({
+        relationships: [],
+        source: 'inferred',
+        message: 'No tables found in dataset',
+        project,
+        dataset
+      });
+    }
+
+    // Fetch schema for each table
+    const tables = [];
+    for (const result of searchResults) {
+      try {
+        // Extract table name from FQN like "bigquery:project.dataset.table"
+        const fqn = result.fullyQualifiedName || '';
+        const tableName = fqn.split('.').pop() || result.displayName || 'unknown';
+
+        // Get entry details to extract schema
+        const entryName = result.relativeResourceName;
+        if (entryName) {
+          const [entry] = await catalogClient.getEntry({ name: entryName });
+
+          // Extract schema from entry aspects
+          let schema = [];
+          if (entry.aspects) {
+            const aspectKeys = Object.keys(entry.aspects);
+            const schemaKey = aspectKeys.find(k => k.includes('schema') || k.includes('Schema'));
+
+            if (schemaKey) {
+              const schemaAspect = entry.aspects[schemaKey];
+              if (schemaAspect?.data?.fields?.fields?.listValue?.values) {
+                const fields = schemaAspect.data.fields.fields.listValue.values;
+                schema = fields.map(f => {
+                  if (f.structValue?.fields) {
+                    return {
+                      name: f.structValue.fields.name?.stringValue || 'unknown',
+                      type: f.structValue.fields.dataType?.stringValue || 'unknown'
+                    };
+                  }
+                  return { name: 'unknown', type: 'unknown' };
+                }).filter(f => f.name !== 'unknown');
+              }
+            }
+          }
+
+          tables.push({
+            name: tableName,
+            fullyQualifiedName: fqn,
+            schema
+          });
+        }
+      } catch (entryErr) {
+        console.warn(`[RELATIONSHIPS] Failed to get schema for table:`, entryErr.message);
+      }
+    }
+
+    console.log(`[RELATIONSHIPS] Got schemas for ${tables.length} tables`);
+
+    // Infer relationships from schemas
+    const relationships = datasetRelationshipService.inferRelationships(tables);
+
+    console.log(`[RELATIONSHIPS] Inferred ${relationships.length} relationships`);
+
+    // Cache the results
+    await datasetRelationshipService.cacheRelationships(project, dataset, relationships, tables);
+
+    res.json({
+      relationships,
+      source: 'inferred',
+      tableCount: tables.length,
+      project,
+      dataset
+    });
+
+  } catch (error) {
+    console.error('[RELATIONSHIPS] Error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch dataset relationships',
+      details: error.message
+    });
+  }
+});
+
+
+/**
+ * POST /api/v1/dataset-relationships/manual
+ * Add a manual relationship between tables
+ */
+app.post('/api/v1/dataset-relationships/manual', async (req, res) => {
+  try {
+    const { project, dataset, table1, table2, relationship } = req.body;
+
+    if (!project || !dataset || !table1 || !table2) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        required: ['project', 'dataset', 'table1', 'table2']
+      });
+    }
+
+    const newRelationship = {
+      table1,
+      table2,
+      relationship: relationship || 'Related To'
+    };
+
+    const relationships = await datasetRelationshipService.addManualRelationship(
+      project,
+      dataset,
+      newRelationship
+    );
+
+    res.json({
+      success: true,
+      relationships,
+      added: newRelationship
+    });
+
+  } catch (error) {
+    console.error('[RELATIONSHIPS] Manual add error:', error);
+    res.status(500).json({ error: 'Failed to add relationship', details: error.message });
+  }
+});
+
+
+/**
+ * DELETE /api/v1/dataset-relationships/cache
+ * Invalidate the relationship cache for a dataset
+ */
+app.delete('/api/v1/dataset-relationships/cache', async (req, res) => {
+  try {
+    const { project, dataset } = req.query;
+
+    if (!project || !dataset) {
+      return res.status(400).json({ error: 'Missing project or dataset' });
+    }
+
+    await datasetRelationshipService.invalidateCache(project, dataset);
+    res.json({ success: true, message: `Cache invalidated for ${project}.${dataset}` });
+
+  } catch (error) {
+    console.error('[RELATIONSHIPS] Cache invalidate error:', error);
+    res.status(500).json({ error: 'Failed to invalidate cache', details: error.message });
+  }
+});
 
 
 /**

@@ -50,6 +50,7 @@ export const URLS = {
     GET_ASPECT_TYPES: '/aspect-types',
     UPDATE_ENTRY_ASPECTS: '/update-entry-aspects',
     LINEAGE_SEARCH_COLUMN_LEVEL: '/lineage-column-level',
+    DATASET_RELATIONSHIPS: '/dataset-relationships',
 
     // Admin Role Management
     ADMIN_CHECK: '/admin/check',
