@@ -216,11 +216,13 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
       // Check if this is a Data Product or if multiple tables are selected (including related tables)
       const activeTables = effectiveTables || tables;
       const hasMultipleTables = activeTables && activeTables.length > 1;
-      const isDataProduct = entry?._isDataProduct || entry?.entryType === 'DATA_PRODUCT' || hasMultipleTables;
+      // Global Chat mode: tables provided without entry — always use multi-table path
+      const isGlobalChat = !entry && activeTables && activeTables.length > 0;
+      const isDataProduct = entry?._isDataProduct || entry?.entryType === 'DATA_PRODUCT' || hasMultipleTables || isGlobalChat;
 
       let contextData: any;
 
-      if (isDataProduct || hasMultipleTables) {
+      if (isDataProduct || hasMultipleTables || isGlobalChat) {
         // Prepare context for all tables
         // Use effectiveTables (which includes selected related tables) or tables prop
         const tableList = activeTables || (entry?._dataProduct?.tables) || (entry ? [entry] : []);
@@ -240,13 +242,15 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
         // For multi-table chat, use the first table as the primary context
         const primaryTable = tableList[0];
         const primaryName = primaryTable.entrySource?.displayName || primaryTable.displayName || primaryTable.name?.split('/').pop() || 'Selected Tables';
+        // Use the first table's FQN when entry is not available (Global Chat mode)
+        const primaryFqn = entry?.fullyQualifiedName || entry?.name || primaryTable.fullyQualifiedName || primaryTable.name || '';
 
         contextData = {
           name: hasMultipleTables ? `${primaryName} + ${tableList.length - 1} related tables` : primaryName,
           description: entry?.entrySource?.description || entry?.description || "Multi-table conversation",
           isDataProduct: true, // Enable multi-table handling in backend
           tables: tablesContext,
-          fullyQualifiedName: entry?.fullyQualifiedName || entry?.name || '',
+          fullyQualifiedName: primaryFqn,
           entryType: isDataProduct ? 'DATA_PRODUCT' : 'MULTI_TABLE',
           conversationHistory: conversationHistory
         };
