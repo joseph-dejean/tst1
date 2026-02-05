@@ -197,11 +197,15 @@ app.post('/api/v1/chat', async (req, res) => {
         `;
       }
 
-      const result = await generativeModel.generateContent(prompt);
-      const response = result.response;
-      const text = response.candidates[0].content.parts[0].text;
-
-      return res.json({ reply: text });
+      try {
+        const result = await generativeModel.generateContent(prompt);
+        const response = result.response;
+        const text = response.candidates[0].content.parts[0].text;
+        return res.json({ reply: text });
+      } catch (vertexErr) {
+        console.error('Vertex AI generateContent error:', vertexErr.message || vertexErr);
+        return res.json({ reply: "I'm sorry, I couldn't process your question. The AI service returned an unexpected response. Please try again." });
+      }
     }
 
     // Use Conversational Analytics API with inline context for BigQuery tables

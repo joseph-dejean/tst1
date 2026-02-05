@@ -40,7 +40,7 @@ const TableSelector: React.FC<{ onSelect: (entry: any) => void; user: any }> = (
                 const response = await axios.post(
                     `${URLS.API_URL}${URLS.AI_SEARCH}`,
                     { query: searchQuery, type: 'table' },
-                    { headers: { Authorization: `Bearer ${user.token}` } }
+                    { headers: { Authorization: `Bearer ${user.token}`, 'x-user-email': user.email || '' } }
                 );
                 setSearchResults(response.data.results || []);
                 setSearchIntent(response.data.intent || null);
@@ -49,7 +49,7 @@ const TableSelector: React.FC<{ onSelect: (entry: any) => void; user: any }> = (
                 const response = await axios.post(
                     `${URLS.API_URL}${URLS.SEARCH}`,
                     { query: searchQuery },
-                    { headers: { Authorization: `Bearer ${user.token}` } }
+                    { headers: { Authorization: `Bearer ${user.token}`, 'x-user-email': user.email || '' } }
                 );
                 // Filter to show only tables (BigQuery tables, views)
                 const rawData = response.data?.data || response.data?.results || response.data || [];
@@ -302,7 +302,7 @@ const ChatPage: React.FC = () => {
                 const response = await axios.post(
                     `${URLS.API_URL}${URLS.SEARCH}`,
                     { query: `${project}.${dataset}` },
-                    { headers: { Authorization: `Bearer ${user.token}` } }
+                    { headers: { Authorization: `Bearer ${user.token}`, 'x-user-email': user.email || '' } }
                 );
 
                 // Filter results to get only tables from the same dataset, excluding the current table

@@ -134,7 +134,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
           query: datasetPath,
           pageSize: 50
         }, {
-          headers: { Authorization: `Bearer ${user.token}` }
+          headers: { Authorization: `Bearer ${user.token}`, 'x-user-email': user.email || '' }
         });
 
         // Filter to only tables and exclude current entry
@@ -278,8 +278,18 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
         }
 
         // Format schema for better AI understanding
+        // Handle Dataplex protobuf structure: field.structValue.fields.{name/dataType}.stringValue
         const formattedSchema = schema.map((field: any) => {
           if (typeof field === 'string') return field;
+          // Protobuf structure from Dataplex API
+          if (field.structValue?.fields) {
+            return {
+              name: field.structValue.fields.name?.stringValue || 'unknown',
+              type: field.structValue.fields.dataType?.stringValue || 'unknown',
+              description: field.structValue.fields.description?.stringValue || ''
+            };
+          }
+          // Fallback for other formats
           return {
             name: field.name || field.stringValue || field.displayName || 'unknown',
             type: field.type || field.dataType || 'unknown',
