@@ -95,8 +95,8 @@ const { getOrCreateDataAgent } = require('./services/dataAgentService');
  * }
  */
 app.post('/api/v1/chat', async (req, res) => {
+  const { message, context } = req.body;
   try {
-    const { message, context } = req.body;
     // Extract user's access token - this ensures queries run with USER's permissions
     const userAccessToken = req.headers.authorization?.split(' ')[1];
 
@@ -153,9 +153,11 @@ app.post('/api/v1/chat', async (req, res) => {
     // If we can't extract BigQuery reference, fall back to metadata-only mode
     if (!projectId || !datasetId || !tableId) {
       // Fallback: Use Vertex AI for non-BigQuery tables or when FQN is not available
+      // Vertex AI requires a specific region (not multi-region like 'us'), default to us-central1
+      const vertexLocation = (process.env.GCP_LOCATION && process.env.GCP_LOCATION.includes('-')) ? process.env.GCP_LOCATION : 'us-central1';
       const vertex_ai = new VertexAI({
         project: PROJECT_ID,
-        location: process.env.GCP_LOCATION || 'us-central1'
+        location: vertexLocation
       });
       const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
 
@@ -497,9 +499,11 @@ app.post('/api/v1/chat', async (req, res) => {
     // This ensures the user always gets an answer.
     try {
       console.log('Attempting fallback to Gemini 1.5 Flash...');
+      // Vertex AI requires a specific region (not multi-region like 'us'), default to us-central1
+      const fallbackLocation = (process.env.GCP_LOCATION && process.env.GCP_LOCATION.includes('-')) ? process.env.GCP_LOCATION : 'us-central1';
       const fallbackVertex = new VertexAI({
         project: PROJECT_ID,
-        location: process.env.GCP_LOCATION || 'us-central1'
+        location: fallbackLocation
       });
       const fallbackModel = fallbackVertex.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
 
