@@ -18,6 +18,7 @@ export interface GrantedAccess {
   id: string;
   userEmail: string;
   assetName: string;
+  assetType?: string;
   gcpProjectId: string;
   role: string;
   grantedAt: string;
@@ -31,6 +32,7 @@ export interface GrantedAccess {
 export interface AccessRequest {
   id: string;
   assetName: string;
+  assetType?: string;
   message: string;
   requesterEmail: string;
   projectId: string;

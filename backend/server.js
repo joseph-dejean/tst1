@@ -3209,7 +3209,7 @@ app.post('/api/v1/check-access', async (req, res) => {
 
 app.post('/api/v1/access-request', async (req, res) => {
   try {
-    const { assetName, linkedResource, message, requesterEmail, projectId, projectAdmin } = req.body;
+    const { assetName, linkedResource, message, requesterEmail, projectId, projectAdmin, assetType } = req.body;
 
     // Validation
     if (!assetName || typeof assetName !== 'string' || assetName.trim() === '') {
@@ -3268,6 +3268,7 @@ app.post('/api/v1/access-request', async (req, res) => {
     const requestData = {
       id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       assetName,
+      assetType: assetType || '',
       linkedResource: linkedResource || '', // Full resource path for IAM provisioning
       message: message || '',
       requesterEmail,
@@ -3312,7 +3313,8 @@ app.post('/api/v1/access-request', async (req, res) => {
       message || '',
       requesterEmail,
       projectId,
-      projectAdmin || []
+      projectAdmin || [],
+      assetType || ''
     );
 
     console.log('Email result:', emailResult);

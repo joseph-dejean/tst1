@@ -127,9 +127,13 @@ const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName,
       // Extract full resource path from entry for IAM provisioning
       const linkedResource = entry?.fullyQualifiedName || entry?.entrySource?.resource || '';
 
+      // Extract asset type from entry (e.g. "TABLE", "VIEW", "DATA_PRODUCT", etc.)
+      const assetType = entry?.entryType?.split('/')?.pop() || entry?.entryType || '';
+
       const response = await axios.post(`${URLS.API_URL}${URLS.ACCESS_REQUEST}`, {
         assetName,
         linkedResource,
+        assetType,
         message,
         requesterEmail: user.email,
         projectId: import.meta.env.VITE_GOOGLE_PROJECT_ID,

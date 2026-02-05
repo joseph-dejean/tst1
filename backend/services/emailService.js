@@ -73,7 +73,7 @@ const formatDate = () => new Date().toLocaleDateString('en-US', {
 /**
  * Template: New access request (sent to admins/data owners)
  */
-const createNewRequestEmail = (assetName, message, requesterEmail, projectId) => ({
+const createNewRequestEmail = (assetName, message, requesterEmail, projectId, assetType) => ({
   subject: `New Access Request: ${assetName} - ${projectId}`,
   html: `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${emailStyles}</style></head><body>
     <div class="email-container">
@@ -82,6 +82,7 @@ const createNewRequestEmail = (assetName, message, requesterEmail, projectId) =>
         <div class="section-title">Request Details</div>
         <div class="info-grid">
           <div class="info-item"><div class="info-label">Asset Name</div><div class="info-value">${assetName}</div></div>
+          <div class="info-item"><div class="info-label">Asset Type</div><div class="info-value">${assetType || 'Unknown'}</div></div>
           <div class="info-item"><div class="info-label">Project ID</div><div class="info-value">${projectId}</div></div>
           <div class="info-item"><div class="info-label">Requester</div><div class="info-value">${requesterEmail}</div></div>
           <div class="info-item"><div class="info-label">Request Date</div><div class="info-value">${formatDate()}</div></div>
@@ -93,7 +94,7 @@ const createNewRequestEmail = (assetName, message, requesterEmail, projectId) =>
       </div>
       <div class="actions">
         ${getAppUrl() ? `<a href="${getAppUrl()}/admin" class="btn btn-primary">Review in App</a>` : ''}
-        <a href="https://console.cloud.google.com/iam-admin/iam?project=${projectId}" class="btn btn-secondary">Open IAM Console</a>
+        <a href="https://new-version-tst-54254020796.europe-west1.run.app" class="btn btn-secondary">Go to Dataplex UI</a>
       </div>
       <div class="footer"><p>This is an automated notification from Dataplex Business Interface.</p></div>
     </div></body></html>`
@@ -218,7 +219,7 @@ const sendEmail = async (to, subject, html) => {
 /**
  * Send new access request notification (to admins/data owners)
  */
-const sendAccessRequestEmail = async (assetName, message, requesterEmail, projectId, projectAdmin = []) => {
+const sendAccessRequestEmail = async (assetName, message, requesterEmail, projectId, projectAdmin = [], assetType = '') => {
   let toEmails = (projectAdmin || []).filter(Boolean);
   if (toEmails.length === 0) {
     const fallback = process.env.VITE_SUPPORT_EMAIL || process.env.VITE_ADMIN_EMAIL;
@@ -229,7 +230,7 @@ const sendAccessRequestEmail = async (assetName, message, requesterEmail, projec
     return { success: false, error: 'No recipients' };
   }
 
-  const email = createNewRequestEmail(assetName, message, requesterEmail, projectId);
+  const email = createNewRequestEmail(assetName, message, requesterEmail, projectId, assetType);
   return sendEmail(toEmails, email.subject, email.html);
 };
 

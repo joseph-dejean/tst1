@@ -381,6 +381,7 @@ const AdminAccessManagement = () => {
                     />
                   </TableCell>
                   <TableCell><strong>Asset</strong></TableCell>
+                  <TableCell><strong>Asset Type</strong></TableCell>
                   <TableCell><strong>Requester</strong></TableCell>
                   <TableCell><strong>Project</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
@@ -391,7 +392,7 @@ const AdminAccessManagement = () => {
               <TableBody>
                 {filteredRequests.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">No access requests found</TableCell>
+                    <TableCell colSpan={8} align="center">No access requests found</TableCell>
                   </TableRow>
                 ) : (
                   filteredRequests.map((request) => (
@@ -410,6 +411,13 @@ const AdminAccessManagement = () => {
                             {request.assetName?.split('/').pop() || request.assetName}
                           </Typography>
                         </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        {request.assetType ? (
+                          <Chip label={request.assetType} size="small" variant="outlined" />
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">-</Typography>
+                        )}
                       </TableCell>
                       <TableCell>{request.requesterEmail}</TableCell>
                       <TableCell>{request.projectId || request.gcpProjectId}</TableCell>
@@ -448,6 +456,7 @@ const AdminAccessManagement = () => {
                 <TableRow sx={{ backgroundColor: '#F8FAFD' }}>
                   <TableCell><strong>User</strong></TableCell>
                   <TableCell><strong>Asset</strong></TableCell>
+                  <TableCell><strong>Asset Type</strong></TableCell>
                   <TableCell><strong>Project</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
                   <TableCell><strong>Granted</strong></TableCell>
@@ -458,7 +467,7 @@ const AdminAccessManagement = () => {
               <TableBody>
                 {grantedAccesses.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">No active accesses found</TableCell>
+                    <TableCell colSpan={8} align="center">No active accesses found</TableCell>
                   </TableRow>
                 ) : (
                   grantedAccesses.map((access) => (
@@ -470,6 +479,13 @@ const AdminAccessManagement = () => {
                             {access.assetName?.split('/').pop() || access.assetName}
                           </Typography>
                         </Tooltip>
+                      </TableCell>
+                      <TableCell>
+                        {access.assetType ? (
+                          <Chip label={access.assetType} size="small" variant="outlined" />
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">-</Typography>
+                        )}
                       </TableCell>
                       <TableCell>{access.gcpProjectId}</TableCell>
                       <TableCell>{getStatusChip(access.status)}</TableCell>

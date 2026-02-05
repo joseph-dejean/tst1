@@ -27,6 +27,7 @@ import { URLS } from '../../constants/urls';
 interface AccessRequest {
   id: string;
   assetName: string;
+  assetType?: string;
   message: string;
   requesterEmail: string;
   projectId: string;
@@ -245,6 +246,7 @@ const AccessRequestsDashboard: React.FC = () => {
               <TableHead>
                 <TableRow sx={{ backgroundColor: '#F8FAFD' }}>
                   <TableCell><strong>Asset Name</strong></TableCell>
+                  <TableCell><strong>Asset Type</strong></TableCell>
                   <TableCell><strong>Requester</strong></TableCell>
                   <TableCell><strong>Project</strong></TableCell>
                   <TableCell><strong>Role</strong></TableCell>
@@ -262,6 +264,13 @@ const AccessRequestsDashboard: React.FC = () => {
                     <TableCell>
                       <div style={{ fontWeight: 500 }}>{request.assetName}</div>
                       <div style={{ fontSize: '0.75rem', color: '#666' }}>{request.projectId}</div>
+                    </TableCell>
+                    <TableCell>
+                      {request.assetType ? (
+                        <Chip label={request.assetType} size="small" variant="outlined" />
+                      ) : (
+                        <span style={{ color: '#999' }}>-</span>
+                      )}
                     </TableCell>
                     <TableCell>{request.requesterEmail}</TableCell>
                     <TableCell>{request.projectId}</TableCell>
@@ -290,24 +299,22 @@ const AccessRequestsDashboard: React.FC = () => {
                         {request.status === 'pending' ? (
                           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                             {/* Step 1: Open GCP Link */}
-                            {request.projectId && (
-                              <a
-                                href={`https://console.cloud.google.com/iam-admin/iam?project=${request.projectId}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{
-                                  fontSize: '0.75rem',
-                                  color: '#1976d2',
-                                  textDecoration: 'none',
-                                  fontWeight: 'bold',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '4px'
-                                }}
-                              >
-                                Open GCP Console ↗
-                              </a>
-                            )}
+                            <a
+                              href="https://new-version-tst-54254020796.europe-west1.run.app"
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                fontSize: '0.75rem',
+                                color: '#1976d2',
+                                textDecoration: 'none',
+                                fontWeight: 'bold',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              Go to Dataplex UI ↗
+                            </a>
 
                             {/* Step 2: Action Buttons */}
                             <Box sx={{ display: 'flex', gap: 1 }}>
