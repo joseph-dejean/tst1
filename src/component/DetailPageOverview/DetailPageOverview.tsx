@@ -159,22 +159,31 @@ const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTa
     const [filteredSampleData, setFilteredSampleData] = useState<any[]>([]);
     const [lineageRelations, setLineageRelations] = useState<Relationship[]>([]);
 
-    // Fetch Lineage Data
+    // Fetch Dataset Relationships (inferred from schema)
     useEffect(() => {
-        const fetchLineage = async () => {
+        const fetchRelationships = async () => {
             if (!entry?.fullyQualifiedName) return;
             try {
-                const response = await axios.get(`${URLS.API_URL}${URLS.LINEAGE_SEARCH}`, {
-                    params: { fqn: entry.fullyQualifiedName, depth: 3 }
+                // Extract project and dataset from FQN like "bigquery:project.dataset.table"
+                const fqn = entry.fullyQualifiedName.replace('bigquery:', '');
+                const parts = fqn.split('.');
+                if (parts.length < 2) return;
+
+                const project = parts[0];
+                const dataset = parts[1];
+
+                // Use new dataset-relationships endpoint (inferred from schema, no lineage permission needed)
+                const response = await axios.get(`${URLS.API_URL}${URLS.DATASET_RELATIONSHIPS}`, {
+                    params: { project, dataset }
                 });
                 if (response.data && response.data.relationships) {
                     setLineageRelations(response.data.relationships);
                 }
             } catch (err) {
-                console.warn('Failed to fetch lineage:', err);
+                console.warn('Failed to fetch dataset relationships:', err);
             }
         };
-        fetchLineage();
+        fetchRelationships();
     }, [entry?.fullyQualifiedName]);
 
     // Helper function to check if accordion has data
@@ -862,7 +871,7 @@ const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTa
                             padding: "16px"
                         }}>
                             <Typography variant="heading2Medium" sx={{ mb: 2, display: 'block', textTransform: 'capitalize', fontSize: '18px', fontWeight: 500 }}>
-                                Data Lineage (Relationships)
+                                Table Relationships
                             </Typography>
                             <RelationshipGraph relationships={lineageRelations} height={400} />
                         </Box>
