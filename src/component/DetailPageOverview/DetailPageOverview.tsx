@@ -159,7 +159,6 @@ const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTa
     const [filteredSampleData, setFilteredSampleData] = useState<any[]>([]);
     const [lineageRelations, setLineageRelations] = useState<Relationship[]>([]);
     const [relationshipsLoading, setRelationshipsLoading] = useState(false);
-    const [relationshipsFetched, setRelationshipsFetched] = useState(false);
 
     // Fetch Dataset Relationships (inferred from schema)
     useEffect(() => {
@@ -186,10 +185,8 @@ const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTa
                 if (response.data && response.data.relationships) {
                     setLineageRelations(response.data.relationships);
                 }
-                setRelationshipsFetched(true);
             } catch (err) {
                 console.warn('Failed to fetch dataset relationships:', err);
-                setRelationshipsFetched(true);
             } finally {
                 setRelationshipsLoading(false);
             }
