@@ -343,28 +343,15 @@ app.post('/api/v1/chat', async (req, res) => {
     const adcToken = (await adcClient.getAccessToken()).token;
     console.log('Using ADC service account token for CA API call');
 
-    const agentName = await getOrCreateDataAgent(tableReferences, systemInstruction);
-
-    if (agentName) {
-      // Use data agent approach
-      chatPayload = {
-        parent: `projects/${projectId_env}/locations/${location}`,
-        messages: messages,
-        data_agent_context: {
-          data_agent: agentName
-        }
-      };
-    } else {
-      // Fall back to inline context
-      chatPayload = {
-        parent: `projects/${projectId_env}/locations/${location}`,
-        messages: messages,
-        inlineContext: {
-          datasourceReferences: bigqueryDataSource,
-          systemInstruction: systemInstruction
-        }
-      };
-    }
+    // Force Inline Context for stability (bypassing Data Agent creation to avoid permission issues)
+    chatPayload = {
+      parent: `projects/${projectId_env}/locations/${location}`,
+      messages: messages,
+      inlineContext: {
+        datasourceReferences: bigqueryDataSource,
+        systemInstruction: systemInstruction
+      }
+    };
 
     // Make request to Conversational Analytics API using ADC service account token
     const chatResponse = await axios.post(chatUrl, chatPayload, {
