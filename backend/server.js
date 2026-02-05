@@ -490,26 +490,70 @@ app.post('/api/v1/chat', async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Conversational Analytics API Error:", err);
+    console.error("Conversational Analytics API Error:", err.message);
 
-    // Decode the actual API error message from buffer
-    if (err.response && err.response.data) {
-      try {
-        const errorMsg = Buffer.from(err.response.data).toString('utf8');
-        console.error("FULL API ERROR MESSAGE:", errorMsg);
-      } catch (decodeErr) {
-        console.error("Could not decode error buffer:", decodeErr);
+    // --- FALLBACK MECHANISM ---
+    // If the specialized API fails (Auth, 404, etc.), fallback to standard Gemini 1.5 Flash
+    // This ensures the user always gets an answer.
+    try {
+      console.log('Attempting fallback to Gemini 1.5 Flash...');
+      const fallbackVertex = new VertexAI({
+        project: PROJECT_ID,
+        location: process.env.GCP_LOCATION || 'us-central1'
+      });
+      const fallbackModel = fallbackVertex.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
+
+      // Construct context for the LLM
+      let schemaContext = '';
+      if (context.tables && context.tables.length > 0) {
+        // Multi-table context
+        schemaContext = context.tables.map(t =>
+          `Table: ${t.name}\nDescription: ${t.description || ''}\nFQN: ${t.fullyQualifiedName}`
+        ).join('\n\n');
+      } else {
+        // Single table context
+        schemaContext = `Table: ${context.name}\nDescription: ${context.description}\nSchema: ${JSON.stringify(context.schema || [])}`;
       }
-    }
 
-    // Return a graceful fallback instead of crashing
-    res.status(200).json({
-      reply: "I'm sorry, but I couldn't process your request at this time. The AI service may be temporarily unavailable. Please try again later or contact your administrator if the issue persists.",
-      chart: null,
-      sql: null,
-      error: true,
-      errorDetails: err.message
-    });
+      const fallbackPrompt = `
+        You are a Data Steward assistant. The user asked a question about the following data:
+        ${schemaContext}
+
+        User Question: ${message}
+
+        Answer concisely based on the metadata provided.
+      `;
+
+      const result = await fallbackModel.generateContent(fallbackPrompt);
+      const fallbackText = result.response.candidates[0].content.parts[0].text;
+
+      console.log('Fallback successful');
+      return res.status(200).json({
+        reply: fallbackText,
+        chart: null,
+        sql: null,
+        fallback: true
+      });
+
+    } catch (fallbackErr) {
+      console.error("Fallback also failed:", fallbackErr.message);
+
+      // Original error handling if fallback fails
+      if (err.response && err.response.data) {
+        try {
+          const errorMsg = Buffer.from(err.response.data).toString('utf8');
+          console.error("FULL API ERROR MESSAGE:", errorMsg);
+        } catch (decodeErr) {
+          console.error("Could not decode error buffer:", decodeErr);
+        }
+      }
+
+      res.status(200).json({
+        reply: "I'm sorry, I encountered an error connecting to the analytics service. Please try again later.",
+        error: true,
+        details: err.message
+      });
+    }
   }
 });
 // --- END CONVERSATIONAL ANALYTICS CODE ---
