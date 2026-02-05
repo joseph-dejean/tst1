@@ -158,29 +158,40 @@ const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTa
     const [filteredSchemaEntry, setFilteredSchemaEntry] = useState<any>(null);
     const [filteredSampleData, setFilteredSampleData] = useState<any[]>([]);
     const [lineageRelations, setLineageRelations] = useState<Relationship[]>([]);
+    const [relationshipsLoading, setRelationshipsLoading] = useState(false);
+    const [relationshipsFetched, setRelationshipsFetched] = useState(false);
 
     // Fetch Dataset Relationships (inferred from schema)
     useEffect(() => {
         const fetchRelationships = async () => {
             if (!entry?.fullyQualifiedName) return;
+            setRelationshipsLoading(true);
             try {
                 // Extract project and dataset from FQN like "bigquery:project.dataset.table"
                 const fqn = entry.fullyQualifiedName.replace('bigquery:', '');
                 const parts = fqn.split('.');
-                if (parts.length < 2) return;
+                if (parts.length < 2) {
+                    setRelationshipsLoading(false);
+                    return;
+                }
 
                 const project = parts[0];
                 const dataset = parts[1];
 
                 // Use new dataset-relationships endpoint (inferred from schema, no lineage permission needed)
+                // Add refresh=true to bypass potentially stale cache
                 const response = await axios.get(`${URLS.API_URL}${URLS.DATASET_RELATIONSHIPS}`, {
-                    params: { project, dataset }
+                    params: { project, dataset, refresh: 'true' }
                 });
                 if (response.data && response.data.relationships) {
                     setLineageRelations(response.data.relationships);
                 }
+                setRelationshipsFetched(true);
             } catch (err) {
                 console.warn('Failed to fetch dataset relationships:', err);
+                setRelationshipsFetched(true);
+            } finally {
+                setRelationshipsLoading(false);
             }
         };
         fetchRelationships();
@@ -860,22 +871,35 @@ const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTa
                         </Box>
                     ) : null}
 
-                    {/* Lineage Graph Section */}
-                    {lineageRelations.length > 0 && (
-                        <Box sx={{
-                            border: "1px solid #DADCE0",
-                            borderRadius: "8px",
-                            marginTop: "10px",
-                            overflow: "hidden",
-                            backgroundColor: "#FFFFFF",
-                            padding: "16px"
-                        }}>
-                            <Typography variant="heading2Medium" sx={{ mb: 2, display: 'block', textTransform: 'capitalize', fontSize: '18px', fontWeight: 500 }}>
-                                Table Relationships
-                            </Typography>
+                    {/* Table Relationships Section */}
+                    <Box sx={{
+                        border: "1px solid #DADCE0",
+                        borderRadius: "8px",
+                        marginTop: "10px",
+                        overflow: "hidden",
+                        backgroundColor: "#FFFFFF",
+                        padding: "16px"
+                    }}>
+                        <Typography variant="heading2Medium" sx={{ mb: 2, display: 'block', textTransform: 'capitalize', fontSize: '18px', fontWeight: 500 }}>
+                            Table Relationships
+                        </Typography>
+                        {relationshipsLoading ? (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
+                                <Typography variant="body2" sx={{ color: '#5F6368' }}>Loading relationships...</Typography>
+                            </Box>
+                        ) : lineageRelations.length > 0 ? (
                             <RelationshipGraph relationships={lineageRelations} height={400} />
-                        </Box>
-                    )}
+                        ) : (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200, flexDirection: 'column', gap: 1 }}>
+                                <Typography variant="body2" sx={{ color: '#5F6368' }}>
+                                    No relationships detected in this dataset.
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: '#9AA0A6' }}>
+                                    Relationships are inferred from column names like customer_id, order_key, etc.
+                                </Typography>
+                            </Box>
+                        )}
+                    </Box>
 
                     {/* Documentation Accordion */}
                     <Box sx={{
