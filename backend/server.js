@@ -3149,14 +3149,14 @@ app.get('/api/v1/dataset-relationships', async (req, res) => {
     // Fetch all tables in the dataset using Data Catalog search
     console.log(`[RELATIONSHIPS] Cache miss, fetching tables from Data Catalog...`);
 
+    // Use DataCatalogClient for searchCatalog, CatalogServiceClient for getEntry
+    const dataCatalogClient = new DataCatalogClient();
     const catalogClient = new CatalogServiceClient();
-    const location = 'global';
-    const parent = `projects/${PROJECT_ID}/locations/${location}`;
 
     // Search for all tables in this dataset
     const searchQuery = `system=bigquery type=TABLE parent:${project}.${dataset}`;
 
-    const [searchResults] = await catalogClient.searchCatalog({
+    const [searchResults] = await dataCatalogClient.searchCatalog({
       scope: {
         includeProjectIds: [project, PROJECT_ID],
         includeGcpPublicDatasets: false
