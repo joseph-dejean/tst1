@@ -337,9 +337,12 @@ app.post('/api/v1/chat', async (req, res) => {
     // Use Data Agent for all BigQuery tables (preferred), fall back to inline context if agent creation fails
     let chatPayload;
 
-    // Use user's access token for CA API - this ensures queries run with USER's table-level permissions
-    // The user's token was extracted at the start of this endpoint from Authorization header
-    console.log('Using user access token for CA API call (user-level permissions)');
+    // Use ADC (service account) token for CA API - the user's OAuth token lacks the cloud-platform scope
+    // needed by geminidataanalytics.googleapis.com. The service account has the proper IAM roles.
+    const adcAuth = new AdcGoogleAuth();
+    const adcClient = await adcAuth.getClient();
+    const adcToken = (await adcClient.getAccessToken()).token;
+    console.log('Using ADC service account token for CA API call');
 
     const agentName = await getOrCreateDataAgent(tableReferences, systemInstruction);
 
@@ -364,10 +367,10 @@ app.post('/api/v1/chat', async (req, res) => {
       };
     }
 
-    // Make request to Conversational Analytics API using USER's token
+    // Make request to Conversational Analytics API using ADC service account token
     const chatResponse = await axios.post(chatUrl, chatPayload, {
       headers: {
-        'Authorization': `Bearer ${userAccessToken}`,
+        'Authorization': `Bearer ${adcToken}`,
         'Content-Type': 'application/json',
         'x-server-timeout': '300'
       },
