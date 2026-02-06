@@ -3146,7 +3146,7 @@ app.get('/api/v1/dataset-relationships', async (req, res) => {
     // Check cache first (unless refresh requested)
     if (refresh !== 'true') {
       const cached = await datasetRelationshipService.getCachedRelationships(project, dataset);
-      if (cached) {
+      if (cached && cached.length > 0) {
         return res.json({
           relationships: cached,
           source: 'cache',
@@ -3159,9 +3159,9 @@ app.get('/api/v1/dataset-relationships', async (req, res) => {
     // Fetch all tables in the dataset using Data Catalog search
     console.log(`[RELATIONSHIPS] Cache miss, fetching tables from Data Catalog...`);
 
-    // Use DataCatalogClient for searchCatalog, CatalogServiceClient for getEntry
+    // Use DataCatalogClient for searchCatalog, BigQuery for schemas
     const dataCatalogClient = new DataCatalogClient();
-    const catalogClient = new CatalogServiceClient();
+    const bigquery = new BigQuery({ projectId: project });
 
     // Search for all tables in this dataset
     const searchQuery = `system=bigquery type=TABLE parent:${project}.${dataset}`;
@@ -3187,7 +3187,7 @@ app.get('/api/v1/dataset-relationships', async (req, res) => {
       });
     }
 
-    // Fetch schema for each table
+    // Fetch schema for each table using BigQuery directly
     const tables = [];
     for (const result of searchResults) {
       try {
@@ -3195,42 +3195,20 @@ app.get('/api/v1/dataset-relationships', async (req, res) => {
         const fqn = result.fullyQualifiedName || '';
         const tableName = fqn.split('.').pop() || result.displayName || 'unknown';
 
-        // Get entry details to extract schema
-        const entryName = result.relativeResourceName;
-        if (entryName) {
-          const [entry] = await catalogClient.getEntry({ name: entryName });
+        // Get table schema from BigQuery
+        const [metadata] = await bigquery.dataset(dataset).table(tableName).getMetadata();
+        const schema = (metadata.schema?.fields || []).map(f => ({
+          name: f.name,
+          type: f.type
+        }));
 
-          // Extract schema from entry aspects
-          let schema = [];
-          if (entry.aspects) {
-            const aspectKeys = Object.keys(entry.aspects);
-            const schemaKey = aspectKeys.find(k => k.includes('schema') || k.includes('Schema'));
-
-            if (schemaKey) {
-              const schemaAspect = entry.aspects[schemaKey];
-              if (schemaAspect?.data?.fields?.fields?.listValue?.values) {
-                const fields = schemaAspect.data.fields.fields.listValue.values;
-                schema = fields.map(f => {
-                  if (f.structValue?.fields) {
-                    return {
-                      name: f.structValue.fields.name?.stringValue || 'unknown',
-                      type: f.structValue.fields.dataType?.stringValue || 'unknown'
-                    };
-                  }
-                  return { name: 'unknown', type: 'unknown' };
-                }).filter(f => f.name !== 'unknown');
-              }
-            }
-          }
-
-          tables.push({
-            name: tableName,
-            fullyQualifiedName: fqn,
-            schema
-          });
-        }
+        tables.push({
+          name: tableName,
+          fullyQualifiedName: fqn,
+          schema
+        });
       } catch (entryErr) {
-        console.warn(`[RELATIONSHIPS] Failed to get schema for table:`, entryErr.message);
+        console.warn(`[RELATIONSHIPS] Failed to get schema for table ${result.fullyQualifiedName}:`, entryErr.message);
       }
     }
 
