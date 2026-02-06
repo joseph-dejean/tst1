@@ -178,9 +178,8 @@ const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTa
                 const dataset = parts[1];
 
                 // Use new dataset-relationships endpoint (inferred from schema, no lineage permission needed)
-                // Add refresh=true to bypass potentially stale cache
                 const response = await axios.get(`${URLS.API_URL}${URLS.DATASET_RELATIONSHIPS}`, {
-                    params: { project, dataset, refresh: 'true' }
+                    params: { project, dataset }
                 });
                 if (response.data && response.data.relationships) {
                     setLineageRelations(response.data.relationships);
