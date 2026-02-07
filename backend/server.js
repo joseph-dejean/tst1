@@ -338,7 +338,14 @@ app.post('/api/v1/chat', async (req, res) => {
     // Prepare messages array (include conversation history if provided)
     const messages = [];
     if (context.conversationHistory && Array.isArray(context.conversationHistory)) {
-      messages.push(...context.conversationHistory);
+      // Transform history to Analytics API format (userMessage / reply)
+      context.conversationHistory.forEach(msg => {
+        if (msg.role === 'user') {
+          messages.push({ userMessage: { text: msg.content } });
+        } else if (msg.role === 'assistant') {
+          messages.push({ reply: { text: msg.content } });
+        }
+      });
     }
     messages.push({
       userMessage: {
@@ -382,6 +389,7 @@ app.post('/api/v1/chat', async (req, res) => {
     let fullResponseText = '';
     let finalChart = null;
     let finalSql = null;
+    let rawDataRows = [];
     let accumulatedJson = chatResponse.data.toString('utf-8'); // Convert buffer to string properly
 
     console.log('DEBUG_RAW_RESPONSE_LENGTH:', accumulatedJson.length);
@@ -438,6 +446,9 @@ app.post('/api/v1/chat', async (req, res) => {
                 const columns = Object.keys(rows[0]);
                 const displayLimit = 10;
 
+                // Keep raw data rows for synthesis
+                rawDataRows = rows;
+
                 // Header
                 let tableMd = `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
 
@@ -493,15 +504,59 @@ app.post('/api/v1/chat', async (req, res) => {
         "Try rephrasing your question or selecting additional related tables.";
     }
 
+    // --- GEMINI 3.0 SYNTHESIS ---
+    let synthesizedReply = fullResponseText;
+
+    // If we have data rows but sparse natural language, let Gemini explain
+    if (rawDataRows && rawDataRows.length > 0 && fullResponseText.length < 200) {
+      try {
+        console.log(`[Gemini 3] Synthesizing ${rawDataRows.length} rows of data...`);
+        const synthesisLocation = (process.env.GCP_LOCATION && process.env.GCP_LOCATION.includes('-')) ? process.env.GCP_LOCATION : 'us-central1';
+        const synthesizerVertex = new VertexAI({
+          project: PROJECT_ID,
+          location: synthesisLocation
+        });
+        const synthesizerModel = synthesizerVertex.getGenerativeModel({
+          model: 'gemini-2.0-flash',
+          generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
+        });
+
+        const synthesisPrompt = `
+          You are an expert Data Steward.
+          The user asked: "${message}"
+
+          The database executed this SQL: 
+          ${finalSql}
+
+          And returned this data (showing first 10 rows):
+          ${JSON.stringify(rawDataRows.slice(0, 10))}
+
+          Task:
+          1. Answer the user's question conversationally using this data.
+          2. Do not just output a table.
+          3. Highlight key insights, totals, or trends.
+          4. If the data is empty, explain why.
+        `;
+
+        const result = await synthesizerModel.generateContent(synthesisPrompt);
+        synthesizedReply = result.response.candidates[0].content.parts[0].text;
+        console.log('[Gemini 3] Synthesis complete');
+      } catch (synthErr) {
+        console.error('[Gemini 3] Synthesis failed:', synthErr.message);
+        // Fallback to original text if synthesis fails
+      }
+    }
+
     // Maintain conversation history
     const newHistory = [...(req.body.context?.conversationHistory || [])];
     newHistory.push({ role: 'user', content: req.body.message });
-    newHistory.push({ role: 'assistant', content: fullResponseText }); // Simplify history to just text content
+    newHistory.push({ role: 'assistant', content: synthesizedReply });
 
     res.json({
-      reply: fullResponseText,
+      reply: synthesizedReply,
       chart: finalChart,
       sql: finalSql,
+      data: rawDataRows,
       conversationHistory: newHistory
     });
 

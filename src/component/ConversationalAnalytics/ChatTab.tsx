@@ -4,6 +4,7 @@ import SendIcon from '@mui/icons-material/Send';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { VegaEmbed } from 'react-vega';
 import { URLS } from '../../constants/urls';
 import { useAuth } from '../../auth/AuthProvider';
 
@@ -60,21 +61,12 @@ interface ChatTabProps {
   tables?: any[]; // Optional list of tables for Data Products/Datasets
 }
 
-interface ChartData {
-  chartType?: string;
-  data?: any[];
-  query?: {
-    instructions?: string;
-    [key: string]: any;
-  };
-  [key: string]: any;
-}
-
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  chart?: ChartData;
+  chart?: any; // Vega-Lite spec object from API
+  data?: any[]; // Raw data rows from API
 }
 
 interface RelatedTable {
@@ -317,7 +309,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
       const assistantMsg: Message = {
         role: 'assistant',
         content: res.data.reply || 'No response received.',
-        timestamp: new Date()
+        timestamp: new Date(),
+        chart: res.data.chart || null,
+        data: res.data.data || null
       };
       setMessages(prev => [...prev, assistantMsg]);
 
@@ -432,9 +426,23 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
                     }}
                   >
                     {msg.role === 'assistant' ? (
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {msg.content}
-                      </ReactMarkdown>
+                      <>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
+
+                        {/* Render Vega-Lite Chart if present */}
+                        {msg.chart && (
+                          <Box sx={{ mt: 2, width: '100%', minHeight: 100, backgroundColor: '#fff', p: 1, borderRadius: 1, border: '1px solid #eee' }}>
+                            <Typography variant="subtitle2" sx={{ mb: 1, color: '#5F6368', fontSize: '0.75rem', fontWeight: 600 }}>
+                              Visual Analysis
+                            </Typography>
+                            <Box sx={{ width: '100%', overflow: 'auto' }}>
+                              <VegaEmbed spec={msg.chart} />
+                            </Box>
+                          </Box>
+                        )}
+                      </>
                     ) : (
                       <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
                         {msg.content}
