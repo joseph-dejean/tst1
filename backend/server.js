@@ -468,31 +468,50 @@ app.post('/api/v1/chat', async (req, res) => {
             // 2. Chart
             if (msg.systemMessage.chart) {
               const rawChart = msg.systemMessage.chart;
-              console.log('DEBUG_CHART_STRUCTURE:', JSON.stringify(rawChart, null, 2).substring(0, 500));
+              console.log('DEBUG_CHART_FULL_STRUCTURE:', JSON.stringify(rawChart, null, 2));
+              console.log('DEBUG_CHART_KEYS:', Object.keys(rawChart));
 
-              // The Google API returns chart data in a custom format.
-              // We need to extract/transform it to a proper Vega-Lite spec.
-              // Check if it's already a Vega-Lite spec (has $schema) or needs transformation
+              // The Google API returns chart data in various formats.
+              // We need to find the Vega-Lite spec which could be nested in different locations.
+
+              let vegaSpec = null;
+
+              // Check various locations for the Vega-Lite spec
               if (rawChart.$schema || rawChart.mark || rawChart.layer) {
-                // It's already a valid Vega-Lite spec
-                finalChart = rawChart;
+                // It's already a valid Vega-Lite spec at root level
+                vegaSpec = rawChart;
               } else if (rawChart.vegaLiteSpec) {
-                // The spec is nested under vegaLiteSpec
-                finalChart = rawChart.vegaLiteSpec;
+                vegaSpec = rawChart.vegaLiteSpec;
               } else if (rawChart.spec) {
-                // The spec is nested under spec
-                finalChart = rawChart.spec;
+                vegaSpec = rawChart.spec;
+              } else if (rawChart.vegaLite) {
+                vegaSpec = rawChart.vegaLite;
+              } else if (rawChart.chartSpec) {
+                vegaSpec = rawChart.chartSpec;
+              } else if (rawChart.visualization?.spec) {
+                vegaSpec = rawChart.visualization.spec;
+              } else if (rawChart.visualization?.vegaLiteSpec) {
+                vegaSpec = rawChart.visualization.vegaLiteSpec;
+              } else if (rawChart.config?.spec) {
+                vegaSpec = rawChart.config.spec;
               } else if (rawChart.data && rawChart.encoding) {
-                // It has Vega-Lite-like properties, use as-is
-                finalChart = rawChart;
-              } else {
-                // Log the full structure for debugging and skip rendering
-                console.log('DEBUG_CHART_UNKNOWN_FORMAT:', JSON.stringify(rawChart, null, 2));
-                // Don't set finalChart - we can't render this format
+                // It has Vega-Lite-like properties at root, use as-is
+                vegaSpec = rawChart;
               }
 
-              // Note: We intentionally do NOT add the query.instructions to the response text
-              // as it's an internal prompt, not useful for end users
+              if (vegaSpec) {
+                console.log('DEBUG_VEGA_SPEC_FOUND:', JSON.stringify(vegaSpec, null, 2).substring(0, 300));
+                finalChart = vegaSpec;
+              } else {
+                // Try to build a basic Vega-Lite spec from the chart data if we have query + data
+                if (rawChart.query && rawDataRows.length > 0) {
+                  console.log('DEBUG_CHART_BUILDING_FROM_DATA');
+                  // We'll let the frontend handle this case with the raw data
+                  finalChart = null; // Don't send unrecognized format
+                } else {
+                  console.log('DEBUG_CHART_UNKNOWN_FORMAT - Cannot render');
+                }
+              }
             }
 
             // 3. Data (Alternative locations)
