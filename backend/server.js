@@ -1192,6 +1192,10 @@ app.post('/api/v1/data-products', async (req, res) => {
 
     const parent = `projects/${projectId}/locations/${loc}/entryGroups/${entryGroup}`;
 
+    // Create timestamp in Protobuf format (gRPC requires this, not ISO strings)
+    const now = new Date();
+    const timestamp = { seconds: Math.floor(now.getTime() / 1000), nanos: 0 };
+
     const request = {
       parent,
       entryId,
@@ -1201,8 +1205,8 @@ app.post('/api/v1/data-products', async (req, res) => {
           displayName: displayName,
           description: description || '',
           system: 'CUSTOM',
-          createTime: new Date().toISOString(),
-          updateTime: new Date().toISOString()
+          createTime: timestamp,
+          updateTime: timestamp
         },
         aspects: {}
       }
