@@ -317,7 +317,7 @@ app.post('/api/v1/chat', async (req, res) => {
         project: PROJECT_ID,
         location: process.env.GCP_LOCATION || 'us-central1'
       });
-      const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
+      const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
       const prompt = isDataProduct
         ? `You are a helpful Data Steward assistant for Dataplex. The user is asking about Data Product: ${context.name}. ${context.description}. User Question: ${message}`
@@ -439,9 +439,30 @@ app.post('/api/v1/chat', async (req, res) => {
             if (msg.systemMessage.text) {
               const t = msg.systemMessage.text;
               if (t.textType === 'FINAL_RESPONSE') {
-                fullResponseText += t.text || t.content || '';
-              } else if (t.textType === 'THOUGHT' && t.parts && t.parts[0]?.text) {
-                fullResponseText += `\n*Thought: ${t.parts[0].text}*\n`;
+                // Handle multiple response formats from API:
+                // - t.text (string)
+                // - t.content (string)
+                // - t.parts (array of strings)
+                if (t.text) {
+                  fullResponseText += t.text;
+                } else if (t.content) {
+                  fullResponseText += t.content;
+                } else if (t.parts && Array.isArray(t.parts)) {
+                  // Parts can be strings or objects with text property
+                  t.parts.forEach(part => {
+                    if (typeof part === 'string') {
+                      fullResponseText += part;
+                    } else if (part?.text) {
+                      fullResponseText += part.text;
+                    }
+                  });
+                }
+              } else if (t.textType === 'THOUGHT' && t.parts && t.parts[0]) {
+                // Thought messages - extract text from parts
+                const thoughtText = typeof t.parts[0] === 'string' ? t.parts[0] : t.parts[0]?.text;
+                if (thoughtText) {
+                  fullResponseText += `\n*Thought: ${thoughtText}*\n`;
+                }
               }
             }
             // 2. Chart
@@ -558,7 +579,7 @@ app.post('/api/v1/chat', async (req, res) => {
           location: synthesisLocation
         });
         const synthesizerModel = synthesizerVertex.getGenerativeModel({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash',
           generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
         });
 
