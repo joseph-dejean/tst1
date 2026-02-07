@@ -170,7 +170,7 @@ app.post('/api/v1/chat', async (req, res) => {
         project: PROJECT_ID,
         location: vertexLocation
       });
-      const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
+      const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
       let prompt = '';
 
@@ -784,7 +784,7 @@ app.post('/api/v1/ai-search', async (req, res) => {
       project: projectId,
       location: process.env.GCP_LOCATION || 'us-central1'
     });
-    const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
+    const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const aiPrompt = `You are a data catalog search assistant. Given a user's natural language query, extract the key search terms and concepts that would help find relevant database tables or datasets.
 
