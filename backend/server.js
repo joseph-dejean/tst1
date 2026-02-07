@@ -335,28 +335,15 @@ app.post('/api/v1/chat', async (req, res) => {
       }
     };
 
-    // Prepare messages array (include conversation history if provided)
-    const messages = [];
-    if (context.conversationHistory && Array.isArray(context.conversationHistory)) {
-      // Transform history to Analytics API format (userMessage / reply)
-      context.conversationHistory.forEach(msg => {
-        if (msg.role === 'user') {
-          messages.push({ userMessage: { text: msg.content } });
-        } else if (msg.role === 'assistant') {
-          messages.push({ reply: { text: msg.content } });
-        }
-      });
-    }
-    messages.push({
+    // For the FIRST message, we send the full context with inline data sources
+    // For SUBSEQUENT messages, we use conversation_reference to let Google manage state
+    const messages = [{
       userMessage: {
         text: message
       }
-    });
+    }];
 
     const systemInstruction = 'You are a helpful Data Steward assistant for Dataplex. Answer questions about the data tables based on their schema and metadata. Be concise and accurate.';
-
-    // Use Data Agent for all BigQuery tables (preferred), fall back to inline context if agent creation fails
-    let chatPayload;
 
     // Use ADC (service account) token for CA API - the user's OAuth token lacks the cloud-platform scope
     // needed by geminidataanalytics.googleapis.com. The service account has the proper IAM roles.
@@ -366,15 +353,36 @@ app.post('/api/v1/chat', async (req, res) => {
     const adcEmail = adcClient.email || 'unknown';
     console.log(`Using ADC service account token for CA API call (SA: ${adcEmail}, location: ${location})`);
 
-    // Force Inline Context for stability (bypassing Data Agent creation to avoid permission issues)
-    chatPayload = {
-      parent: `projects/${projectId_env}/locations/${location}`,
-      messages: messages,
-      inlineContext: {
-        datasourceReferences: bigqueryDataSource,
-        systemInstruction: systemInstruction
-      }
-    };
+    let chatPayload;
+    const existingConversationId = context.conversationId; // From frontend state
+
+    if (existingConversationId) {
+      // --- STATEFUL MODE: Resume existing conversation ---
+      // Google stores the history, we just send the new message
+      console.log(`[Stateful] Resuming conversation: ${existingConversationId}`);
+      chatPayload = {
+        parent: `projects/${projectId_env}/locations/${location}`,
+        messages: messages, // Only the new message
+        conversationReference: {
+          conversation: `projects/${projectId_env}/locations/${location}/conversations/${existingConversationId}`,
+          inlineContext: {
+            datasourceReferences: bigqueryDataSource,
+            systemInstruction: systemInstruction
+          }
+        }
+      };
+    } else {
+      // --- FIRST MESSAGE: Create new conversation with inline context ---
+      console.log('[Stateful] Starting new conversation with inline context');
+      chatPayload = {
+        parent: `projects/${projectId_env}/locations/${location}`,
+        messages: messages,
+        inlineContext: {
+          datasourceReferences: bigqueryDataSource,
+          systemInstruction: systemInstruction
+        }
+      };
+    }
 
     // Make request to Conversational Analytics API using ADC service account token
     const chatResponse = await axios.post(chatUrl, chatPayload, {
@@ -390,6 +398,7 @@ app.post('/api/v1/chat', async (req, res) => {
     let finalChart = null;
     let finalSql = null;
     let rawDataRows = [];
+    let returnedConversationId = existingConversationId || null; // Will be updated from response
     let accumulatedJson = chatResponse.data.toString('utf-8'); // Convert buffer to string properly
 
     console.log('DEBUG_RAW_RESPONSE_LENGTH:', accumulatedJson.length);
@@ -412,6 +421,17 @@ app.post('/api/v1/chat', async (req, res) => {
 
       if (Array.isArray(parsedMessages)) {
         parsedMessages.forEach((msg, index) => {
+          // Extract conversation ID from metadata (usually in first message)
+          if (msg.metadata?.conversationName || msg.conversationName) {
+            const convName = msg.metadata?.conversationName || msg.conversationName;
+            // Format: projects/{project}/locations/{location}/conversations/{id}
+            const convParts = convName.split('/');
+            if (convParts.length >= 6) {
+              returnedConversationId = convParts[convParts.length - 1];
+              console.log(`[Stateful] Extracted conversation ID: ${returnedConversationId}`);
+            }
+          }
+
           if (msg.systemMessage) {
             console.log(`DEBUG_MSG_${index}_KEYS:`, Object.keys(msg.systemMessage)); // Log what keys exist (e.g. text, chart, data?)
 
@@ -568,17 +588,15 @@ app.post('/api/v1/chat', async (req, res) => {
       }
     }
 
-    // Maintain conversation history
-    const newHistory = [...(req.body.context?.conversationHistory || [])];
-    newHistory.push({ role: 'user', content: req.body.message });
-    newHistory.push({ role: 'assistant', content: synthesizedReply });
+    // Note: With stateful mode, Google manages the conversation history.
+    // We just need to return the conversation ID for the frontend to track.
 
     res.json({
       reply: synthesizedReply,
       chart: finalChart,
       sql: finalSql,
       data: rawDataRows,
-      conversationHistory: newHistory
+      conversationId: returnedConversationId // For stateful mode - frontend stores this
     });
 
   } catch (err) {

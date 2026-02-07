@@ -83,7 +83,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [conversationHistory, setConversationHistory] = useState<any[]>([]);
+  const [conversationId, setConversationId] = useState<string | null>(null); // For stateful conversations
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -244,7 +244,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
           tables: tablesContext,
           fullyQualifiedName: primaryFqn,
           entryType: isDataProduct ? 'DATA_PRODUCT' : 'MULTI_TABLE',
-          conversationHistory: conversationHistory
+          conversationId: conversationId // Stateful mode - Google manages history
         };
       } else {
         // For regular tables/entries, extract schema as before
@@ -288,7 +288,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
           schema: formattedSchema,
           fullyQualifiedName: entry?.fullyQualifiedName || entry?.name || '',
           entryType: entry?.entryType || entry?.entrySource?.system || 'Unknown',
-          conversationHistory: conversationHistory
+          conversationId: conversationId // Stateful mode - Google manages history
         };
       }
 
@@ -300,9 +300,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
         headers: { Authorization: `Bearer ${user?.token}` }
       });
 
-      // Update conversation history for next turn
-      if (res.data.conversationHistory) {
-        setConversationHistory(res.data.conversationHistory);
+      // Update conversation ID for stateful mode
+      if (res.data.conversationId) {
+        setConversationId(res.data.conversationId);
       }
 
       // Add assistant response to UI
@@ -334,7 +334,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ entry, tables }) => {
 
   const handleClearChat = () => {
     setMessages([]);
-    setConversationHistory([]);
+    setConversationId(null); // Reset for new conversation
     setError(null);
   };
 
