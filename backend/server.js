@@ -426,11 +426,32 @@ app.post('/api/v1/chat', async (req, res) => {
             }
             // 2. Chart
             if (msg.systemMessage.chart) {
-              finalChart = msg.systemMessage.chart;
-              // Add instruction text if present, but avoid duplication if it looks like a prompt
-              if (finalChart.query?.instructions && !fullResponseText.includes(finalChart.query.instructions)) {
-                fullResponseText += `\n\n**Visual Analysis:** ${finalChart.query.instructions}`;
+              const rawChart = msg.systemMessage.chart;
+              console.log('DEBUG_CHART_STRUCTURE:', JSON.stringify(rawChart, null, 2).substring(0, 500));
+
+              // The Google API returns chart data in a custom format.
+              // We need to extract/transform it to a proper Vega-Lite spec.
+              // Check if it's already a Vega-Lite spec (has $schema) or needs transformation
+              if (rawChart.$schema || rawChart.mark || rawChart.layer) {
+                // It's already a valid Vega-Lite spec
+                finalChart = rawChart;
+              } else if (rawChart.vegaLiteSpec) {
+                // The spec is nested under vegaLiteSpec
+                finalChart = rawChart.vegaLiteSpec;
+              } else if (rawChart.spec) {
+                // The spec is nested under spec
+                finalChart = rawChart.spec;
+              } else if (rawChart.data && rawChart.encoding) {
+                // It has Vega-Lite-like properties, use as-is
+                finalChart = rawChart;
+              } else {
+                // Log the full structure for debugging and skip rendering
+                console.log('DEBUG_CHART_UNKNOWN_FORMAT:', JSON.stringify(rawChart, null, 2));
+                // Don't set finalChart - we can't render this format
               }
+
+              // Note: We intentionally do NOT add the query.instructions to the response text
+              // as it's an internal prompt, not useful for end users
             }
 
             // 3. Data (Alternative locations)
