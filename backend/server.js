@@ -472,45 +472,81 @@ app.post('/api/v1/chat', async (req, res) => {
               console.log('DEBUG_CHART_KEYS:', Object.keys(rawChart));
 
               // The Google API returns chart data in various formats.
-              // We need to find the Vega-Lite spec which could be nested in different locations.
+              // We need to find the Vega-Lite spec OR build one from raw data.
 
               let vegaSpec = null;
 
+              // First, check if there's a result wrapper (Google's format)
+              const chartData = rawChart.result || rawChart;
+              console.log('DEBUG_CHART_DATA_KEYS:', Object.keys(chartData));
+
               // Check various locations for the Vega-Lite spec
-              if (rawChart.$schema || rawChart.mark || rawChart.layer) {
-                // It's already a valid Vega-Lite spec at root level
-                vegaSpec = rawChart;
-              } else if (rawChart.vegaLiteSpec) {
-                vegaSpec = rawChart.vegaLiteSpec;
-              } else if (rawChart.spec) {
-                vegaSpec = rawChart.spec;
-              } else if (rawChart.vegaLite) {
-                vegaSpec = rawChart.vegaLite;
-              } else if (rawChart.chartSpec) {
-                vegaSpec = rawChart.chartSpec;
-              } else if (rawChart.visualization?.spec) {
-                vegaSpec = rawChart.visualization.spec;
-              } else if (rawChart.visualization?.vegaLiteSpec) {
-                vegaSpec = rawChart.visualization.vegaLiteSpec;
-              } else if (rawChart.config?.spec) {
-                vegaSpec = rawChart.config.spec;
-              } else if (rawChart.data && rawChart.encoding) {
-                // It has Vega-Lite-like properties at root, use as-is
-                vegaSpec = rawChart;
+              if (chartData.$schema || chartData.mark || chartData.layer) {
+                // It's already a valid Vega-Lite spec
+                vegaSpec = chartData;
+              } else if (chartData.vegaLiteSpec) {
+                vegaSpec = chartData.vegaLiteSpec;
+              } else if (chartData.spec) {
+                vegaSpec = chartData.spec;
+              } else if (chartData.vegaLite) {
+                vegaSpec = chartData.vegaLite;
+              } else if (chartData.chartSpec) {
+                vegaSpec = chartData.chartSpec;
+              } else if (chartData.visualization?.spec) {
+                vegaSpec = chartData.visualization.spec;
+              } else if (chartData.visualization?.vegaLiteSpec) {
+                vegaSpec = chartData.visualization.vegaLiteSpec;
+              } else if (chartData.data && chartData.encoding) {
+                // It has Vega-Lite-like properties, use as-is
+                vegaSpec = chartData;
+              } else if (chartData.data && Array.isArray(chartData.data) && chartData.chartType) {
+                // Google returns raw data with chartType - build a Vega-Lite spec
+                console.log('DEBUG_BUILDING_VEGA_FROM_GOOGLE_DATA:', chartData.chartType);
+                const dataRows = chartData.data;
+                if (dataRows.length > 0) {
+                  const columns = Object.keys(dataRows[0]);
+                  // Assume first column is category (x), second is value (y)
+                  const xField = columns[0];
+                  const yField = columns.length > 1 ? columns[1] : columns[0];
+
+                  // Determine mark type from Google's chartType
+                  let markType = 'bar';
+                  if (chartData.chartType.toLowerCase().includes('line')) markType = 'line';
+                  else if (chartData.chartType.toLowerCase().includes('pie')) markType = 'arc';
+                  else if (chartData.chartType.toLowerCase().includes('scatter')) markType = 'point';
+                  else if (chartData.chartType.toLowerCase().includes('area')) markType = 'area';
+
+                  vegaSpec = {
+                    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+                    "data": { "values": dataRows },
+                    "mark": markType,
+                    "encoding": {
+                      "x": { "field": xField, "type": "nominal", "title": xField },
+                      "y": { "field": yField, "type": "quantitative", "title": yField }
+                    },
+                    "width": 400,
+                    "height": 300
+                  };
+
+                  // For pie charts, adjust encoding
+                  if (markType === 'arc') {
+                    vegaSpec.encoding = {
+                      "theta": { "field": yField, "type": "quantitative" },
+                      "color": { "field": xField, "type": "nominal" }
+                    };
+                  }
+
+                  console.log('DEBUG_BUILT_VEGA_SPEC:', JSON.stringify(vegaSpec, null, 2).substring(0, 300));
+                }
               }
 
               if (vegaSpec) {
                 console.log('DEBUG_VEGA_SPEC_FOUND:', JSON.stringify(vegaSpec, null, 2).substring(0, 300));
                 finalChart = vegaSpec;
               } else {
-                // Try to build a basic Vega-Lite spec from the chart data if we have query + data
-                if (rawChart.query && rawDataRows.length > 0) {
-                  console.log('DEBUG_CHART_BUILDING_FROM_DATA');
-                  // We'll let the frontend handle this case with the raw data
-                  finalChart = null; // Don't send unrecognized format
-                } else {
-                  console.log('DEBUG_CHART_UNKNOWN_FORMAT - Cannot render');
-                }
+                // Could not find or build a Vega-Lite spec
+                console.log('DEBUG_CHART_UNKNOWN_FORMAT - Cannot render, chartData keys:', Object.keys(chartData));
+                console.log('DEBUG_CHART_DATA_SAMPLE:', JSON.stringify(chartData, null, 2).substring(0, 500));
               }
             }
 
