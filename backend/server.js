@@ -689,7 +689,7 @@ app.post('/api/v1/chat', async (req, res) => {
         project: PROJECT_ID,
         location: fallbackLocation
       });
-      const fallbackModel = fallbackVertex.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
+      const fallbackModel = fallbackVertex.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
       // Construct context for the LLM
       let schemaContext = '';
