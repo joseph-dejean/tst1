@@ -104,7 +104,30 @@ const AdminAccessManagement = () => {
     return req.status?.toUpperCase() === statusFilter.toUpperCase();
   });
 
-  const filteredAccesses = grantedAccesses.filter((access) => {
+  // Build unified access history: granted (ACTIVE/REVOKED) + rejected requests
+  const rejectedAsHistory = pendingRequests
+    .filter((req) => req.status === 'REJECTED')
+    .map((req) => ({
+      id: req.id,
+      userEmail: req.requesterEmail,
+      assetName: req.assetName,
+      assetType: req.assetType || '',
+      gcpProjectId: req.gcpProjectId || req.projectId,
+      role: req.requestedRole || '',
+      grantedAt: '',
+      grantedBy: '',
+      originalRequestId: req.id,
+      status: 'REJECTED' as const,
+      revokedAt: null,
+      revokedBy: null,
+      reviewedBy: req.reviewedBy || null,
+      reviewedAt: req.reviewedAt || null,
+      submittedAt: req.submittedAt,
+    }));
+
+  const allAccessHistory = [...grantedAccesses, ...rejectedAsHistory];
+
+  const filteredAccesses = allAccessHistory.filter((access) => {
     if (accessStatusFilter === 'all') return true;
     return access.status?.toUpperCase() === accessStatusFilter.toUpperCase();
   });
@@ -463,6 +486,7 @@ const AdminAccessManagement = () => {
               <Select value={accessStatusFilter} label="Status" onChange={(e) => setAccessStatusFilter(e.target.value)}>
                 <MenuItem value="all">All</MenuItem>
                 <MenuItem value="ACTIVE">Active</MenuItem>
+                <MenuItem value="REJECTED">Rejected</MenuItem>
                 <MenuItem value="REVOKED">Revoked</MenuItem>
               </Select>
             </FormControl>
@@ -477,8 +501,8 @@ const AdminAccessManagement = () => {
                   <TableCell><strong>Asset Type</strong></TableCell>
                   <TableCell><strong>Project</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
-                  <TableCell><strong>Granted</strong></TableCell>
-                  <TableCell><strong>Granted By</strong></TableCell>
+                  <TableCell><strong>Date</strong></TableCell>
+                  <TableCell><strong>Reviewed By</strong></TableCell>
                   <TableCell><strong>Revoked</strong></TableCell>
                   <TableCell><strong>Revoked By</strong></TableCell>
                   <TableCell><strong>Actions</strong></TableCell>
@@ -491,7 +515,7 @@ const AdminAccessManagement = () => {
                   </TableRow>
                 ) : (
                   filteredAccesses.map((access) => (
-                    <TableRow key={access.id} hover sx={access.status === 'REVOKED' ? { opacity: 0.7 } : {}}>
+                    <TableRow key={access.id} hover sx={access.status !== 'ACTIVE' ? { opacity: 0.7 } : {}}>
                       <TableCell>{access.userEmail}</TableCell>
                       <TableCell>
                         <Tooltip title={access.assetName}>
@@ -509,8 +533,8 @@ const AdminAccessManagement = () => {
                       </TableCell>
                       <TableCell>{access.gcpProjectId}</TableCell>
                       <TableCell>{getStatusChip(access.status)}</TableCell>
-                      <TableCell>{formatDate(access.grantedAt)}</TableCell>
-                      <TableCell>{access.grantedBy}</TableCell>
+                      <TableCell>{formatDate(access.status === 'REJECTED' ? (access as any).submittedAt : access.grantedAt)}</TableCell>
+                      <TableCell>{access.status === 'REJECTED' ? ((access as any).reviewedBy || '-') : (access.grantedBy || '-')}</TableCell>
                       <TableCell>{access.revokedAt ? formatDate(access.revokedAt) : '-'}</TableCell>
                       <TableCell>{access.revokedBy || '-'}</TableCell>
                       <TableCell>
