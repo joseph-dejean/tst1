@@ -65,7 +65,10 @@ const GlobalSidebar: React.FC<GlobalSidebarProps> = ({ isHomePage = false }) => 
             alt="Dataplex"
             className="logo-icon-only"
           />
-          <span className="sidebar-practice-label">France Practice</span>
+          <div className="sidebar-logo-text">
+            <span className="sidebar-logo-title">Dataplex</span>
+            <span className="sidebar-practice-label">Catalog France Practice</span>
+          </div>
         </div>
       )}
 

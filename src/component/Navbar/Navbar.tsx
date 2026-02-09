@@ -224,27 +224,36 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
               <Box onClick={handleLogoClick} sx={{
                 display: { xs: 'none', md: 'flex' },
                 alignItems: 'center',
-                gap: '12px',
+                gap: '8px',
                 flex: "0 0 auto",
                 marginLeft: "-0.5rem",
                 cursor: "pointer",
               }}>
                 <img
-                  src="/assets/svg/dataplex-universal-catalog-logo.svg"
-                  alt="Dataplex Universal Catalog"
-                  style={{ width: '157px', height: '46px' }}
+                  src="/assets/svg/dataplex-logo-icon.svg"
+                  alt="Dataplex"
+                  style={{ width: '28px', height: '28px' }}
                 />
-                <Typography sx={{
-                  fontFamily: '"Google Sans", sans-serif',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  color: '#5F6368',
-                  whiteSpace: 'nowrap',
-                  borderLeft: '1px solid #DADCE0',
-                  paddingLeft: '12px',
-                }}>
-                  France Practice
-                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                  <Typography sx={{
+                    fontFamily: '"Google Sans", sans-serif',
+                    fontSize: '16px',
+                    fontWeight: 600,
+                    color: '#0B57D0',
+                    lineHeight: 1.2,
+                  }}>
+                    Dataplex
+                  </Typography>
+                  <Typography sx={{
+                    fontFamily: '"Google Sans", sans-serif',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    color: '#0B57D0',
+                    lineHeight: 1.2,
+                  }}>
+                    Catalog France Practice
+                  </Typography>
+                </Box>
               </Box>
             )}
 
