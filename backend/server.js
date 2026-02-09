@@ -287,11 +287,8 @@ app.post('/api/v1/chat', async (req, res) => {
           tableReferences.push({
             projectId: tProjectId,
             datasetId: tDatasetId,
-            tableId: tTableId,
-            schema: {
-              description: table.description || '',
-              fields: []
-            }
+            tableId: tTableId
+            // Let the CA API resolve schema from BigQuery directly
           });
         } else {
           console.warn(`Could not parse FQN for table: ${table.name}, FQN: ${fqn}`);
@@ -382,6 +379,8 @@ app.post('/api/v1/chat', async (req, res) => {
     let fullResponseText = '';
     let finalChart = null;
     let finalSql = null;
+    let finalData = null;
+    let finalConversationId = null;
     let accumulatedJson = chatResponse.data.toString('utf-8'); // Convert buffer to string properly
 
     console.log('DEBUG_RAW_RESPONSE_LENGTH:', accumulatedJson.length);
@@ -461,6 +460,23 @@ app.post('/api/v1/chat', async (req, res) => {
             }
           }
 
+          // Handle direct response format (CA API sometimes returns fields at top level)
+          if (msg.reply && !msg.systemMessage) {
+            fullResponseText += msg.reply;
+          }
+          if (msg.chart && !msg.systemMessage) {
+            finalChart = msg.chart;
+          }
+          if ((msg.sql || msg.sqlQuery) && !msg.systemMessage) {
+            finalSql = msg.sql || msg.sqlQuery;
+          }
+          if (msg.data && Array.isArray(msg.data) && msg.data.length > 0 && !msg.systemMessage) {
+            finalData = msg.data;
+          }
+          if (msg.conversationId) {
+            finalConversationId = msg.conversationId;
+          }
+
           if (msg.error) {
             console.error('API Returned Error:', msg.error);
             fullResponseText += `\nError: ${msg.error.message}`;
@@ -502,6 +518,8 @@ app.post('/api/v1/chat', async (req, res) => {
       reply: fullResponseText,
       chart: finalChart,
       sql: finalSql,
+      data: finalData,
+      conversationId: finalConversationId,
       conversationHistory: newHistory
     });
 

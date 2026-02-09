@@ -52,7 +52,7 @@ const TableSelector: React.FC<{ onSelect: (entry: any) => void; user: any }> = (
                     { headers: { Authorization: `Bearer ${user.token}` } }
                 );
                 // Filter to show only tables (BigQuery tables, views)
-                const tables = (response.data || []).filter((item: any) => {
+                const tables = (Array.isArray(response.data) ? response.data : response.data?.results || []).filter((item: any) => {
                     const entryType = item.entryType || item.type || '';
                     return entryType.includes('TABLE') || entryType.includes('VIEW') ||
                         item.fullyQualifiedName?.includes('bigquery');
@@ -305,7 +305,7 @@ const ChatPage: React.FC = () => {
 
                 // Filter results to get only tables from the same dataset, excluding the current table
                 const currentTableName = parts[2] || selectedEntry.entrySource?.displayName;
-                const tables = (response.data || []).filter((item: any) => {
+                const tables = (Array.isArray(response.data) ? response.data : response.data?.results || []).filter((item: any) => {
                     const itemFqn = item.fullyQualifiedName || '';
                     const isInSameDataset = itemFqn.includes(`${project}.${dataset}`);
                     const entryType = item.entryType || item.type || '';
