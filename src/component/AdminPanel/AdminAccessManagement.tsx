@@ -85,6 +85,7 @@ const AdminAccessManagement = () => {
   const [pendingRequests, setPendingRequests] = useState<AccessRequest[]>([]);
   const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('PENDING');
+  const [accessStatusFilter, setAccessStatusFilter] = useState<string>('all');
   const [projectFilter] = useState<string>('');
 
   // Dialog states
@@ -101,6 +102,11 @@ const AdminAccessManagement = () => {
   const filteredRequests = pendingRequests.filter((req) => {
     if (statusFilter === 'all') return true;
     return req.status?.toUpperCase() === statusFilter.toUpperCase();
+  });
+
+  const filteredAccesses = grantedAccesses.filter((access) => {
+    if (accessStatusFilter === 'all') return true;
+    return access.status?.toUpperCase() === accessStatusFilter.toUpperCase();
   });
 
   const token = user?.token || '';
@@ -130,8 +136,8 @@ const AdminAccessManagement = () => {
         setPendingRequests(response.data.data || []);
       }
 
-      // Fetch granted accesses
-      await dispatch(fetchGrantedAccesses({ token, email, status: 'ACTIVE' }));
+      // Fetch all granted accesses (active + revoked) for history
+      await dispatch(fetchGrantedAccesses({ token, email }));
 
       // Fetch all admins if super-admin
       if (currentUserRole?.role === 'super-admin') {
@@ -336,7 +342,7 @@ const AdminAccessManagement = () => {
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs value={tabValue} onChange={handleTabChange}>
             <Tab label="Pending Requests" />
-            <Tab label="Active Accesses" />
+            <Tab label="Access History" />
             {currentUserRole?.role === 'super-admin' && <Tab label="Admin Roles" />}
           </Tabs>
         </Box>
@@ -448,8 +454,20 @@ const AdminAccessManagement = () => {
           </TableContainer>
         </TabPanel>
 
-        {/* Tab 1: Active Accesses */}
+        {/* Tab 1: Access History (Active + Revoked) */}
         <TabPanel value={tabValue} index={1}>
+          {/* Status Filter */}
+          <Box sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center' }}>
+            <FormControl sx={{ minWidth: 150 }}>
+              <InputLabel>Status</InputLabel>
+              <Select value={accessStatusFilter} label="Status" onChange={(e) => setAccessStatusFilter(e.target.value)}>
+                <MenuItem value="all">All</MenuItem>
+                <MenuItem value="ACTIVE">Active</MenuItem>
+                <MenuItem value="REVOKED">Revoked</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
           <TableContainer component={Paper} sx={{ boxShadow: 'none', border: '1px solid #DADCE0' }}>
             <Table>
               <TableHead>
@@ -461,17 +479,19 @@ const AdminAccessManagement = () => {
                   <TableCell><strong>Status</strong></TableCell>
                   <TableCell><strong>Granted</strong></TableCell>
                   <TableCell><strong>Granted By</strong></TableCell>
+                  <TableCell><strong>Revoked</strong></TableCell>
+                  <TableCell><strong>Revoked By</strong></TableCell>
                   <TableCell><strong>Actions</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {grantedAccesses.length === 0 ? (
+                {filteredAccesses.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">No active accesses found</TableCell>
+                    <TableCell colSpan={10} align="center">No accesses found</TableCell>
                   </TableRow>
                 ) : (
-                  grantedAccesses.map((access) => (
-                    <TableRow key={access.id} hover>
+                  filteredAccesses.map((access) => (
+                    <TableRow key={access.id} hover sx={access.status === 'REVOKED' ? { opacity: 0.7 } : {}}>
                       <TableCell>{access.userEmail}</TableCell>
                       <TableCell>
                         <Tooltip title={access.assetName}>
@@ -491,6 +511,8 @@ const AdminAccessManagement = () => {
                       <TableCell>{getStatusChip(access.status)}</TableCell>
                       <TableCell>{formatDate(access.grantedAt)}</TableCell>
                       <TableCell>{access.grantedBy}</TableCell>
+                      <TableCell>{access.revokedAt ? formatDate(access.revokedAt) : '-'}</TableCell>
+                      <TableCell>{access.revokedBy || '-'}</TableCell>
                       <TableCell>
                         {access.status === 'ACTIVE' && (
                           <IconButton
