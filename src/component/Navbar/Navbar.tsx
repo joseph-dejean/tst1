@@ -223,9 +223,9 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
             {location.pathname === '/home' && (
               <Box onClick={handleLogoClick} sx={{
                 display: { xs: 'none', md: 'flex' },
+                alignItems: 'center',
+                gap: '12px',
                 flex: "0 0 auto",
-                width: "157px",
-                height: "46px",
                 marginLeft: "-0.5rem",
                 cursor: "pointer",
               }}>
@@ -234,6 +234,17 @@ const Navbar: React.FC<NavBarProps> = ({ searchBar = false, searchNavigate = tru
                   alt="Dataplex Universal Catalog"
                   style={{ width: '157px', height: '46px' }}
                 />
+                <Typography sx={{
+                  fontFamily: '"Google Sans", sans-serif',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: '#5F6368',
+                  whiteSpace: 'nowrap',
+                  borderLeft: '1px solid #DADCE0',
+                  paddingLeft: '12px',
+                }}>
+                  France Practice
+                </Typography>
               </Box>
             )}
 

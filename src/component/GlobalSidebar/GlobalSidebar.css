@@ -104,6 +104,20 @@
   box-sizing: border-box;
 }
 
+/* Ensure img icons are visible and properly sized */
+.menu-icon-container img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  display: block;
+}
+
+/* SVG icons inside container */
+.menu-icon-container svg {
+  width: 20px;
+  height: 20px;
+}
+
 /* Active state */
 .sidebar-menu-item.active .menu-icon-container {
   background-color: #E7F0FE;
@@ -140,13 +154,16 @@
   font-style: normal;
   font-weight: 500;
   font-size: 10px;
-  line-height: 16px;
+  line-height: 12px;
   display: flex;
   align-items: center;
   text-align: center;
   justify-content: center;
   letter-spacing: 0.1px;
   color: #575757;
+  flex-wrap: wrap;
+  word-break: break-word;
+  hyphens: none;
 }
 
 /* Disabled state */
