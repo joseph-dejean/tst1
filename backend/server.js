@@ -353,32 +353,71 @@ app.post('/api/v1/chat', async (req, res) => {
     let chatPayload;
     const existingConversationId = context.conversationId; // From frontend state
 
+    // Try to create/get a persistent Data Agent for better performance and caching
+    let dataAgentName = null;
+    try {
+      dataAgentName = await getOrCreateDataAgent(tableReferences, systemInstruction, {
+        projectId: projectId_env,
+        location: location,
+        accessToken: adcToken
+      });
+      if (dataAgentName) {
+        console.log(`[DataAgent] Using persistent agent: ${dataAgentName}`);
+      }
+    } catch (agentErr) {
+      console.warn(`[DataAgent] Error during agent creation, falling back to inline context: ${agentErr.message}`);
+    }
+
     if (existingConversationId) {
       // --- STATEFUL MODE: Resume existing conversation ---
       // Google stores the history, we just send the new message
       console.log(`[Stateful] Resuming conversation: ${existingConversationId}`);
-      chatPayload = {
-        parent: `projects/${projectId_env}/locations/${location}`,
-        messages: messages, // Only the new message
-        conversationReference: {
-          conversation: `projects/${projectId_env}/locations/${location}/conversations/${existingConversationId}`,
+      if (dataAgentName) {
+        chatPayload = {
+          parent: `projects/${projectId_env}/locations/${location}`,
+          messages: messages,
+          conversationReference: {
+            conversation: `projects/${projectId_env}/locations/${location}/conversations/${existingConversationId}`,
+            dataAgentContext: {
+              dataAgent: dataAgentName
+            }
+          }
+        };
+      } else {
+        chatPayload = {
+          parent: `projects/${projectId_env}/locations/${location}`,
+          messages: messages,
+          conversationReference: {
+            conversation: `projects/${projectId_env}/locations/${location}/conversations/${existingConversationId}`,
+            inlineContext: {
+              datasourceReferences: bigqueryDataSource,
+              systemInstruction: systemInstruction
+            }
+          }
+        };
+      }
+    } else {
+      // --- FIRST MESSAGE: Create new conversation ---
+      if (dataAgentName) {
+        console.log('[Stateful] Starting new conversation with persistent Data Agent');
+        chatPayload = {
+          parent: `projects/${projectId_env}/locations/${location}`,
+          messages: messages,
+          dataAgentContext: {
+            dataAgent: dataAgentName
+          }
+        };
+      } else {
+        console.log('[Stateful] Starting new conversation with inline context (no agent available)');
+        chatPayload = {
+          parent: `projects/${projectId_env}/locations/${location}`,
+          messages: messages,
           inlineContext: {
             datasourceReferences: bigqueryDataSource,
             systemInstruction: systemInstruction
           }
-        }
-      };
-    } else {
-      // --- FIRST MESSAGE: Create new conversation with inline context ---
-      console.log('[Stateful] Starting new conversation with inline context');
-      chatPayload = {
-        parent: `projects/${projectId_env}/locations/${location}`,
-        messages: messages,
-        inlineContext: {
-          datasourceReferences: bigqueryDataSource,
-          systemInstruction: systemInstruction
-        }
-      };
+        };
+      }
     }
 
     // Make request to Conversational Analytics API using ADC service account token

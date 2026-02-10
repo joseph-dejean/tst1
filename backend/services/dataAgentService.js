@@ -16,21 +16,36 @@ const generateTableIdentifier = (tableReferences) => {
 };
 
 /**
- * Create or get a data agent for the given table references
- * Returns the agent resource name or null if creation fails (will fall back to inline context)
+ * Create or get a data agent for the given table references.
+ * Returns the agent resource name or null if creation fails (will fall back to inline context).
+ *
+ * @param {Array} tableReferences - BigQuery table references
+ * @param {string} systemInstruction - System instruction for the agent
+ * @param {Object} options - Optional overrides for projectId, location, and accessToken
  */
-const getOrCreateDataAgent = async (tableReferences, systemInstruction) => {
+const getOrCreateDataAgent = async (tableReferences, systemInstruction, { projectId, location, accessToken: providedToken } = {}) => {
     try {
         const tableId = generateTableIdentifier(tableReferences);
 
         // Check cache first
         if (dataAgentCache.has(tableId)) {
+            console.log(`[DataAgent] Cache hit for ${tableId}`);
             return dataAgentCache.get(tableId);
         }
 
-        const projectId_env = process.env.GOOGLE_CLOUD_PROJECT_ID;
-        const location = process.env.GCP_LOCATION || 'europe-west1';
+        const project = projectId || process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+        const loc = location || process.env.GCP_LOCATION || 'us-central1';
         const agentId = `agent_${tableId.substring(0, 40)}`;
+
+        // Use provided token or get a new one
+        let token = providedToken;
+        if (!token) {
+            const auth = new GoogleAuth({
+                scopes: 'https://www.googleapis.com/auth/cloud-platform'
+            });
+            const client = await auth.getClient();
+            token = (await client.getAccessToken()).token;
+        }
 
         const bigqueryDataSource = {
             bq: {
@@ -39,7 +54,7 @@ const getOrCreateDataAgent = async (tableReferences, systemInstruction) => {
         };
 
         const agentPayload = {
-            name: `projects/${projectId_env}/locations/${location}/dataAgents/${agentId}`,
+            name: `projects/${project}/locations/${loc}/dataAgents/${agentId}`,
             description: `Data agent for ${tableReferences.length} table(s)`,
             data_analytics_agent: {
                 published_context: {
@@ -49,22 +64,15 @@ const getOrCreateDataAgent = async (tableReferences, systemInstruction) => {
             }
         };
 
-        const agentUrl = `https://geminidataanalytics.googleapis.com/v1beta/projects/${projectId_env}/locations/${location}/dataAgents`;
+        const agentUrl = `https://geminidataanalytics.googleapis.com/v1beta/projects/${project}/locations/${loc}/dataAgents`;
 
-        // Get ADC token
-        const auth = new GoogleAuth({
-            scopes: 'https://www.googleapis.com/auth/cloud-platform'
-        });
-        const client = await auth.getClient();
-        const accessToken = (await client.getAccessToken()).token;
-
-        console.log(`Creating/Retrieving Data Agent for ${tableId}...`);
+        console.log(`[DataAgent] Creating/Retrieving agent ${agentId} in ${loc}...`);
 
         try {
             const response = await axios.post(agentUrl, agentPayload, {
                 params: { data_agent_id: agentId },
                 headers: {
-                    'Authorization': `Bearer ${accessToken}`,
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 }
             });
@@ -72,17 +80,17 @@ const getOrCreateDataAgent = async (tableReferences, systemInstruction) => {
             if (response.status === 200 || response.status === 201) {
                 const agentName = response.data.name || agentPayload.name;
                 dataAgentCache.set(tableId, agentName);
-                console.log(`Data Agent created: ${agentName}`);
+                console.log(`[DataAgent] Created: ${agentName}`);
                 return agentName;
             }
         } catch (error) {
             // If agent already exists, try to get it
             if (error.response?.status === 409 || error.response?.status === 400) {
                 try {
-                    const getAgentUrl = `https://geminidataanalytics.googleapis.com/v1beta/projects/${projectId_env}/locations/${location}/dataAgents/${agentId}`;
+                    const getAgentUrl = `https://geminidataanalytics.googleapis.com/v1beta/projects/${project}/locations/${loc}/dataAgents/${agentId}`;
                     const getResponse = await axios.get(getAgentUrl, {
                         headers: {
-                            'Authorization': `Bearer ${accessToken}`,
+                            'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         }
                     });
@@ -90,19 +98,18 @@ const getOrCreateDataAgent = async (tableReferences, systemInstruction) => {
                     if (getResponse.status === 200) {
                         const agentName = getResponse.data.name;
                         dataAgentCache.set(tableId, agentName);
-                        console.log(`Data Agent retrieved: ${agentName}`);
+                        console.log(`[DataAgent] Retrieved existing: ${agentName}`);
                         return agentName;
                     }
                 } catch (getError) {
-                    console.warn(`Failed to retrieve existing agent: ${getError.message}`);
+                    console.warn(`[DataAgent] Failed to retrieve existing agent: ${getError.message}`);
                 }
             } else {
-                console.warn(`Failed to create agent: ${error.message}`);
+                console.warn(`[DataAgent] Failed to create agent: ${error.response?.status} ${error.message}`);
             }
         }
     } catch (error) {
-        // Any error - fall back to inline context
-        console.log('Data agent creation failed, using inline context:', error.message);
+        console.log('[DataAgent] Agent creation failed, will use inline context:', error.message);
     }
 
     return null;
