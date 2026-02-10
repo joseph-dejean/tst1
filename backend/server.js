@@ -170,7 +170,7 @@ app.post('/api/v1/chat', async (req, res) => {
         project: PROJECT_ID,
         location: vertexLocation
       });
-      const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
+      const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
       let prompt = '';
 
@@ -314,7 +314,7 @@ app.post('/api/v1/chat', async (req, res) => {
         project: PROJECT_ID,
         location: process.env.GCP_LOCATION || 'us-central1'
       });
-      const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
+      const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
       const prompt = isDataProduct
         ? `You are a helpful Data Steward assistant for Dataplex. The user is asking about Data Product: ${context.name}. ${context.description}. User Question: ${message}`
@@ -332,21 +332,15 @@ app.post('/api/v1/chat', async (req, res) => {
       }
     };
 
-    // Prepare messages array (include conversation history if provided)
-    const messages = [];
-    if (context.conversationHistory && Array.isArray(context.conversationHistory)) {
-      messages.push(...context.conversationHistory);
-    }
-    messages.push({
+    // For the FIRST message, we send the full context with inline data sources
+    // For SUBSEQUENT messages, we use conversation_reference to let Google manage state
+    const messages = [{
       userMessage: {
         text: message
       }
-    });
+    }];
 
     const systemInstruction = 'You are a helpful Data Steward assistant for Dataplex. Answer questions about the data tables based on their schema and metadata. Be concise and accurate.';
-
-    // Use Data Agent for all BigQuery tables (preferred), fall back to inline context if agent creation fails
-    let chatPayload;
 
     // Use ADC (service account) token for CA API - the user's OAuth token lacks the cloud-platform scope
     // needed by geminidataanalytics.googleapis.com. The service account has the proper IAM roles.
@@ -356,15 +350,36 @@ app.post('/api/v1/chat', async (req, res) => {
     const adcEmail = adcClient.email || 'unknown';
     console.log(`Using ADC service account token for CA API call (SA: ${adcEmail}, location: ${location})`);
 
-    // Force Inline Context for stability (bypassing Data Agent creation to avoid permission issues)
-    chatPayload = {
-      parent: `projects/${projectId_env}/locations/${location}`,
-      messages: messages,
-      inlineContext: {
-        datasourceReferences: bigqueryDataSource,
-        systemInstruction: systemInstruction
-      }
-    };
+    let chatPayload;
+    const existingConversationId = context.conversationId; // From frontend state
+
+    if (existingConversationId) {
+      // --- STATEFUL MODE: Resume existing conversation ---
+      // Google stores the history, we just send the new message
+      console.log(`[Stateful] Resuming conversation: ${existingConversationId}`);
+      chatPayload = {
+        parent: `projects/${projectId_env}/locations/${location}`,
+        messages: messages, // Only the new message
+        conversationReference: {
+          conversation: `projects/${projectId_env}/locations/${location}/conversations/${existingConversationId}`,
+          inlineContext: {
+            datasourceReferences: bigqueryDataSource,
+            systemInstruction: systemInstruction
+          }
+        }
+      };
+    } else {
+      // --- FIRST MESSAGE: Create new conversation with inline context ---
+      console.log('[Stateful] Starting new conversation with inline context');
+      chatPayload = {
+        parent: `projects/${projectId_env}/locations/${location}`,
+        messages: messages,
+        inlineContext: {
+          datasourceReferences: bigqueryDataSource,
+          systemInstruction: systemInstruction
+        }
+      };
+    }
 
     // Make request to Conversational Analytics API using ADC service account token
     const chatResponse = await axios.post(chatUrl, chatPayload, {
@@ -379,8 +394,8 @@ app.post('/api/v1/chat', async (req, res) => {
     let fullResponseText = '';
     let finalChart = null;
     let finalSql = null;
-    let finalData = null;
-    let finalConversationId = null;
+    let rawDataRows = [];
+    let returnedConversationId = existingConversationId || null; // Will be updated from response
     let accumulatedJson = chatResponse.data.toString('utf-8'); // Convert buffer to string properly
 
     console.log('DEBUG_RAW_RESPONSE_LENGTH:', accumulatedJson.length);
@@ -403,6 +418,17 @@ app.post('/api/v1/chat', async (req, res) => {
 
       if (Array.isArray(parsedMessages)) {
         parsedMessages.forEach((msg, index) => {
+          // Extract conversation ID from metadata (usually in first message)
+          if (msg.metadata?.conversationName || msg.conversationName) {
+            const convName = msg.metadata?.conversationName || msg.conversationName;
+            // Format: projects/{project}/locations/{location}/conversations/{id}
+            const convParts = convName.split('/');
+            if (convParts.length >= 6) {
+              returnedConversationId = convParts[convParts.length - 1];
+              console.log(`[Stateful] Extracted conversation ID: ${returnedConversationId}`);
+            }
+          }
+
           if (msg.systemMessage) {
             console.log(`DEBUG_MSG_${index}_KEYS:`, Object.keys(msg.systemMessage)); // Log what keys exist (e.g. text, chart, data?)
 
@@ -410,17 +436,114 @@ app.post('/api/v1/chat', async (req, res) => {
             if (msg.systemMessage.text) {
               const t = msg.systemMessage.text;
               if (t.textType === 'FINAL_RESPONSE') {
-                fullResponseText += t.text || t.content || '';
-              } else if (t.textType === 'THOUGHT' && t.parts && t.parts[0]?.text) {
-                fullResponseText += `\n*Thought: ${t.parts[0].text}*\n`;
+                // Handle multiple response formats from API:
+                // - t.text (string)
+                // - t.content (string)
+                // - t.parts (array of strings)
+                if (t.text) {
+                  fullResponseText += t.text;
+                } else if (t.content) {
+                  fullResponseText += t.content;
+                } else if (t.parts && Array.isArray(t.parts)) {
+                  // Parts can be strings or objects with text property
+                  t.parts.forEach(part => {
+                    if (typeof part === 'string') {
+                      fullResponseText += part;
+                    } else if (part?.text) {
+                      fullResponseText += part.text;
+                    }
+                  });
+                }
+              } else if (t.textType === 'THOUGHT' && t.parts && t.parts[0]) {
+                // Thought messages - extract text from parts
+                const thoughtText = typeof t.parts[0] === 'string' ? t.parts[0] : t.parts[0]?.text;
+                if (thoughtText) {
+                  fullResponseText += `\n*Thought: ${thoughtText}*\n`;
+                }
               }
             }
             // 2. Chart
             if (msg.systemMessage.chart) {
-              finalChart = msg.systemMessage.chart;
-              // Add instruction text if present, but avoid duplication if it looks like a prompt
-              if (finalChart.query?.instructions && !fullResponseText.includes(finalChart.query.instructions)) {
-                fullResponseText += `\n\n**Visual Analysis:** ${finalChart.query.instructions}`;
+              const rawChart = msg.systemMessage.chart;
+              console.log('DEBUG_CHART_FULL_STRUCTURE:', JSON.stringify(rawChart, null, 2));
+              console.log('DEBUG_CHART_KEYS:', Object.keys(rawChart));
+
+              // The Google API returns chart data in various formats.
+              // We need to find the Vega-Lite spec OR build one from raw data.
+
+              let vegaSpec = null;
+
+              // First, check if there's a result wrapper (Google's format)
+              const chartData = rawChart.result || rawChart;
+              console.log('DEBUG_CHART_DATA_KEYS:', Object.keys(chartData));
+
+              // Check various locations for the Vega-Lite spec
+              if (chartData.$schema || chartData.mark || chartData.layer) {
+                // It's already a valid Vega-Lite spec
+                vegaSpec = chartData;
+              } else if (chartData.vegaLiteSpec) {
+                vegaSpec = chartData.vegaLiteSpec;
+              } else if (chartData.spec) {
+                vegaSpec = chartData.spec;
+              } else if (chartData.vegaLite) {
+                vegaSpec = chartData.vegaLite;
+              } else if (chartData.chartSpec) {
+                vegaSpec = chartData.chartSpec;
+              } else if (chartData.visualization?.spec) {
+                vegaSpec = chartData.visualization.spec;
+              } else if (chartData.visualization?.vegaLiteSpec) {
+                vegaSpec = chartData.visualization.vegaLiteSpec;
+              } else if (chartData.data && chartData.encoding) {
+                // It has Vega-Lite-like properties, use as-is
+                vegaSpec = chartData;
+              } else if (chartData.data && Array.isArray(chartData.data) && chartData.chartType) {
+                // Google returns raw data with chartType - build a Vega-Lite spec
+                console.log('DEBUG_BUILDING_VEGA_FROM_GOOGLE_DATA:', chartData.chartType);
+                const dataRows = chartData.data;
+                if (dataRows.length > 0) {
+                  const columns = Object.keys(dataRows[0]);
+                  // Assume first column is category (x), second is value (y)
+                  const xField = columns[0];
+                  const yField = columns.length > 1 ? columns[1] : columns[0];
+
+                  // Determine mark type from Google's chartType
+                  let markType = 'bar';
+                  if (chartData.chartType.toLowerCase().includes('line')) markType = 'line';
+                  else if (chartData.chartType.toLowerCase().includes('pie')) markType = 'arc';
+                  else if (chartData.chartType.toLowerCase().includes('scatter')) markType = 'point';
+                  else if (chartData.chartType.toLowerCase().includes('area')) markType = 'area';
+
+                  vegaSpec = {
+                    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+                    "data": { "values": dataRows },
+                    "mark": markType,
+                    "encoding": {
+                      "x": { "field": xField, "type": "nominal", "title": xField },
+                      "y": { "field": yField, "type": "quantitative", "title": yField }
+                    },
+                    "width": 400,
+                    "height": 300
+                  };
+
+                  // For pie charts, adjust encoding
+                  if (markType === 'arc') {
+                    vegaSpec.encoding = {
+                      "theta": { "field": yField, "type": "quantitative" },
+                      "color": { "field": xField, "type": "nominal" }
+                    };
+                  }
+
+                  console.log('DEBUG_BUILT_VEGA_SPEC:', JSON.stringify(vegaSpec, null, 2).substring(0, 300));
+                }
+              }
+
+              if (vegaSpec) {
+                console.log('DEBUG_VEGA_SPEC_FOUND:', JSON.stringify(vegaSpec, null, 2).substring(0, 300));
+                finalChart = vegaSpec;
+              } else {
+                // Could not find or build a Vega-Lite spec
+                console.log('DEBUG_CHART_UNKNOWN_FORMAT - Cannot render, chartData keys:', Object.keys(chartData));
+                console.log('DEBUG_CHART_DATA_SAMPLE:', JSON.stringify(chartData, null, 2).substring(0, 500));
               }
             }
 
@@ -436,6 +559,9 @@ app.post('/api/v1/chat', async (req, res) => {
                 const rows = dataResult.data;
                 const columns = Object.keys(rows[0]);
                 const displayLimit = 10;
+
+                // Keep raw data rows for synthesis
+                rawDataRows = rows;
 
                 // Header
                 let tableMd = `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
@@ -471,10 +597,10 @@ app.post('/api/v1/chat', async (req, res) => {
             finalSql = msg.sql || msg.sqlQuery;
           }
           if (msg.data && Array.isArray(msg.data) && msg.data.length > 0 && !msg.systemMessage) {
-            finalData = msg.data;
+            rawDataRows = msg.data;
           }
           if (msg.conversationId) {
-            finalConversationId = msg.conversationId;
+            returnedConversationId = msg.conversationId;
           }
 
           if (msg.error) {
@@ -509,18 +635,58 @@ app.post('/api/v1/chat', async (req, res) => {
         "Try rephrasing your question or selecting additional related tables.";
     }
 
-    // Maintain conversation history
-    const newHistory = [...(req.body.context?.conversationHistory || [])];
-    newHistory.push({ role: 'user', content: req.body.message });
-    newHistory.push({ role: 'assistant', content: fullResponseText }); // Simplify history to just text content
+    // --- GEMINI 3.0 SYNTHESIS ---
+    let synthesizedReply = fullResponseText;
+
+    // If we have data rows but sparse natural language, let Gemini explain
+    if (rawDataRows && rawDataRows.length > 0 && fullResponseText.length < 200) {
+      try {
+        console.log(`[Gemini 3] Synthesizing ${rawDataRows.length} rows of data...`);
+        const synthesisLocation = (process.env.GCP_LOCATION && process.env.GCP_LOCATION.includes('-')) ? process.env.GCP_LOCATION : 'us-central1';
+        const synthesizerVertex = new VertexAI({
+          project: PROJECT_ID,
+          location: synthesisLocation
+        });
+        const synthesizerModel = synthesizerVertex.getGenerativeModel({
+          model: 'gemini-2.5-flash',
+          generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
+        });
+
+        const synthesisPrompt = `
+          You are an expert Data Steward.
+          The user asked: "${message}"
+
+          The database executed this SQL: 
+          ${finalSql}
+
+          And returned this data (showing first 10 rows):
+          ${JSON.stringify(rawDataRows.slice(0, 10))}
+
+          Task:
+          1. Answer the user's question conversationally using this data.
+          2. Do not just output a table.
+          3. Highlight key insights, totals, or trends.
+          4. If the data is empty, explain why.
+        `;
+
+        const result = await synthesizerModel.generateContent(synthesisPrompt);
+        synthesizedReply = result.response.candidates[0].content.parts[0].text;
+        console.log('[Gemini 3] Synthesis complete');
+      } catch (synthErr) {
+        console.error('[Gemini 3] Synthesis failed:', synthErr.message);
+        // Fallback to original text if synthesis fails
+      }
+    }
+
+    // Note: With stateful mode, Google manages the conversation history.
+    // We just need to return the conversation ID for the frontend to track.
 
     res.json({
-      reply: fullResponseText,
+      reply: synthesizedReply,
       chart: finalChart,
       sql: finalSql,
-      data: finalData,
-      conversationId: finalConversationId,
-      conversationHistory: newHistory
+      data: rawDataRows,
+      conversationId: returnedConversationId // For stateful mode - frontend stores this
     });
 
   } catch (err) {
@@ -537,7 +703,7 @@ app.post('/api/v1/chat', async (req, res) => {
         project: PROJECT_ID,
         location: fallbackLocation
       });
-      const fallbackModel = fallbackVertex.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
+      const fallbackModel = fallbackVertex.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
       // Construct context for the LLM
       let schemaContext = '';
@@ -632,7 +798,7 @@ app.post('/api/v1/ai-search', async (req, res) => {
       project: projectId,
       location: process.env.GCP_LOCATION || 'us-central1'
     });
-    const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
+    const generativeModel = vertex_ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const aiPrompt = `You are a data catalog search assistant. Given a user's natural language query, extract the key search terms and concepts that would help find relevant database tables or datasets.
 
@@ -1040,6 +1206,10 @@ app.post('/api/v1/data-products', async (req, res) => {
 
     const parent = `projects/${projectId}/locations/${loc}/entryGroups/${entryGroup}`;
 
+    // Create timestamp in Protobuf format (gRPC requires this, not ISO strings)
+    const now = new Date();
+    const timestamp = { seconds: Math.floor(now.getTime() / 1000), nanos: 0 };
+
     const request = {
       parent,
       entryId,
@@ -1049,8 +1219,8 @@ app.post('/api/v1/data-products', async (req, res) => {
           displayName: displayName,
           description: description || '',
           system: 'CUSTOM',
-          createTime: new Date().toISOString(),
-          updateTime: new Date().toISOString()
+          createTime: timestamp,
+          updateTime: timestamp
         },
         aspects: {}
       }
