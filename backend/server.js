@@ -457,15 +457,29 @@ app.post('/api/v1/chat', async (req, res) => {
 
       if (Array.isArray(parsedMessages)) {
         parsedMessages.forEach((msg, index) => {
-          // Extract conversation ID from metadata (usually in first message)
-          if (msg.metadata?.conversationName || msg.conversationName) {
-            const convName = msg.metadata?.conversationName || msg.conversationName;
+          // Log ALL top-level keys for every message so we can see the full structure
+          console.log(`DEBUG_MSG_${index}_TOP_KEYS:`, Object.keys(msg));
+
+          // Extract conversation ID - check multiple possible locations
+          const convName = msg.metadata?.conversationName || msg.conversationName
+            || msg.metadata?.conversation || msg.conversation
+            || msg.systemMessage?.conversationName || msg.systemMessage?.metadata?.conversationName;
+          if (convName && !returnedConversationId) {
             // Format: projects/{project}/locations/{location}/conversations/{id}
             const convParts = convName.split('/');
             if (convParts.length >= 6) {
               returnedConversationId = convParts[convParts.length - 1];
-              console.log(`[Stateful] Extracted conversation ID: ${returnedConversationId}`);
+              console.log(`[Stateful] Extracted conversation ID from conversationName: ${returnedConversationId}`);
+            } else {
+              // Maybe it's just the raw ID
+              returnedConversationId = convName;
+              console.log(`[Stateful] Extracted raw conversation ID: ${returnedConversationId}`);
             }
+          }
+          // Also check for conversationId directly
+          if (msg.conversationId && !returnedConversationId) {
+            returnedConversationId = msg.conversationId;
+            console.log(`[Stateful] Extracted conversationId directly: ${returnedConversationId}`);
           }
 
           if (msg.systemMessage) {
@@ -586,27 +600,83 @@ app.post('/api/v1/chat', async (req, res) => {
               }
             }
 
-            // 3. Data (Alternative locations)
+            // 3. Data, SQL, Chart from result objects
             // Check msg.systemMessage.data.result OR msg.systemMessage.schema.result
             const dataResult = msg.systemMessage.data?.result || msg.systemMessage.schema?.result;
 
             if (dataResult) {
-              console.log(`DEBUG_MSG_${index}_DATA_FOUND`, dataResult);
+              console.log(`DEBUG_MSG_${index}_DATA_RESULT_KEYS:`, Object.keys(dataResult));
 
-              // Format Data as Markdown Table
+              // 3a. Extract SQL from inside the data result
+              if (!finalSql && (dataResult.sql || dataResult.sqlQuery || dataResult.query)) {
+                finalSql = dataResult.sql || dataResult.sqlQuery || dataResult.query;
+                console.log(`DEBUG_MSG_${index}_SQL_FOUND_IN_RESULT:`, finalSql.substring(0, 200));
+              }
+
+              // 3b. Extract chart/visualization from inside the data result
+              if (!finalChart) {
+                const resultChart = dataResult.chart || dataResult.visualization || dataResult.vegaLiteSpec || dataResult.vegaSpec;
+                if (resultChart) {
+                  console.log(`DEBUG_MSG_${index}_CHART_FOUND_IN_RESULT_KEYS:`, Object.keys(resultChart));
+                  // Try to extract Vega-Lite spec from the chart object
+                  let vegaFromResult = null;
+                  if (resultChart.$schema || resultChart.mark || resultChart.layer) {
+                    vegaFromResult = resultChart;
+                  } else if (resultChart.vegaLiteSpec) {
+                    vegaFromResult = resultChart.vegaLiteSpec;
+                  } else if (resultChart.spec) {
+                    vegaFromResult = resultChart.spec;
+                  } else if (resultChart.chartSpec) {
+                    vegaFromResult = resultChart.chartSpec;
+                  } else if (resultChart.data && resultChart.encoding) {
+                    vegaFromResult = resultChart;
+                  } else if (typeof resultChart === 'string') {
+                    // Maybe it's a JSON string
+                    try { vegaFromResult = JSON.parse(resultChart); } catch (e) { /* not JSON */ }
+                  } else {
+                    // Use it as-is and let the frontend try
+                    vegaFromResult = resultChart;
+                    console.log(`DEBUG_MSG_${index}_CHART_RAW_FROM_RESULT:`, JSON.stringify(resultChart).substring(0, 500));
+                  }
+                  if (vegaFromResult) {
+                    finalChart = vegaFromResult;
+                    console.log(`DEBUG_MSG_${index}_CHART_EXTRACTED_FROM_RESULT`);
+                  }
+                }
+              }
+
+              // 3c. Format Data as Markdown Table
               if (dataResult.data && Array.isArray(dataResult.data) && dataResult.data.length > 0) {
                 const rows = dataResult.data;
                 const columns = Object.keys(rows[0]);
                 const displayLimit = 10;
 
-                // Keep raw data rows for synthesis
-                rawDataRows = rows;
+                // Clean up floating point precision issues (e.g. "75265.87999999999" → "75265.88")
+                const cleanValue = (val) => {
+                  if (typeof val === 'string' && /^-?\d+\.\d{3,}$/.test(val)) {
+                    return parseFloat(parseFloat(val).toFixed(2)).toString();
+                  }
+                  if (typeof val === 'number' && !Number.isInteger(val)) {
+                    return parseFloat(val.toFixed(2)).toString();
+                  }
+                  return val;
+                };
+                const cleanedRows = rows.map(row => {
+                  const cleaned = {};
+                  for (const key of Object.keys(row)) {
+                    cleaned[key] = cleanValue(row[key]);
+                  }
+                  return cleaned;
+                });
+
+                // Keep cleaned data rows for synthesis and frontend
+                rawDataRows = cleanedRows;
 
                 // Header
                 let tableMd = `\n\n**Data Results:**\n\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n`;
 
                 // Rows
-                rows.slice(0, displayLimit).forEach(row => {
+                cleanedRows.slice(0, displayLimit).forEach(row => {
                   const vals = columns.map(c => row[c]);
                   tableMd += `| ${vals.join(' | ')} |\n`;
                 });
@@ -619,9 +689,12 @@ app.post('/api/v1/chat', async (req, res) => {
               }
             }
 
-            // 4. SQL
-            if (msg.systemMessage.sqlQuery) {
+            // 4. SQL (also check at systemMessage level)
+            if (!finalSql && msg.systemMessage.sqlQuery) {
               finalSql = msg.systemMessage.sqlQuery;
+            }
+            if (!finalSql && msg.systemMessage.sql) {
+              finalSql = msg.systemMessage.sql;
             }
           }
 
@@ -647,6 +720,26 @@ app.post('/api/v1/chat', async (req, res) => {
             fullResponseText += `\nError: ${msg.error.message}`;
           }
         });
+
+        // After processing all messages, if we still don't have conversationId/sql/chart,
+        // do a deep search on the raw parsed data
+        if (!returnedConversationId) {
+          // Search entire response for conversation name pattern
+          const convMatch = accumulatedJson.match(/"conversationName"\s*:\s*"([^"]+)"/);
+          if (convMatch) {
+            const parts = convMatch[1].split('/');
+            returnedConversationId = parts.length >= 6 ? parts[parts.length - 1] : convMatch[1];
+            console.log(`[Stateful] Fallback extracted conversation ID from raw: ${returnedConversationId}`);
+          }
+        }
+        if (!finalSql) {
+          // Search for SQL in raw response
+          const sqlMatch = accumulatedJson.match(/"(?:sql|sqlQuery|query)"\s*:\s*"(SELECT[^"]+)"/i);
+          if (sqlMatch) {
+            finalSql = sqlMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+            console.log(`[Fallback] Extracted SQL from raw response: ${finalSql.substring(0, 100)}`);
+          }
+        }
       }
     } catch (e) {
       console.error('JSON Parse Error of Stream:', e);
@@ -660,8 +753,38 @@ app.post('/api/v1/chat', async (req, res) => {
       }
     }
 
+    // Auto-generate chart from data if API didn't return one
+    if (!finalChart && rawDataRows && rawDataRows.length > 0) {
+      try {
+        const columns = Object.keys(rawDataRows[0]);
+        // Find a numeric column for Y axis and a text/id column for X axis
+        const numericCol = columns.find(c => {
+          const val = rawDataRows[0][c];
+          return !isNaN(parseFloat(val)) && columns.indexOf(c) > 0; // prefer non-first column
+        }) || columns.find(c => !isNaN(parseFloat(rawDataRows[0][c])));
+        const labelCol = columns.find(c => c !== numericCol) || columns[0];
+
+        if (numericCol && labelCol && rawDataRows.length <= 50) {
+          finalChart = {
+            "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+            "data": { "values": rawDataRows.map(r => ({ [labelCol]: r[labelCol], [numericCol]: parseFloat(r[numericCol]) || 0 })) },
+            "mark": "bar",
+            "encoding": {
+              "x": { "field": labelCol, "type": "nominal", "title": labelCol, "sort": "-y" },
+              "y": { "field": numericCol, "type": "quantitative", "title": numericCol }
+            },
+            "width": 500,
+            "height": 300
+          };
+          console.log('[AutoChart] Generated bar chart from data rows');
+        }
+      } catch (chartErr) {
+        console.warn('[AutoChart] Failed to auto-generate chart:', chartErr.message);
+      }
+    }
+
     // Send structured response
-    console.log('Sending response to frontend:', { replyLength: fullResponseText.length, hasChart: !!finalChart });
+    console.log('Sending response to frontend:', { replyLength: fullResponseText.length, hasChart: !!finalChart, hasSql: !!finalSql, hasData: rawDataRows.length > 0, conversationId: returnedConversationId });
 
     // If no text was extracted, provide helpful feedback
     if (!fullResponseText || fullResponseText.trim().length === 0) {
