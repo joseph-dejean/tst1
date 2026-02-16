@@ -123,27 +123,6 @@ const ViewDetails = () => {
   };
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-    // Determine if the clicked tab is the Chat tab
-    let isChat = false;
-    const isBQTable = getEntryType(displayEntry.name, '/') === 'Tables' && displayEntry.entrySource?.system?.toLowerCase() === 'bigquery';
-    const isDataset = getEntryType(displayEntry.name, '/') === 'Datasets';
-
-    // Chat tab logic: open in new window if it's the specific chat index
-    // We'll define the indices in the Tabs component below.
-    // BQ Table: 0-Overview, 1-Aspects, 2-Lineage, 3-Data Profile, 4-Data Quality, 5-Chat
-    // Dataset: 0-Overview, 1-Entry List, 2-Aspects, 3-Chat
-    // Others: 0-Overview, 1-Aspects, 2-Chat
-    if (isBQTable && newValue === 5) isChat = true;
-    else if (isDataset && newValue === 3) isChat = true;
-    else if (!isBQTable && !isDataset && !glossaryType && newValue === 2) isChat = true;
-
-    if (isChat) {
-      // Open in new tab
-      const url = `/chat-analytics?entryName=${encodeURIComponent(displayEntry.name)}`;
-      window.open(url, '_blank');
-      return; // Do not change active tab
-    }
-
     setTabValue(newValue);
 
     // Auto-close asset preview on tab switch
@@ -712,7 +691,7 @@ const ViewDetails = () => {
                         <Tab key="lineage" label="Lineage" {...tabProps(2)} />,
                         <Tab key="dataProfile" label="Data Profile" {...tabProps(3)} />,
                         <Tab key="dataQuality" label="Data Quality" {...tabProps(4)} />,
-                        <Tab key="dataQuality" label="Data Quality" {...tabProps(4)} />
+
                       ] : getEntryType(displayEntry.name, '/') === 'Datasets' ? [
                         <Tab key="overview" label="Overview" {...tabProps(0)} />,
                         <Tab key="entryList" label="Entry List" {...tabProps(1)} />,
