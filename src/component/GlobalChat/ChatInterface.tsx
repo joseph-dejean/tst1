@@ -220,22 +220,22 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ entry, mode = 'global' })
                         <Typography variant="h6" sx={{ color: '#1F1F1F', fontSize: '1.rem', fontWeight: 500 }}>
                             Chat with {entry?.entrySource?.displayName || 'Table'}
                         </Typography>
-                        {mode === 'embedded' && (
-                            <Button
-                                variant="outlined"
-                                startIcon={<OpenInNewIcon />}
-                                onClick={handleOpenGlobalChat}
-                                size="small"
-                                sx={{ color: '#0B57D0', borderColor: '#0B57D0', textTransform: 'none' }}
-                            >
-                                Open in Global Chat
-                            </Button>
-                        )}
                     </Box>
                     <Typography variant="body2" sx={{ color: '#575757', mt: 0.5 }}>
                         Ask natural language questions about this table's data.
                     </Typography>
                 </Box>
+                {mode === 'embedded' && (
+                    <Button
+                        variant="outlined"
+                        startIcon={<OpenInNewIcon />}
+                        onClick={handleOpenGlobalChat}
+                        size="small"
+                        sx={{ color: '#0B57D0', borderColor: '#0B57D0', textTransform: 'none' }}
+                    >
+                        Open in Global Chat
+                    </Button>
+                )}
             </Box>
 
             {/* Chat Messages Area */}
