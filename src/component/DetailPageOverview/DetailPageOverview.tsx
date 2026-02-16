@@ -715,6 +715,75 @@ const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTa
                                 </Box>
                             </AccordionDetails>
                         </Accordion>
+
+                    </Box>
+
+                    {/* Relationships Accordion */}
+                    <Box sx={{
+                        border: "1px solid #DADCE0",
+                        borderRadius: "8px",
+                        marginTop: "10px",
+                        overflow: "hidden",
+                        backgroundColor: "#FFFFFF"
+                    }}>
+                        <Accordion
+                            defaultExpanded
+                            key="relationships-accordion"
+                            sx={{
+                                background: "none",
+                                boxShadow: "none",
+                                margin: "0px",
+                                borderRadius: "8px",
+                                minHeight: "64px",
+                                '&:before': { display: 'none' }
+                            }}
+                        >
+                            <AccordionSummary
+                                expandIcon={<ExpandMoreIcon />}
+                                aria-controls="relationships-content"
+                                id="relationships-header"
+                                sx={{
+                                    background: "#F8FAFD",
+                                    minHeight: "64px",
+                                    '& .MuiAccordionSummary-content': {
+                                        margin: 0
+                                    }
+                                }}
+                            >
+                                <Box sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "8px"
+                                }}>
+                                    <Typography
+                                        component="span"
+                                        variant="heading2Medium"
+                                        sx={{
+                                            fontWeight: 500,
+                                            fontSize: "1.125rem",
+                                            lineHeight: "1.33em",
+                                            color: "#1F1F1F",
+                                            textTransform: "capitalize",
+                                        }}
+                                    >
+                                        Relationships
+                                    </Typography>
+                                    <Tooltip title="Visualizes relationships between this table and others derived from foreign keys/joins." arrow placement="right">
+                                        <InfoOutline
+                                            sx={{
+                                                fontWeight: 800,
+                                                width: "18px",
+                                                height: "18px",
+                                                opacity: 0.9
+                                            }}
+                                        />
+                                    </Tooltip>
+                                </Box>
+                            </AccordionSummary>
+                            <AccordionDetails sx={{ padding: 0 }}>
+                                <RelationshipGraph relationships={lineageRelations} height={400} />
+                            </AccordionDetails>
+                        </Accordion>
                     </Box>
                     {/* Table Info Accordion */}
                     {getEntryType(entry.name, '/') == 'Tables' ? (
