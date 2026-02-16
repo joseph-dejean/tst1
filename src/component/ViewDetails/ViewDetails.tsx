@@ -1,4 +1,4 @@
-import ChatTab from '../ConversationalAnalytics/ChatTab';
+import ChatInterface from '../GlobalChat/ChatInterface';
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { Box, Tab, Tabs, Tooltip, Skeleton } from '@mui/material'
 import { ArrowBack } from '@mui/icons-material'
@@ -712,7 +712,7 @@ const ViewDetails = () => {
                         <Tab key="lineage" label="Lineage" {...tabProps(2)} />,
                         <Tab key="dataProfile" label="Data Profile" {...tabProps(3)} />,
                         <Tab key="dataQuality" label="Data Quality" {...tabProps(4)} />,
-                        <Tab key="chat" label="Chat with Table" {...tabProps(5)} />
+                        <Tab key="dataQuality" label="Data Quality" {...tabProps(4)} />
                       ] : getEntryType(displayEntry.name, '/') === 'Datasets' ? [
                         <Tab key="overview" label="Overview" {...tabProps(0)} />,
                         <Tab key="entryList" label="Entry List" {...tabProps(1)} />,
@@ -765,17 +765,10 @@ const ViewDetails = () => {
                   <CustomTabPanel value={tabValue} index={4}>
                     <DataQuality scanName={dqScanName} />
                   </CustomTabPanel>
-                  <CustomTabPanel value={tabValue} index={5}>
-                    <Box sx={{
-                      borderRadius: '8px',
-                      border: '1px solid #DADCE0',
-                      background: '#ffffff',
-                      minHeight: '500px',
-                      marginTop: '1.25rem'
-                    }}>
-                      <ChatTab entry={displayEntry} />
-                    </Box>
-                  </CustomTabPanel>
+                  {/* Chat Interface - Embedded Mode */}
+                  <Box sx={{ marginTop: '2rem', marginBottom: '2rem' }}>
+                    <ChatInterface entry={displayEntry} mode="embedded" />
+                  </Box>
                 </>
               ) : getEntryType(displayEntry.name, '/') === 'Datasets' ? (
                 <>

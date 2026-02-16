@@ -1,5 +1,7 @@
+
 import React, { useEffect, useState } from 'react';
-import { Box, Typography, TextField, Button, IconButton, CircularProgress, Tooltip } from '@mui/material';
+import { Box, Typography, TextField, Button, IconButton, CircularProgress, Tooltip, FormControlLabel, Checkbox } from '@mui/material';
+import { ServiceNowService } from '../../services/ServiceNowService';
 import { Close } from '@mui/icons-material';
 import { useAuth } from '../../auth/AuthProvider';
 import { useSelector } from 'react-redux';
@@ -60,6 +62,8 @@ interface SubmitAccessProps {
 
 const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName, entry, onSubmitSuccess, previewData, isLookup }) => {
   const [message, setMessage] = useState('');
+
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [contactEmails, setContactEmails] = useState<string[]>([]);
@@ -130,7 +134,7 @@ const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName,
       // Extract asset type from entry (e.g. "TABLE", "VIEW", "DATA_PRODUCT", etc.)
       const assetType = entry?.entryType?.split('/')?.pop() || entry?.entryType || '';
 
-      const response = await axios.post(`${URLS.API_URL}${URLS.ACCESS_REQUEST}`, {
+      const response = await axios.post(`${URLS.API_URL}${URLS.ACCESS_REQUEST} `, {
         assetName,
         linkedResource,
         assetType,
@@ -141,9 +145,26 @@ const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName,
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.token || ''}`
+          'Authorization': `Bearer ${user?.token || ''} `
         }
       });
+
+      // Create ServiceNow Ticket if requested
+      if (createTicket) {
+        try {
+          await ServiceNowService.createAccessRequestTicket(
+            user.email,
+            assetName,
+            'roles/bigquery.dataViewer', // Default role for now
+            message
+          );
+          console.log('ServiceNow ticket created successfully');
+        } catch (snError) {
+          console.error('Failed to create ServiceNow ticket:', snError);
+          // We don't block the UI success if ServiceNow fails, but maybe show a warning?
+          // For now, just log it.
+        }
+      }
 
       const data = response.data;
       if (data.success) {
@@ -497,6 +518,38 @@ const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName,
                 color: '#1F1F1F'
               }
             }}
+          />
+
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={createTicket}
+                onChange={(e) => setCreateTicket(e.target.checked)}
+                color="primary"
+              />
+            }
+            label={
+              <Typography sx={{ fontSize: '14px', color: '#1F1F1F' }}>
+                Create a ServiceNow Ticket
+              </Typography>
+            }
+            sx={{ marginTop: '12px' }}
+          />
+
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={createTicket}
+                onChange={(e) => setCreateTicket(e.target.checked)}
+                color="primary"
+              />
+            }
+            label={
+              <Typography sx={{ fontSize: '14px', color: '#1F1F1F' }}>
+                Create a ServiceNow Ticket
+              </Typography>
+            }
+            sx={{ marginTop: '12px' }}
           />
         </Box>
       </Box>

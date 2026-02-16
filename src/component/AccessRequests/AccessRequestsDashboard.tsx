@@ -1,4 +1,3 @@
-import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -16,9 +15,11 @@ import {
   Select,
   MenuItem,
   FormControl,
-  InputLabel
+  InputLabel,
+  Tabs,
+  Tab
 } from '@mui/material';
-import { ArrowBack, CheckCircle, Cancel, Refresh } from '@mui/icons-material';
+import { ArrowBack, CheckCircle, Cancel, Refresh, Person, Assignment } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthProvider';
 import axios from 'axios';
@@ -48,6 +49,7 @@ const AccessRequestsDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('');
+  const [tabValue, setTabValue] = useState<number>(0);
 
   // Determine user role (admin, manager, or user)
   const userRole = user?.roles?.includes('admin') ? 'admin' :
@@ -149,6 +151,19 @@ const AccessRequestsDashboard: React.FC = () => {
   // Get unique projects for filter
   const uniqueProjects = Array.from(new Set(requests.map(r => r.projectId)));
 
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
+
+  const filteredRequests = requests.filter(req => {
+    // If Tab 0 (All Requests) - only for admin/manager, show all (filtered by status/project)
+    // If Tab 1 (My Requests) - show only requests where requesterEmail == user.email
+    if (tabValue === 1) {
+      return req.requesterEmail === user?.email;
+    }
+    return true; // Admin/Manager view shows all by default (backend filters by role usually, but here we can refine)
+  });
+
   return (
     <Box sx={{
       backgroundColor: '#F8FAFD',
@@ -182,6 +197,16 @@ const AccessRequestsDashboard: React.FC = () => {
           <IconButton onClick={fetchAccessRequests} sx={{ marginLeft: 'auto' }}>
             <Refresh />
           </IconButton>
+        </Box>
+
+        {/* Tabs */}
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Tabs value={tabValue} onChange={handleTabChange} aria-label="access request tabs">
+            {(userRole === 'admin' || userRole === 'manager') && (
+              <Tab label="All Requests" icon={<Assignment />} iconPosition="start" />
+            )}
+            <Tab label="My Requests" icon={<Person />} iconPosition="start" />
+          </Tabs>
         </Box>
 
         {/* Filters */}
@@ -259,7 +284,7 @@ const AccessRequestsDashboard: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {requests.map((request) => (
+                {filteredRequests.map((request) => (
                   <TableRow key={request.id} hover>
                     <TableCell>
                       <div style={{ fontWeight: 500 }}>{request.assetName}</div>

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Box, Typography, Paper } from '@mui/material';
 import AccessibleTablesPanel from './AccessibleTablesPanel';
-import ChatTab from '../ConversationalAnalytics/ChatTab';
+import ChatInterface from './ChatInterface';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
+import { Button } from '@mui/material';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
 const GlobalChatPage: React.FC = () => {
     const [selectedTables, setSelectedTables] = useState<any[]>([]);
@@ -62,8 +64,19 @@ const GlobalChatPage: React.FC = () => {
                         </Paper>
                     </Box>
                 ) : (
-                    <ChatTab tables={selectedTables} />
+                    <ChatInterface initialTables={selectedTables} mode="global" />
                 )}
+            </Box>
+            {/* Create Agent Link */}
+            <Box sx={{ position: 'absolute', top: 20, right: 30 }}>
+                <Button
+                    variant="text"
+                    endIcon={<OpenInNewIcon />}
+                    onClick={() => window.open('https://console.cloud.google.com/bigquery/analytics-hub', '_blank')}
+                    sx={{ textTransform: 'none', color: '#1967D2' }}
+                >
+                    Create an Agent
+                </Button>
             </Box>
         </Box>
     );
