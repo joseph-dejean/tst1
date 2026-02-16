@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, TextField, Button, Paper, Typography, CircularProgress, Alert, Tooltip, IconButton } from '@mui/material';
+import { Box, TextField, Button, Paper, Typography, CircularProgress, Alert } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import axios from 'axios';
@@ -221,11 +221,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ entry, mode = 'global' })
                             Chat with {entry?.entrySource?.displayName || 'Table'}
                         </Typography>
                         {mode === 'embedded' && (
-                            <Tooltip title="Open in Global Chat">
-                                <IconButton size="small" onClick={handleOpenGlobalChat} sx={{ color: '#0B57D0' }}>
-                                    <OpenInNewIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
+                            <Button
+                                variant="outlined"
+                                startIcon={<OpenInNewIcon />}
+                                onClick={handleOpenGlobalChat}
+                                size="small"
+                                sx={{ color: '#0B57D0', borderColor: '#0B57D0', textTransform: 'none' }}
+                            >
+                                Open in Global Chat
+                            </Button>
                         )}
                     </Box>
                     <Typography variant="body2" sx={{ color: '#575757', mt: 0.5 }}>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Typography, Paper } from '@mui/material';
 import AccessibleTablesPanel from './AccessibleTablesPanel';
 import ChatInterface from './ChatInterface';
@@ -6,8 +6,18 @@ import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import { Button } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
+import { useLocation } from 'react-router-dom';
+
 const GlobalChatPage: React.FC = () => {
+    const location = useLocation();
     const [selectedTables, setSelectedTables] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (location.state?.selectedTable) {
+            setSelectedTables([location.state.selectedTable]);
+            // Clear location state to prevent re-open on refresh? No, maybe keep it.
+        }
+    }, [location.state]);
 
     return (
         <Box sx={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
