@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -149,13 +150,13 @@ const AccessRequestsDashboard: React.FC = () => {
   };
 
   // Get unique projects for filter
-  const uniqueProjects = Array.from(new Set(requests.map(r => r.projectId)));
+  const uniqueProjects = Array.from(new Set(requests.map((r: AccessRequest) => r.projectId)));
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
 
-  const filteredRequests = requests.filter(req => {
+  const filteredRequests = requests.filter((req: AccessRequest) => {
     // If Tab 0 (All Requests) - only for admin/manager, show all (filtered by status/project)
     // If Tab 1 (My Requests) - show only requests where requesterEmail == user.email
     if (tabValue === 1) {
@@ -284,7 +285,7 @@ const AccessRequestsDashboard: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredRequests.map((request) => (
+                {filteredRequests.map((request: AccessRequest) => (
                   <TableRow key={request.id} hover>
                     <TableCell>
                       <div style={{ fontWeight: 500 }}>{request.assetName}</div>

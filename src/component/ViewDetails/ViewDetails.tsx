@@ -75,7 +75,7 @@ const ViewDetails = () => {
   const id_token = user?.token || '';
   const allScans = useSelector(selectAllScans);
   const allScansStatus = useSelector(selectAllScansStatus);
-  const resourcesEntryList = useSelector((state: any) => state.resources.entryListData);
+
   const [tabValue, setTabValue] = React.useState(0);
   const [sampleTableData, setSampleTableData] = React.useState<any>();
   const [filteredEntry, setFilteredEntry] = useState<any>(null);
@@ -716,8 +716,7 @@ const ViewDetails = () => {
                       ] : getEntryType(displayEntry.name, '/') === 'Datasets' ? [
                         <Tab key="overview" label="Overview" {...tabProps(0)} />,
                         <Tab key="entryList" label="Entry List" {...tabProps(1)} />,
-                        <Tab key="annotations" label="Aspects" {...tabProps(2)} />,
-                        <Tab key="chat" label="Conversational Analytics" {...tabProps(3)} />
+                        <Tab key="annotations" label="Aspects" {...tabProps(2)} />
                       ] : glossaryType === 'glossary' || glossaryType === 'category' ? [
                         <Tab key="overview" label="Overview" {...tabProps(0)} />,
                         <Tab key="categories" label="Categories" {...tabProps(1)} />,
@@ -784,17 +783,6 @@ const ViewDetails = () => {
                       onExpandAll={handleAnnotationExpandAll}
                     />
                     {annotationTab}
-                  </CustomTabPanel>
-                  <CustomTabPanel value={tabValue} index={3}>
-                    <Box sx={{
-                      borderRadius: '8px',
-                      border: '1px solid #DADCE0',
-                      background: '#ffffff',
-                      minHeight: '500px',
-                      marginTop: '1.25rem'
-                    }}>
-                      <ChatTab entry={displayEntry} tables={resourcesEntryList} />
-                    </Box>
                   </CustomTabPanel>
                 </>
               ) : glossaryType === 'glossary' || glossaryType === 'category' ? (
@@ -919,17 +907,7 @@ const ViewDetails = () => {
                     />
                     {annotationTab}
                   </CustomTabPanel>
-                  <CustomTabPanel value={tabValue} index={2}>
-                    <Box sx={{
-                      borderRadius: '8px',
-                      border: '1px solid #DADCE0',
-                      background: '#ffffff',
-                      minHeight: '500px',
-                      marginTop: '1.25rem'
-                    }}>
-                      <ChatTab entry={displayEntry} />
-                    </Box>
-                  </CustomTabPanel>
+
                 </>
               )}
             </div>

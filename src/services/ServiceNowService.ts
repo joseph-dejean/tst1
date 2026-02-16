@@ -18,7 +18,7 @@ class ServiceNowServiceMock {
     /**
      * Creates a new access request ticket in ServiceNow
      */
-    async createAccessRequestTicket(userEmail: string, resourceName: string, role: string, justification: string): Promise<ServiceNowTicket> {
+    async createAccessRequestTicket(userEmail: string, resourceName: string, role: string, _justification: string): Promise<ServiceNowTicket> {
         console.log(`[ServiceNow Mock] Creating ticket for ${userEmail} requesting ${role} on ${resourceName}`);
 
         // Simulate API delay

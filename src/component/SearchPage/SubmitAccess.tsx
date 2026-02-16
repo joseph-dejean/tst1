@@ -62,6 +62,7 @@ interface SubmitAccessProps {
 
 const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName, entry, onSubmitSuccess, previewData, isLookup }) => {
   const [message, setMessage] = useState('');
+  const [createTicket, setCreateTicket] = useState(true); // Default to true
 
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -520,21 +521,7 @@ const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName,
             }}
           />
 
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={createTicket}
-                onChange={(e) => setCreateTicket(e.target.checked)}
-                color="primary"
-              />
-            }
-            label={
-              <Typography sx={{ fontSize: '14px', color: '#1F1F1F' }}>
-                Create a ServiceNow Ticket
-              </Typography>
-            }
-            sx={{ marginTop: '12px' }}
-          />
+
 
           <FormControlLabel
             control={
