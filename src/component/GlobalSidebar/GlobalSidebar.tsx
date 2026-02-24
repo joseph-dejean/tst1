@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, AdminPanelSettings, ChatBubbleOutline, MenuBook } from '@mui/icons-material';
+import { Search, AdminPanelSettings, ChatBubbleOutline } from '@mui/icons-material';
 import SidebarMenuItem from './SidebarMenuItem';
 import { useAccessRequest } from '../../contexts/AccessRequestContext';
 import './GlobalSidebar.css';
@@ -21,7 +21,7 @@ const GlobalSidebar: React.FC<GlobalSidebarProps> = ({ isHomePage = false }) => 
 
   // Determine active states based on current route
   const isSearchActive = ['/home', '/search', '/view-details'].includes(location.pathname);
-  const isGlossariesActive = location.pathname.startsWith('/glossaries');
+
   const isDataProductsActive = location.pathname.startsWith('/data-products');
   const isChatActive = location.pathname === '/global-chat';
   const dispatch = useDispatch<AppDispatch>();
