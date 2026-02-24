@@ -1,6 +1,6 @@
 import './Home.css'
 import SearchBar from '../SearchBar/SearchBar'
-import { Button, CircularProgress, Grid } from '@mui/material'
+import { CircularProgress, Grid } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../auth/AuthProvider'
