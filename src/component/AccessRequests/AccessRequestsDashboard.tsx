@@ -18,9 +18,10 @@ import {
   FormControl,
   InputLabel,
   Tabs,
-  Tab
+  Tab,
+  Button
 } from '@mui/material';
-import { ArrowBack, CheckCircle, Cancel, Refresh, Person, Assignment } from '@mui/icons-material';
+import { ArrowBack, CheckCircle, Cancel, Refresh, Person, Assignment, AdminPanelSettings } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthProvider';
 import axios from 'axios';
@@ -53,8 +54,7 @@ const AccessRequestsDashboard: React.FC = () => {
   const [tabValue, setTabValue] = useState<number>(0);
 
   // Determine user role (admin, manager, or user)
-  const userRole = user?.roles?.includes('admin') ? 'admin' :
-    user?.roles?.includes('manager') ? 'manager' : 'user';
+  const userRole = user?.isAdmin ? 'admin' : 'user';
 
   useEffect(() => {
     fetchAccessRequests();
@@ -157,12 +157,18 @@ const AccessRequestsDashboard: React.FC = () => {
   };
 
   const filteredRequests = requests.filter((req: AccessRequest) => {
-    // If Tab 0 (All Requests) - only for admin/manager, show all (filtered by status/project)
-    // If Tab 1 (My Requests) - show only requests where requesterEmail == user.email
-    if (tabValue === 1) {
+    const isAdmin = userRole === 'admin';
+
+    if (isAdmin) {
+      // If admin, they have two tabs: 0 = All, 1 = My Requests
+      if (tabValue === 1) {
+        return req.requesterEmail === user?.email;
+      }
+      return true;
+    } else {
+      // If not admin, they only have one tab: 0 = My Requests
       return req.requesterEmail === user?.email;
     }
-    return true; // Admin/Manager view shows all by default (backend filters by role usually, but here we can refine)
   });
 
   return (
@@ -193,17 +199,27 @@ const AccessRequestsDashboard: React.FC = () => {
             <ArrowBack />
           </IconButton>
           <Typography variant="h5" sx={{ fontWeight: 500, color: '#1F1F1F' }}>
-            Access Requests Dashboard
+            Access Requests
           </Typography>
+          {user?.isAdmin && (
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => navigate('/admin-access')}
+              sx={{ ml: 2, borderRadius: '20px', textTransform: 'none' }}
+              startIcon={<AdminPanelSettings />}
+            >
+              Admin Management
+            </Button>
+          )}
           <IconButton onClick={fetchAccessRequests} sx={{ marginLeft: 'auto' }}>
             <Refresh />
           </IconButton>
         </Box>
 
-        {/* Tabs */}
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
           <Tabs value={tabValue} onChange={handleTabChange} aria-label="access request tabs">
-            {(userRole === 'admin' || userRole === 'manager') && (
+            {userRole === 'admin' && (
               <Tab label="All Requests" icon={<Assignment />} iconPosition="start" />
             )}
             <Tab label="My Requests" icon={<Person />} iconPosition="start" />
@@ -279,7 +295,7 @@ const AccessRequestsDashboard: React.FC = () => {
                   <TableCell><strong>Status</strong></TableCell>
                   <TableCell><strong>Submitted</strong></TableCell>
                   <TableCell><strong>Message</strong></TableCell>
-                  {(userRole === 'admin' || userRole === 'manager') && (
+                  {userRole === 'admin' && (
                     <TableCell><strong>Actions</strong></TableCell>
                   )}
                 </TableRow>
@@ -320,7 +336,7 @@ const AccessRequestsDashboard: React.FC = () => {
                     <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {request.message || '-'}
                     </TableCell>
-                    {(userRole === 'admin' || userRole === 'manager') && (
+                    {(userRole === 'admin') && (
                       <TableCell>
                         {request.status === 'pending' ? (
                           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>

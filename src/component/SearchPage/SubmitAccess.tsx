@@ -5,6 +5,7 @@ import { ServiceNowService } from '../../services/ServiceNowService';
 import { Close } from '@mui/icons-material';
 import { useAuth } from '../../auth/AuthProvider';
 import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { URLS } from '../../constants/urls';
 
@@ -61,8 +62,9 @@ interface SubmitAccessProps {
 }
 
 const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName, entry, onSubmitSuccess, previewData, isLookup }) => {
+  const navigate = useNavigate();
   const [message, setMessage] = useState('');
-  const [createTicket, setCreateTicket] = useState(true); // Default to true
+  const [createTicket, setCreateTicket] = useState(ServiceNowService.isConfigured());
 
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -523,21 +525,37 @@ const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName,
 
 
 
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={createTicket}
-                onChange={(e) => setCreateTicket(e.target.checked)}
-                color="primary"
-              />
-            }
-            label={
-              <Typography sx={{ fontSize: '14px', color: '#1F1F1F' }}>
-                Create a ServiceNow Ticket
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={createTicket}
+                  onChange={(e) => setCreateTicket(e.target.checked)}
+                  color="primary"
+                  disabled={!ServiceNowService.isConfigured()}
+                />
+              }
+              label={
+                <Typography sx={{ fontSize: '14px', color: ServiceNowService.isConfigured() ? '#1F1F1F' : '#9AA0A6' }}>
+                  Create a ServiceNow Ticket
+                </Typography>
+              }
+            />
+            {!ServiceNowService.isConfigured() && (
+              <Typography
+                onClick={() => { onClose(); navigate('/settings'); }}
+                sx={{
+                  fontSize: '12px',
+                  color: '#0E4DCA',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  '&:hover': { color: '#0B3DA8' }
+                }}
+              >
+                Configure in Settings
               </Typography>
-            }
-            sx={{ marginTop: '12px' }}
-          />
+            )}
+          </Box>
         </Box>
       </Box>
 

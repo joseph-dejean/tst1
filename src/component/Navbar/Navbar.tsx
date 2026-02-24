@@ -55,7 +55,7 @@ import NotificationCenter from './NotificationCenter';
  */
 
 //const pages = ['Guide', 'Notification', 'Help'];
-const settings = ['Home'];
+const settings = ['Home', 'Integrations'];
 
 // Icon mapping for menu items
 const getMenuIcon = (setting: string) => {
@@ -66,14 +66,8 @@ const getMenuIcon = (setting: string) => {
         fontSize: "1.25rem", // 20px
         color: "#5F6367"
       }} />;
-    case 'Profile':
-      return <Person sx={{
-        mr: "0.25rem",
-        fontSize: "1.25rem", // 20px
-        color: "#5F6367"
-      }} />;
-    case 'Account':
-      return <AccountCircle sx={{
+    case 'Integrations':
+      return <Business sx={{
         mr: "0.25rem",
         fontSize: "1.25rem", // 20px
         color: "#5F6367"
@@ -87,10 +81,8 @@ const getNavPath = (setting: string) => {
   switch (setting) {
     case 'Home':
       return '/home';
-    case 'Profile':
-      return '/profile';
-    case 'Account':
-      return '/account';
+    case 'Integrations':
+      return '/settings';
     default:
       return '/';
   }

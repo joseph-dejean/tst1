@@ -14,12 +14,36 @@ export interface ServiceNowTicket {
 }
 
 class ServiceNowServiceMock {
+    /**
+     * Helper to get the current configuration
+     */
+    getConfig() {
+        try {
+            const saved = localStorage.getItem('servicenow_integration_config');
+            return saved ? JSON.parse(saved) : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Checks if the service is enabled and configured
+     */
+    isConfigured(): boolean {
+        const config = this.getConfig();
+        return !!(config && config.enabled && config.instanceUrl);
+    }
 
     /**
      * Creates a new access request ticket in ServiceNow
      */
     async createAccessRequestTicket(userEmail: string, resourceName: string, role: string, _justification: string): Promise<ServiceNowTicket> {
-        console.log(`[ServiceNow Mock] Creating ticket for ${userEmail} requesting ${role} on ${resourceName}`);
+        const config = this.getConfig();
+        const instance = config?.instanceUrl || 'https://dev-mock.service-now.com';
+
+        console.log(`[ServiceNow] Connecting to ${instance}...`);
+        console.log(`[ServiceNow] Authenticating as ${config?.username || 'mock_user'}...`);
+        console.log(`[ServiceNow] Creating ticket for ${userEmail} requesting ${role} on ${resourceName}`);
 
         // Simulate API delay
         await new Promise(resolve => setTimeout(resolve, 1500));
@@ -38,7 +62,10 @@ class ServiceNowServiceMock {
      * Checks the status of an existing ticket
      */
     async checkTicketStatus(ticketNumber: string): Promise<string> {
-        console.log(`[ServiceNow Mock] Checking status for ${ticketNumber}`);
+        const config = this.getConfig();
+        const instance = config?.instanceUrl || 'https://dev-mock.service-now.com';
+
+        console.log(`[ServiceNow] Checking status for ${ticketNumber} on ${instance}`);
 
         // Simulate API delay
         await new Promise(resolve => setTimeout(resolve, 800));

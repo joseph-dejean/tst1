@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, AdminPanelSettings, ChatBubbleOutline } from '@mui/icons-material';
+import { Search, AdminPanelSettings, ChatBubbleOutline, Assignment, Settings as SettingsIcon } from '@mui/icons-material';
 import SidebarMenuItem from './SidebarMenuItem';
 import { useAccessRequest } from '../../contexts/AccessRequestContext';
 import './GlobalSidebar.css';
@@ -93,16 +93,21 @@ const GlobalSidebar: React.FC<GlobalSidebarProps> = ({ isHomePage = false }) => 
           onClick={() => navigate('/global-chat')}
         />
 
-        {/* Access Management */}
-        {user?.isAdmin && (
-          <SidebarMenuItem
-            icon={<AdminPanelSettings sx={{ fontSize: 20, color: ['/admin-access', '/access-requests'].includes(location.pathname) ? '#0E4DCA' : '#5F6368' }} />}
-            label="Admin"
-            isActive={['/admin-access', '/access-requests'].includes(location.pathname)}
-            onClick={() => navigate('/admin-access')}
-          />
-        )}
+        {/* Access Management / Requests */}
+        <SidebarMenuItem
+          icon={<Assignment sx={{ fontSize: 20, color: location.pathname === '/access-requests' ? '#0E4DCA' : '#5F6368' }} />}
+          label="Requests"
+          isActive={location.pathname === '/access-requests'}
+          onClick={() => navigate('/access-requests')}
+        />
 
+        {/* Settings */}
+        <SidebarMenuItem
+          icon={<SettingsIcon sx={{ fontSize: 20, color: location.pathname === '/settings' ? '#0E4DCA' : '#5F6368' }} />}
+          label="Settings"
+          isActive={location.pathname === '/settings'}
+          onClick={() => navigate('/settings')}
+        />
       </div>
 
       {/* Browse Popover */}

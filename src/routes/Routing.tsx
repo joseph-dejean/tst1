@@ -30,6 +30,7 @@ import DataProductsDetailView from '../component/DataProducts/DataProductsDetail
 import AccessRequestsDashboard from '../component/AccessRequests/AccessRequestsDashboard';
 import AdminAccessManagement from '../component/AdminPanel/AdminAccessManagement';
 import GlobalChatPage from '../component/GlobalChat/GlobalChatPage';
+import Settings from '../component/Settings/Settings';
 
 const Routing = () => {
   // state to hold the user object
@@ -307,6 +308,18 @@ const Routing = () => {
             <SessionExpirationWrapper>
               <Layout searchBar={true}>
                 <DataProductPage />
+              </Layout>
+            </SessionExpirationWrapper>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <SessionExpirationWrapper>
+              <Layout searchBar={true}>
+                <Settings />
               </Layout>
             </SessionExpirationWrapper>
           </ProtectedRoute>
