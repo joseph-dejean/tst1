@@ -84,6 +84,10 @@ export const searchResourcesByTerm = createAsyncThunk('resources/searchResources
           if (filter.type === 'project') {
             project += (project != '' ? '|' : '') + `${filter.name}`;
           }
+          if (filter.type === 'glossary') {
+            const glossaryName = filter.data.name;
+            searchString += (searchString != '' ? ' ' : '') + `parent:"${glossaryName}"`;
+          }
         });
         // Example search string format: 
         // name:searchTerm|description:searchTerm|title:searchTerm|tags:searchTerm|

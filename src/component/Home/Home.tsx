@@ -153,46 +153,7 @@ const Home = () => {
                   { name: 'GCS' }
                 ]} />
               </div>
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-                <Button
-                  variant="outlined"
-                  onClick={() => navigate('/glossaries')}
-                  startIcon={<img src="/assets/svg/glossary_icon.svg" alt="" style={{ width: '20px' }} onError={(e) => { e.currentTarget.style.display = 'none' }} />}
-                  sx={{
-                    borderRadius: '24px',
-                    textTransform: 'none',
-                    color: '#0E4DCA',
-                    borderColor: '#DADCE0',
-                    padding: '8px 20px',
-                    backgroundColor: '#FFFFFF',
-                    '&:hover': {
-                      borderColor: '#0E4DCA',
-                      backgroundColor: '#F8FAFD'
-                    }
-                  }}
-                >
-                  Browse by Glossaries
-                </Button>
-                <Button
-                  variant="outlined"
-                  onClick={() => navigate('/browse-by-annotation')}
-                  startIcon={<img src="/assets/svg/annotations-icon-blue.svg" alt="" style={{ width: '20px' }} onError={(e) => { e.currentTarget.style.display = 'none' }} />}
-                  sx={{
-                    borderRadius: '24px',
-                    textTransform: 'none',
-                    color: '#0E4DCA',
-                    borderColor: '#DADCE0',
-                    padding: '8px 20px',
-                    backgroundColor: '#FFFFFF',
-                    '&:hover': {
-                      borderColor: '#0E4DCA',
-                      backgroundColor: '#F8FAFD'
-                    }
-                  }}
-                >
-                  Browse by Aspects
-                </Button>
-              </div>
+
             </Grid>
           </div>
           )}

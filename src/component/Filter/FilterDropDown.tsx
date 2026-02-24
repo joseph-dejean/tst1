@@ -255,11 +255,41 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange, isGlos
     defaultExpanded: false,
   };
 
+  const [availableGlossaries, setAvailableGlossaries] = useState<any[]>([]);
+
   const [filterData, setFilterData] = useState<any[]>(
     isGlossary
       ? [assets, products, projects]
-      : [annotations, assets, products, projects]
+      : [annotations, { title: 'Glossaries', items: [], defaultExpanded: false }, assets, products, projects]
   );
+
+  useEffect(() => {
+    const fetchAvailableGlossaries = async () => {
+      try {
+        const response = await axios.post(`${URLS.API_URL}/projects/${import.meta.env.VITE_GOOGLE_PROJECT_ID}/locations/global:searchEntries`, {
+          query: "type=GLOSSARY EXP:SEMANTIC",
+          pageSize: 100
+        }, {
+          headers: { Authorization: `Bearer ${user?.token}` }
+        });
+
+        if (response.data && response.data.results) {
+          const items = response.data.results.map((r: any) => ({
+            name: r.dataplexEntry.entrySource.displayName || r.dataplexEntry.name.split('/').pop(),
+            type: "glossary",
+            data: r.dataplexEntry
+          }));
+          setAvailableGlossaries(items);
+        }
+      } catch (err) {
+        console.error("Error fetching glossaries for filter:", err);
+      }
+    };
+
+    if (user?.token) {
+      fetchAvailableGlossaries();
+    }
+  }, [user?.token]);
 
   useEffect(() => {
     if (user?.appConfig) {
@@ -282,9 +312,15 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange, isGlos
         pItems.push({ name: 'Others', type: "project", data: {} });
       }
 
+      const glossaries: any = {
+        title: 'Glossaries',
+        items: availableGlossaries,
+        defaultExpanded: false,
+      };
+
       const newData = isGlossary
         ? [assets, products, { ...projects, items: pItems }]
-        : [{ ...annotations }, assets, products, { ...projects, items: pItems }];
+        : [{ ...annotations }, glossaries, assets, products, { ...projects, items: pItems }];
 
       setFilterData(newData);
     }
@@ -373,6 +409,7 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange, isGlos
 
   const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({
     'Annotations': false,
+    'Glossaries': false,
     'Assets': false,
     'Products': false,
     'Projects': false
@@ -586,7 +623,7 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange, isGlos
                 fontSize: "0.75rem",
               }}>
                 {
-                  (filter.title === 'Assets' || filter.title === 'Products' ?
+                  (filter.title === 'Assets' || filter.title === 'Products' || filter.title === 'Glossaries' ?
                     filter.items :
                     filter.items.slice(0, 20)
                   ).map((item: any) => (
@@ -661,6 +698,13 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange, isGlos
                                   style={{ width: '1.25rem', height: '1.25rem', flex: '0 0 auto' }}
                                 />
                               )}
+                              {(filter.title === 'Glossaries' || (filter.title === 'Assets' && (item.name.toLowerCase().includes('glossary')))) && (
+                                <img
+                                  src={GlossaryIcon}
+                                  alt={item.name}
+                                  style={{ width: '1.25rem', height: '1.25rem', flex: '0 0 auto' }}
+                                />
+                              )}
                               <span style={{
                                 flex: '1 1 auto',
                                 overflow: 'hidden',
@@ -729,7 +773,7 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange, isGlos
             </Accordion>
           ))}
         </div>
-      </Box>
+      </Box >
 
       {showMultiSelect && (
         <FilterAnnotationsMultiSelect
@@ -741,21 +785,24 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange, isGlos
           onChange={handleMultiSelectChange}
           position={multiselectPosition}
         />
-      )}
+      )
+      }
 
-      {showSubAnnotationsPanel && (
-        <FilterSubAnnotationsPanel
-          isOpen={showSubAnnotationsPanel}
-          onClose={handleCloseSubAnnotationsPanel}
-          annotationName={selectedAnnotationForSubPanel}
-          subAnnotations={subAnnotationData}
-          selectedSubAnnotations={selectedSubAnnotations}
-          subAnnotationsloader={!subAnnotationsloaded}
-          onSubAnnotationsChange={handleSubAnnotationsChange}
-          onSubAnnotationsApply={handleSubAnnotationsApply}
-          clickPosition={clickPosition}
-        />
-      )}
+      {
+        showSubAnnotationsPanel && (
+          <FilterSubAnnotationsPanel
+            isOpen={showSubAnnotationsPanel}
+            onClose={handleCloseSubAnnotationsPanel}
+            annotationName={selectedAnnotationForSubPanel}
+            subAnnotations={subAnnotationData}
+            selectedSubAnnotations={selectedSubAnnotations}
+            subAnnotationsloader={!subAnnotationsloaded}
+            onSubAnnotationsChange={handleSubAnnotationsChange}
+            onSubAnnotationsApply={handleSubAnnotationsApply}
+            clickPosition={clickPosition}
+          />
+        )
+      }
     </>
   );
 };
