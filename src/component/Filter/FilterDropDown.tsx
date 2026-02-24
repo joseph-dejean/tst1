@@ -291,40 +291,80 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange, isGlos
     }
   }, [user?.token]);
 
-  useEffect(() => {
-    if (user?.appConfig) {
-      if (user.appConfig.aspects && Array.isArray(user.appConfig.aspects)) {
-        annotations.items = user.appConfig.aspects.map((aspect: any) => ({
-          name: aspect.dataplexEntry.entrySource.displayName || (aspect.dataplexEntry.name ? aspect.dataplexEntry.name.split('/').pop() : ''),
-          type: "aspectType",
-          data: aspect.dataplexEntry
-        }));
-      }
-
-      let pItems = [];
-      if (user.appConfig.projects && Array.isArray(user.appConfig.projects)) {
-        let plist: any = projectsLoaded ? projectsList : user.appConfig.projects;
-        pItems = plist.map((project: any) => ({
-          name: project.projectId,
-          type: "project",
-          data: {}
-        }));
-        pItems.push({ name: 'Others', type: "project", data: {} });
-      }
-
-      const glossaries: any = {
-        title: 'Glossaries',
-        items: availableGlossaries,
-        defaultExpanded: false,
-      };
-
-      const newData = isGlossary
-        ? [assets, products, { ...projects, items: pItems }]
-        : [{ ...annotations }, glossaries, assets, products, { ...projects, items: pItems }];
-
-      setFilterData(newData);
+  const loadAspectsData = async () => {
+    if (user?.appConfig?.aspects && Array.isArray(user.appConfig.aspects) && user.appConfig.aspects.length > 0) {
+      const items = user.appConfig.aspects.map((aspect: any) => ({
+        name: aspect.dataplexEntry.entrySource.displayName || (aspect.dataplexEntry.name ? aspect.dataplexEntry.name.split('/').pop() : ''),
+        type: "aspectType",
+        data: aspect.dataplexEntry
+      }));
+      return items;
     }
-  }, [user?.appConfig, projectsLoaded, projectsList, isGlossary]);
+
+    // Fallback: fetch aspects from API if not in appConfig
+    try {
+      const response = await axios.get(`${URLS.API_URL}${URLS.GET_ASPECT_TYPES}`, {
+        headers: { Authorization: `Bearer ${user?.token}` }
+      });
+      let aspectTypes = response.data || [];
+      if (!Array.isArray(aspectTypes)) {
+        aspectTypes = response.data?.data || [];
+      }
+
+      return aspectTypes.map((aspect: any) => ({
+        name: aspect.displayName || aspect.name?.split('/').pop() || 'Unknown Aspect',
+        type: "aspectType",
+        data: {
+          name: aspect.name,
+          entrySource: {
+            displayName: aspect.displayName || aspect.name?.split('/').pop(),
+            resource: aspect.name
+          }
+        }
+      }));
+    } catch (error) {
+      console.error('Error fetching aspects for FilterDropDown:', error);
+      return [];
+    }
+  };
+
+  useEffect(() => {
+    const updateFilterData = async () => {
+      if (user?.appConfig) {
+        const aspectItems = await loadAspectsData();
+        const annotationsData = {
+          title: 'Aspects',
+          items: aspectItems,
+          defaultExpanded: false,
+        };
+
+        let pItems = [];
+        if (user.appConfig.projects && Array.isArray(user.appConfig.projects)) {
+          let plist: any = projectsLoaded ? projectsList : user.appConfig.projects;
+          pItems = plist.map((project: any) => ({
+            name: project.projectId,
+            type: "project",
+            data: {}
+          }));
+          pItems.push({ name: 'Others', type: "project", data: {} });
+        }
+
+        const glossaries: any = {
+          title: 'Glossaries',
+          items: availableGlossaries,
+          defaultExpanded: false,
+        };
+
+        const newData = isGlossary
+          ? [assets, products, { ...projects, items: pItems }]
+          : [annotationsData, glossaries, assets, products, { ...projects, items: pItems }];
+
+        setFilterData(newData);
+      }
+    };
+
+    updateFilterData();
+  }, [user?.appConfig, projectsLoaded, projectsList, isGlossary, availableGlossaries]);
 
   const [showSubAnnotationsPanel, setShowSubAnnotationsPanel] = useState(false);
   const [selectedAnnotationForSubPanel, setSelectedAnnotationForSubPanel] = useState<string>('');
@@ -408,7 +448,7 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange, isGlos
   }, [searchType, products.items, selectedFilters, onFilterChange]);
 
   const [expandedSections, setExpandedSections] = useState<{ [key: string]: boolean }>({
-    'Annotations': false,
+    'Aspects': false,
     'Glossaries': false,
     'Assets': false,
     'Products': false,
