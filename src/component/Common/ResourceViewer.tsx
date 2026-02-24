@@ -384,7 +384,16 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
     const isAccessGranted = entryStatus === 'succeeded';
 
     if (isCurrentlyPreviewed && isAccessGranted) {
-      navigate('/view-details');
+      // Check if it's a glossary entry to redirect to the Glossaries page
+      const rawType = (clickedEntry.searchResultType || clickedEntry.entryType || 'Unknown').toLowerCase();
+      const isGlossary = rawType.includes('glossary') || rawType.includes('category') || rawType.includes('term');
+
+      if (isGlossary) {
+        const resourceId = clickedEntry.entrySource?.resource || clickedEntry.name;
+        navigate('/glossaries', { state: { selectedId: resourceId } });
+      } else {
+        navigate('/view-details');
+      }
     } else {
       onPreviewDataChange(clickedEntry);
     }

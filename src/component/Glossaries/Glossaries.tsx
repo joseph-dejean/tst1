@@ -8,6 +8,7 @@ import {
   Tab,
   Button,
 } from "@mui/material";
+import { useLocation, useNavigate } from "react-router-dom";
 import NothingImage from "../../assets/images/nothing-image.png";
 
 import { ArrowBack } from "@mui/icons-material";
@@ -156,8 +157,29 @@ const Glossaries = () => {
   } = useSelector((state: any) => state.glossaries);
   const projectsLoaded = useSelector((state: any) => state.projects.isloaded);
 
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const [selectedId, setSelectedId] = useState<string>("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  // Handle deep-linking from search results or other pages
+  useEffect(() => {
+    if (location.state?.selectedId) {
+      const id = location.state.selectedId;
+      setSelectedId(id);
+      manualSelectionId.current = id;
+
+      // Fetch details immediately for the deep-linked item
+      setIsContentLoading(true);
+      dispatch(fetchGlossaryEntryDetails({ entryName: id, id_token: user?.token }))
+        .unwrap()
+        .finally(() => setIsContentLoading(false));
+
+      // Clear state after reading so we don't keep resetting on every render
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, dispatch, user?.token, navigate, location.pathname]);
   const [tabValue, setTabValue] = useState(0);
   const [contentSearchTerm, setContentSearchTerm] = useState("");
   const [relationFilter, setRelationFilter] = useState<
@@ -753,9 +775,9 @@ const Glossaries = () => {
 
           {/* Tabs */}
           {(status === "loading" && !selectedItem) ||
-          isContentLoading ||
-          (selectedItem && !selectedItem.aspects) ||
-          (selectedItem?.type === "term" && !selectedItem.relations) ? (
+            isContentLoading ||
+            (selectedItem && !selectedItem.aspects) ||
+            (selectedItem?.type === "term" && !selectedItem.relations) ? (
             // Tabs Shimmer: Horizontal row of placeholders to prevent layout jump
             <Box
               sx={{

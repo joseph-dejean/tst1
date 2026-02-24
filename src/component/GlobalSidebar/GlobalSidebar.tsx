@@ -28,7 +28,7 @@ const GlobalSidebar: React.FC<GlobalSidebarProps> = ({ isHomePage = false }) => 
   const { user } = useAuth();
 
   const handleSearchClick = () => {
-    navigate('/home');
+    navigate('/search');
   };
 
 
