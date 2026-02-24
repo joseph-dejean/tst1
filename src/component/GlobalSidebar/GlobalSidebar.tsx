@@ -73,13 +73,7 @@ const GlobalSidebar: React.FC<GlobalSidebarProps> = ({ isHomePage = false }) => 
           onClick={handleSearchClick}
         />
 
-        {/* Glossaries */}
-        <SidebarMenuItem
-          icon={<MenuBook sx={{ fontSize: 20 }} />}
-          label="Glossaries"
-          isActive={isGlossariesActive}
-          onClick={() => navigate('/glossaries')}
-        />
+
 
         {/* Data Products */}
         <SidebarMenuItem

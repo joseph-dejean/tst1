@@ -266,7 +266,7 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange, isGlos
   useEffect(() => {
     const fetchAvailableGlossaries = async () => {
       try {
-        const response = await axios.post(`${URLS.API_URL}/projects/${import.meta.env.VITE_GOOGLE_PROJECT_ID}/locations/global:searchEntries`, {
+        const response = await axios.post(`https://dataplex.googleapis.com/v1/projects/${import.meta.env.VITE_GOOGLE_PROJECT_ID}/locations/global:searchEntries`, {
           query: "type=GLOSSARY EXP:SEMANTIC",
           pageSize: 100
         }, {
@@ -349,7 +349,7 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange, isGlos
           pItems.push({ name: 'Others', type: "project", data: {} });
         }
 
-        const glossaries: any = {
+        const glossariesData = {
           title: 'Glossaries',
           items: availableGlossaries,
           defaultExpanded: false,
@@ -357,7 +357,7 @@ const FilterDropdown: React.FC<FilterProps> = ({ filters, onFilterChange, isGlos
 
         const newData = isGlossary
           ? [assets, products, { ...projects, items: pItems }]
-          : [annotationsData, glossaries, assets, products, { ...projects, items: pItems }];
+          : [annotationsData, glossariesData, assets, products, { ...projects, items: pItems }];
 
         setFilterData(newData);
       }
