@@ -6,9 +6,7 @@ import {
     TextField,
     Button,
     Switch,
-    FormControlLabel,
     Divider,
-    IconButton,
     Alert,
     Snackbar,
     Grid,
@@ -67,7 +65,7 @@ const Settings: React.FC = () => {
             </Box>
 
             <Grid container spacing={4}>
-                <Grid item xs={12} md={8}>
+                <Grid size={{ xs: 12, md: 8 }}>
                     <Paper elevation={0} sx={{ p: 3, border: '1px solid #DADCE0', borderRadius: '16px' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
                             <Business sx={{ color: '#5F6368' }} />
@@ -94,7 +92,7 @@ const Settings: React.FC = () => {
 
                             {snConfig.enabled && (
                                 <Grid container spacing={2}>
-                                    <Grid item xs={12}>
+                                    <Grid size={{ xs: 12 }}>
                                         <TextField
                                             fullWidth
                                             label="ServiceNow Instance URL"
@@ -108,7 +106,7 @@ const Settings: React.FC = () => {
                                             }}
                                         />
                                     </Grid>
-                                    <Grid item xs={12} md={6}>
+                                    <Grid size={{ xs: 12, md: 6 }}>
                                         <TextField
                                             fullWidth
                                             label="Client ID"
@@ -118,7 +116,7 @@ const Settings: React.FC = () => {
                                             size="small"
                                         />
                                     </Grid>
-                                    <Grid item xs={12} md={6}>
+                                    <Grid size={{ xs: 12, md: 6 }}>
                                         <TextField
                                             fullWidth
                                             label="Client Secret"
@@ -129,7 +127,7 @@ const Settings: React.FC = () => {
                                             size="small"
                                         />
                                     </Grid>
-                                    <Grid item xs={12} md={6}>
+                                    <Grid size={{ xs: 12, md: 6 }}>
                                         <TextField
                                             fullWidth
                                             label="API Username"
@@ -139,7 +137,7 @@ const Settings: React.FC = () => {
                                             size="small"
                                         />
                                     </Grid>
-                                    <Grid item xs={12} md={6}>
+                                    <Grid size={{ xs: 12, md: 6 }}>
                                         <TextField
                                             fullWidth
                                             label="API Password"
@@ -183,7 +181,7 @@ const Settings: React.FC = () => {
                     </Paper>
                 </Grid>
 
-                <Grid item xs={12} md={4}>
+                <Grid size={{ xs: 12, md: 4 }}>
                     <Paper elevation={0} sx={{ p: 3, border: '1px solid #DADCE0', borderRadius: '16px', bgcolor: '#F1F3F4' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
                             <Security sx={{ color: '#5F6368' }} />

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, AdminPanelSettings, ChatBubbleOutline, Assignment, Settings as SettingsIcon } from '@mui/icons-material';
+import { Search, ChatBubbleOutline, Assignment, Settings as SettingsIcon } from '@mui/icons-material';
 import SidebarMenuItem from './SidebarMenuItem';
 import { useAccessRequest } from '../../contexts/AccessRequestContext';
 import './GlobalSidebar.css';
