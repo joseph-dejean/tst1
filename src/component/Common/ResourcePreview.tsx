@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Alert, Box, Grid, Tooltip, IconButton, Typography, Skeleton } from '@mui/material';
+import ChatInterface from '../GlobalChat/ChatInterface';
 import { Close } from '@mui/icons-material';
 import { useDispatch, useSelector } from 'react-redux';
 import axios from 'axios';
@@ -707,8 +708,7 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
                 disabled={!hasAccess || demoMode}
                 handleClick={() => {
                   if (hasAccess && !demoMode && entry?.name) {
-                    const url = `/chat-analytics?entryName=${encodeURIComponent(entry.name)}`;
-                    window.open(url, '_blank');
+                    handleTabClick(3);
                   }
                 }}
                 text="Chat"
@@ -854,6 +854,44 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
                     width: "100%",
                     height: "3px",
                     backgroundColor: tabValue === 2 ? "#0E4DCA" : "transparent",
+                    borderRadius: "2.5px 2.5px 0 0",
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Tab 4: Chat */}
+          {hasAccess && previewData.entrySource?.system?.toLowerCase() === 'bigquery' && getEntryType(previewData.name, '/') === 'Tables' && (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                justifyContent: "center",
+                cursor: "pointer",
+                padding: "0.5rem 0",
+              }}
+              onClick={() => handleTabClick(3)}
+            >
+              <div style={{ position: "relative", display: "inline-block", padding: "0px 0px 6px" }}>
+                <span
+                  style={{
+                    fontFamily: '"Google Sans Text", sans-serif',
+                    fontWeight: "500",
+                    fontSize: "0.875rem",
+                    color: tabValue === 3 ? "#0E4DCA" : "#575757",
+                  }}
+                >
+                  Chat
+                </span>
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "-0.5rem",
+                    left: 0,
+                    width: "100%",
+                    height: "3px",
+                    backgroundColor: tabValue === 3 ? "#0E4DCA" : "transparent",
                     borderRadius: "2.5px 2.5px 0 0",
                   }}
                 />
@@ -1078,6 +1116,13 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
                   annotationTab
                 )}
               </>
+            )
+          }
+          {
+            tabValue === 3 && (
+              <Box sx={{ p: 0, height: '100%' }}>
+                <ChatInterface entry={entry} mode="embedded" />
+              </Box>
             )
           }
         </div>

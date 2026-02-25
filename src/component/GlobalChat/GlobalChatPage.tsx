@@ -74,7 +74,7 @@ const GlobalChatPage: React.FC = () => {
                             <Button
                                 variant="outlined"
                                 endIcon={<OpenInNewIcon />}
-                                onClick={() => window.open('https://console.cloud.google.com/bigquery/agents_hub;chatPath=%2Fbq%2Fchat%2Fnew', '_blank')}
+                                onClick={() => window.open('https://console.cloud.google.com/bigquery/agents_hub;agentsHubTab=Agents;agentsPath=%2Fbq%2Fagents%2Fnew;chatPath=%2Fbq%2Fchat%2Fnew?', '_blank')}
                                 sx={{ textTransform: 'none', color: '#1967D2', borderColor: '#1967D2' }}
                             >
                                 Create an Agent
@@ -89,7 +89,7 @@ const GlobalChatPage: React.FC = () => {
                             <Button
                                 variant="text"
                                 endIcon={<OpenInNewIcon />}
-                                onClick={() => window.open('https://console.cloud.google.com/bigquery/agents_hub;chatPath=%2Fbq%2Fchat%2Fnew', '_blank')}
+                                onClick={() => window.open('https://console.cloud.google.com/bigquery/agents_hub;agentsHubTab=Agents;agentsPath=%2Fbq%2Fagents%2Fnew;chatPath=%2Fbq%2Fchat%2Fnew?', '_blank')}
                                 sx={{ textTransform: 'none', color: '#1967D2' }}
                             >
                                 Create an Agent

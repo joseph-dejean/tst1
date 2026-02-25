@@ -54,11 +54,11 @@ const AccessRequestsDashboard: React.FC = () => {
   const [tabValue, setTabValue] = useState<number>(0);
 
   // Determine user role (admin, manager, or user)
-  const userRole = user?.isAdmin ? 'admin' : 'user';
+  const userRole = user?.isAdmin || user?.role === 'admin' || user?.role === 'manager' ? 'admin' : 'user';
 
   useEffect(() => {
     fetchAccessRequests();
-  }, [statusFilter, projectFilter]);
+  }, [user?.email, userRole, statusFilter, projectFilter]);
 
   const fetchAccessRequests = async () => {
     setLoading(true);
@@ -125,7 +125,8 @@ const AccessRequestsDashboard: React.FC = () => {
   };
 
   const getStatusColor = (status: string) => {
-    switch (status) {
+    const s = status?.toLowerCase();
+    switch (s) {
       case 'approved':
         return 'success';
       case 'rejected':
@@ -220,7 +221,7 @@ const AccessRequestsDashboard: React.FC = () => {
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
           <Tabs value={tabValue} onChange={handleTabChange} aria-label="access request tabs">
             {userRole === 'admin' && (
-              <Tab label="All Requests" icon={<Assignment />} iconPosition="start" />
+              <Tab label="Access Management" icon={<Assignment />} iconPosition="start" />
             )}
             <Tab label="My Requests" icon={<Person />} iconPosition="start" />
           </Tabs>
@@ -338,10 +339,10 @@ const AccessRequestsDashboard: React.FC = () => {
                     </TableCell>
                     {(userRole === 'admin') && (
                       <TableCell>
-                        {request.status === 'pending' ? (
+                        {request.status?.toLowerCase() === 'pending' ? (
                           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                             {/* Step 1: Open GCP Link */}
-                            <a
+                            {/* <a
                               href="https://new-version-tst-54254020796.europe-west1.run.app"
                               target="_blank"
                               rel="noreferrer"
@@ -356,7 +357,7 @@ const AccessRequestsDashboard: React.FC = () => {
                               }}
                             >
                               Go to Dataplex UI ↗
-                            </a>
+                            </a> */}
 
                             {/* Step 2: Action Buttons */}
                             <Box sx={{ display: 'flex', gap: 1 }}>
@@ -380,9 +381,13 @@ const AccessRequestsDashboard: React.FC = () => {
                           </Box>
                         ) : (
                           <Typography variant="caption" color="text.secondary">
-                            {request.status === 'approved' ? 'Access Granted' : 'Request Rejected'}
-                            <br />
-                            by {request.reviewedBy}
+                            {request.status?.toLowerCase() === 'approved' ? 'Access Granted' : 'Request Rejected'}
+                            {request.reviewedBy && (
+                              <>
+                                <br />
+                                by {request.reviewedBy}
+                              </>
+                            )}
                           </Typography>
                         )}
                       </TableCell>
