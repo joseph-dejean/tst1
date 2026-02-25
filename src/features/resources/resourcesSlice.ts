@@ -59,15 +59,29 @@ export const searchResourcesByTerm = createAsyncThunk('resources/searchResources
             if (filter.subAnnotationData && filter.subAnnotationData.length > 0) {
               filter.subAnnotationData.forEach((subAspect: any) => {
                 let subAspectName = `${name}.${subAspect.fieldName}`;
-                let subAspectNameVal = subAspect.enabled ? (subAspect.filterType == 'include' ? `(aspect:${subAspectName}:${subAspect.value})` : `-(aspect:(${subAspectName}:${subAspect.value})`) : '';
-                aspectType += (aspectType != '' ? '|' : '') + `aspect=(${subAspectName}) AND ${subAspectNameVal}`;
+                let value = subAspect.value;
+                // Handle boolean strings for Dataplex search
+                if (typeof value === 'string') {
+                  if (value.toLowerCase() === 'true') value = 'true';
+                  else if (value.toLowerCase() === 'false') value = 'false';
+                }
+
+                let subAspectNameVal = subAspect.enabled
+                  ? (subAspect.filterType === 'include'
+                    ? `aspect:${subAspectName}:${value}`
+                    : `-aspect:${subAspectName}:${value}`)
+                  : '';
+
+                if (subAspectNameVal) {
+                  aspectType += (aspectType !== '' ? ' ' : '') + subAspectNameVal;
+                }
               });
             } else {
-              aspectType += (aspectType != '' ? '|' : '') + `aspect=(${name})`;
+              aspectType += (aspectType !== '' ? ' ' : '') + `aspect:${name}`;
             }
           }
           if (filter.type === 'system') {
-            system += (system != '' ? '|' : '') + `${filter.name.replaceAll(' ', '_').replace('/', '').toUpperCase()}`;
+            system += (system !== '' ? '|' : '') + `${filter.name.replaceAll(' ', '_').replace('/', '').toUpperCase()}`;
           }
           if (filter.type === 'typeAliases') {
             const filterName = filter.name.toLowerCase();
@@ -79,29 +93,21 @@ export const searchResourcesByTerm = createAsyncThunk('resources/searchResources
               assetType = filter.name.replaceAll(' ', '_').replace('/', '').toLowerCase();
             }
 
-            typeAliases += (typeAliases != '' ? '|' : '') + assetType;
+            typeAliases += (typeAliases !== '' ? '|' : '') + assetType;
           }
           if (filter.type === 'project') {
-            project += (project != '' ? '|' : '') + `${filter.name}`;
+            project += (project !== '' ? '|' : '') + `${filter.name}`;
           }
           if (filter.type === 'glossary') {
             const glossaryName = filter.data.name;
-            searchString += (searchString != '' ? ' ' : '') + `parent:"${glossaryName}"`;
+            searchString += (searchString !== '' ? ' ' : '') + `parent:"${glossaryName}"`;
           }
         });
-        // Example search string format: 
-        // name:searchTerm|description:searchTerm|title:searchTerm|tags:searchTerm|
-        // fully_qualified_name:searchTerm|category:searchTerm|displayName:searchTerm
-        // (type=(DATASET|TABLE))
-        // -(
-        //     aspectType=(bigquery_dataset,bigquery_table)
-        //     system=(ANALYTICS_HUB|CLOUD_SQL|CUSTOM|DATAFORM|DATAPLEX|DATAPROC_METASTORE|CLOUD_SPANNER|VERTEX_AI)
-        //  )
 
-        searchString += aspectType != '' ? ((searchString != '' ? ' ' : '') + `(${aspectType})`) : '';
-        searchString += system != '' ? ((searchString != '' ? ',' : '') + `(system=(${system}))`) : '';
-        searchString += typeAliases != '' ? ((searchString != '' ? ',' : '') + `(type=(${typeAliases}))`) : '';
-        searchString += project != '' ? ((searchString != '' ? ',' : '') + `(project=(${project}))`) : '';
+        if (aspectType) searchString += (searchString !== '' ? ' ' : '') + `(${aspectType})`;
+        if (system) searchString += (searchString !== '' ? ' ' : '') + `system:(${system})`;
+        if (typeAliases) searchString += (searchString !== '' ? ' ' : '') + `type:(${typeAliases})`;
+        if (project) searchString += (searchString !== '' ? ' ' : '') + `project:(${project})`;
       }
 
       if (requestData.aspectFilters && requestData.aspectFilters.length > 0) {
