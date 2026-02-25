@@ -177,7 +177,11 @@ const ResourcePreview: React.FC<ResourcePreviewProps> = ({
     if (onViewDetails) {
       onViewDetails(entry);
     } else {
-      navigate('/view-details');
+      if (previewData?._isDataProduct) {
+        navigate(`/data-products-details?dataProductId=${encodeURIComponent(previewData._dataProductId)}`);
+      } else {
+        navigate('/view-details');
+      }
     }
   };
 
