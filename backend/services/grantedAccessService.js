@@ -283,6 +283,28 @@ const getAccessStats = async (projectId) => {
     }
 };
 
+/**
+ * Get a grant by its original request ID
+ * @param {string} requestId 
+ * @returns {Object|null}
+ */
+const getGrantByRequestId = async (requestId) => {
+    try {
+        const snapshot = await getFirestore()
+            .collection(COLLECTION_NAME)
+            .where('originalRequestId', '==', requestId)
+            .where('status', '==', 'ACTIVE')
+            .limit(1)
+            .get();
+
+        if (snapshot.empty) return null;
+        return snapshot.docs[0].data();
+    } catch (error) {
+        console.error(`Error finding grant by requestId ${requestId}:`, error);
+        return null;
+    }
+};
+
 module.exports = {
     createGrantedAccess,
     getGrantedAccesses,
@@ -292,5 +314,6 @@ module.exports = {
     getAccessesByUser,
     revokeAccess,
     findExistingAccess,
-    getAccessStats
+    getAccessStats,
+    getGrantByRequestId
 };

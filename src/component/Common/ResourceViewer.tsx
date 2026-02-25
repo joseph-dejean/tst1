@@ -383,6 +383,15 @@ const ResourceViewer: React.FC<ResourceViewerProps> = ({
     const isCurrentlyPreviewed = previewData && previewData.name === clickedEntry.name;
     const isAccessGranted = entryStatus === 'succeeded';
 
+    // Check if it's a Data Product
+    const isDataProduct = clickedEntry._isDataProduct || clickedEntry.dataplexEntry?._isDataProduct;
+    const dataProductId = clickedEntry._dataProductId || clickedEntry.dataplexEntry?._dataProductId;
+
+    if (isDataProduct && dataProductId) {
+      navigate(`/data-products-details?dataProductId=${encodeURIComponent(dataProductId)}`);
+      return;
+    }
+
     if (isCurrentlyPreviewed && isAccessGranted) {
       // Check if it's a glossary entry to redirect to the Glossaries page
       const rawType = (clickedEntry.searchResultType || clickedEntry.entryType || 'Unknown').toLowerCase();

@@ -19,9 +19,11 @@ import {
   InputLabel,
   Tabs,
   Tab,
-  Button
+  Button,
+  TextField,
+  InputAdornment
 } from '@mui/material';
-import { ArrowBack, CheckCircle, Cancel, Refresh, Person, Assignment, AdminPanelSettings } from '@mui/icons-material';
+import { ArrowBack, CheckCircle, Cancel, Refresh, Person, Assignment, AdminPanelSettings, Search } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthProvider';
 import axios from 'axios';
@@ -52,6 +54,7 @@ const AccessRequestsDashboard: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [projectFilter, setProjectFilter] = useState<string>('');
   const [tabValue, setTabValue] = useState<number>(0);
+  const [searchTerm, setSearchTerm] = useState<string>('');
 
   // Determine user role (admin, manager, or user)
   const userRole = user?.isAdmin || user?.role === 'admin' || user?.role === 'manager' ? 'admin' : 'user';
@@ -100,7 +103,7 @@ const AccessRequestsDashboard: React.FC = () => {
     }
   };
 
-  const handleUpdateStatus = async (requestId: string, newStatus: 'approved' | 'rejected') => {
+  const handleUpdateStatus = async (requestId: string, newStatus: 'approved' | 'rejected' | 'revoked') => {
     try {
       const response = await axios.post(`${URLS.API_URL}${URLS.UPDATE_ACCESS_REQUEST}`, {
         requestId,
@@ -108,7 +111,8 @@ const AccessRequestsDashboard: React.FC = () => {
         reviewerEmail: user?.email
       }, {
         headers: {
-          Authorization: `Bearer ${user?.token}`
+          Authorization: `Bearer ${user?.token}`,
+          'x-user-email': user?.email
         }
       });
 
@@ -133,6 +137,8 @@ const AccessRequestsDashboard: React.FC = () => {
         return 'error';
       case 'pending':
         return 'warning';
+      case 'revoked':
+        return 'secondary';
       default:
         return 'default';
     }
@@ -159,17 +165,32 @@ const AccessRequestsDashboard: React.FC = () => {
 
   const filteredRequests = requests.filter((req: AccessRequest) => {
     const isAdmin = userRole === 'admin';
+    let passesTab = true;
 
     if (isAdmin) {
-      // If admin, they have two tabs: 0 = All, 1 = My Requests
+      // If admin, they have two tabs: 0 = Management, 1 = My Requests
       if (tabValue === 1) {
-        return req.requesterEmail === user?.email;
+        passesTab = req.requesterEmail === user?.email;
       }
-      return true;
     } else {
       // If not admin, they only have one tab: 0 = My Requests
-      return req.requesterEmail === user?.email;
+      passesTab = req.requesterEmail === user?.email;
     }
+
+    if (!passesTab) return false;
+
+    // Apply text search filter
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      return (
+        req.assetName.toLowerCase().includes(search) ||
+        req.requesterEmail.toLowerCase().includes(search) ||
+        req.projectId.toLowerCase().includes(search) ||
+        (req.assetType && req.assetType.toLowerCase().includes(search))
+      );
+    }
+
+    return true;
   });
 
   return (
@@ -232,24 +253,49 @@ const AccessRequestsDashboard: React.FC = () => {
           display: 'flex',
           gap: 2,
           marginBottom: 3,
-          flexWrap: 'wrap'
+          flexWrap: 'wrap',
+          alignItems: 'center'
         }}>
-          <FormControl sx={{ minWidth: 150 }}>
+          <Box sx={{ flexGrow: 1, minWidth: 250 }}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search by email, asset or project..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search sx={{ color: 'text.secondary', fontSize: 20 }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '20px',
+                  backgroundColor: '#F1F3F4',
+                  '& fieldset': { border: 'none' }
+                }
+              }}
+            />
+          </Box>
+          <FormControl sx={{ minWidth: 150 }} size="small">
             <InputLabel>Status</InputLabel>
             <Select
               value={statusFilter}
               label="Status"
               onChange={(e) => setStatusFilter(e.target.value)}
             >
-              <MenuItem value="all">All</MenuItem>
+              <MenuItem value="all">All Status</MenuItem>
               <MenuItem value="pending">Pending</MenuItem>
               <MenuItem value="approved">Approved</MenuItem>
               <MenuItem value="rejected">Rejected</MenuItem>
+              <MenuItem value="revoked">Revoked</MenuItem>
             </Select>
           </FormControl>
 
           {userRole === 'admin' && (
-            <FormControl sx={{ minWidth: 200 }}>
+            <FormControl sx={{ minWidth: 200 }} size="small">
               <InputLabel>Project</InputLabel>
               <Select
                 value={projectFilter}
@@ -277,27 +323,24 @@ const AccessRequestsDashboard: React.FC = () => {
           <Box sx={{ display: 'flex', justifyContent: 'center', padding: 4 }}>
             <CircularProgress />
           </Box>
-        ) : requests.length === 0 ? (
+        ) : filteredRequests.length === 0 ? (
           <Box sx={{ textAlign: 'center', padding: 4 }}>
             <Typography variant="body1" color="text.secondary">
               No access requests found
             </Typography>
           </Box>
         ) : (
-          <TableContainer component={Paper} sx={{ boxShadow: 'none', border: '1px solid #DADCE0' }}>
+          <TableContainer component={Paper} sx={{ boxShadow: 'none', border: '1px solid #DADCE0', borderRadius: '12px', overflow: 'hidden' }}>
             <Table>
               <TableHead>
                 <TableRow sx={{ backgroundColor: '#F8FAFD' }}>
                   <TableCell><strong>Asset Name</strong></TableCell>
-                  <TableCell><strong>Asset Type</strong></TableCell>
                   <TableCell><strong>Requester</strong></TableCell>
-                  <TableCell><strong>Project</strong></TableCell>
-                  <TableCell><strong>Role</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
                   <TableCell><strong>Submitted</strong></TableCell>
                   <TableCell><strong>Message</strong></TableCell>
                   {userRole === 'admin' && (
-                    <TableCell><strong>Actions</strong></TableCell>
+                    <TableCell align="right"><strong>Actions</strong></TableCell>
                   )}
                 </TableRow>
               </TableHead>
@@ -305,89 +348,73 @@ const AccessRequestsDashboard: React.FC = () => {
                 {filteredRequests.map((request: AccessRequest) => (
                   <TableRow key={request.id} hover>
                     <TableCell>
-                      <div style={{ fontWeight: 500 }}>{request.assetName}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#666' }}>{request.projectId}</div>
+                      <div style={{ fontWeight: 500, color: '#1F1F1F' }}>{request.assetName}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#5F6368' }}>{request.projectId}</div>
                     </TableCell>
                     <TableCell>
-                      {request.assetType ? (
-                        <Chip label={request.assetType} size="small" variant="outlined" />
-                      ) : (
-                        <span style={{ color: '#999' }}>-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>{request.requesterEmail}</TableCell>
-                    <TableCell>{request.projectId}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={request.requestedRole || 'roles/bigquery.dataViewer'}
-                        size="small"
-                        variant="outlined"
-                        color="primary"
-                      />
+                      <Typography variant="body2" sx={{ color: '#1F1F1F' }}>{request.requesterEmail}</Typography>
                     </TableCell>
                     <TableCell>
                       <Chip
                         label={request.status.toUpperCase()}
                         color={getStatusColor(request.status) as any}
                         size="small"
-                        icon={request.autoApproved ? <CheckCircle /> : undefined}
+                        sx={{ fontWeight: 500, fontSize: '0.7rem' }}
                       />
                     </TableCell>
-                    <TableCell>{formatDate(request.submittedAt)}</TableCell>
+                    <TableCell>
+                      <Typography variant="caption" color="text.secondary">
+                        {formatDate(request.submittedAt)}
+                      </Typography>
+                    </TableCell>
                     <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {request.message || '-'}
+                      <Typography variant="body2" color="text.secondary">
+                        {request.message || '-'}
+                      </Typography>
                     </TableCell>
                     {(userRole === 'admin') && (
-                      <TableCell>
+                      <TableCell align="right">
                         {request.status?.toLowerCase() === 'pending' ? (
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                            {/* Step 1: Open GCP Link */}
-                            {/* <a
-                              href="https://new-version-tst-54254020796.europe-west1.run.app"
-                              target="_blank"
-                              rel="noreferrer"
-                              style={{
-                                fontSize: '0.75rem',
-                                color: '#1976d2',
-                                textDecoration: 'none',
-                                fontWeight: 'bold',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}
+                          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="success"
+                              startIcon={<CheckCircle sx={{ fontSize: '16px !important' }} />}
+                              onClick={() => handleUpdateStatus(request.id, 'approved')}
+                              sx={{ textTransform: 'none', borderRadius: '16px', py: 0 }}
                             >
-                              Go to Dataplex UI ↗
-                            </a> */}
-
-                            {/* Step 2: Action Buttons */}
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                              <IconButton
-                                size="small"
-                                sx={{ backgroundColor: '#E6F4EA', color: '#137333', '&:hover': { backgroundColor: '#CEEAD6' } }}
-                                onClick={() => handleUpdateStatus(request.id, 'approved')}
-                                title="Approve"
-                              >
-                                <CheckCircle fontSize="small" />
-                              </IconButton>
-                              <IconButton
-                                size="small"
-                                sx={{ backgroundColor: '#FCE8E6', color: '#C5221F', '&:hover': { backgroundColor: '#FAD2CF' } }}
-                                onClick={() => handleUpdateStatus(request.id, 'rejected')}
-                                title="Reject"
-                              >
-                                <Cancel fontSize="small" />
-                              </IconButton>
-                            </Box>
+                              Approve
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="error"
+                              startIcon={<Cancel sx={{ fontSize: '16px !important' }} />}
+                              onClick={() => handleUpdateStatus(request.id, 'rejected')}
+                              sx={{ textTransform: 'none', borderRadius: '16px', py: 0 }}
+                            >
+                              Reject
+                            </Button>
+                          </Box>
+                        ) : request.status?.toLowerCase() === 'approved' ? (
+                          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, alignItems: 'center' }}>
+                            <Typography variant="caption" sx={{ color: '#5F6368', mr: 1 }}>
+                              Granted {request.reviewedBy ? `by ${request.reviewedBy.split('@')[0]}` : ''}
+                            </Typography>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="warning"
+                              onClick={() => handleUpdateStatus(request.id, 'revoked')}
+                              sx={{ textTransform: 'none', borderRadius: '16px', py: 0 }}
+                            >
+                              Revoke
+                            </Button>
                           </Box>
                         ) : (
                           <Typography variant="caption" color="text.secondary">
-                            {request.status?.toLowerCase() === 'approved' ? 'Access Granted' : 'Request Rejected'}
-                            {request.reviewedBy && (
-                              <>
-                                <br />
-                                by {request.reviewedBy}
-                              </>
-                            )}
+                            {request.status?.toLowerCase() === 'revoked' ? 'Access Revoked' : 'Rejected'}
                           </Typography>
                         )}
                       </TableCell>

@@ -3906,7 +3906,7 @@ app.get('/api/v1/access-requests', async (req, res) => {
     }
 
     const filters = {};
-    if (status) filters.status = status;
+    if (status) filters.status = status.toUpperCase();
     if (projectId) filters.projectId = projectId;
 
     if (userRole === 'admin') {
@@ -3959,8 +3959,8 @@ app.post('/api/v1/access-request/update', async (req, res) => {
     }
 
     const status = rawStatus.toUpperCase();
-    if (!['APPROVED', 'REJECTED'].includes(status)) {
-      return res.status(400).json({ success: false, error: 'Invalid status. Must be APPROVED or REJECTED.' });
+    if (!['APPROVED', 'REJECTED', 'REVOKED'].includes(status)) {
+      return res.status(400).json({ success: false, error: 'Invalid status. Must be APPROVED, REJECTED, or REVOKED.' });
     }
 
     console.log(`[UPDATE] Processing: ID=${requestId}, Status=${status}, Reviewer=${reviewerEmail}`);
@@ -3971,85 +3971,83 @@ app.post('/api/v1/access-request/update', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Access request not found' });
     }
 
-    // --- IAM PROVISIONING on APPROVE ---
-    let iamGranted = false;
-    if (status === 'APPROVED') {
-      const linkedResource = originalRequest.linkedResource || originalRequest.assetName || req.body.linkedResource || '';
-      const requesterEmail = originalRequest.requesterEmail || '';
+    // --- IAM PROVISIONING/REVOCATION ---
+    let iamStatus = 'NOT_ATTEMPTED';
 
-      if (linkedResource && requesterEmail) {
-        // Parse linkedResource to extract project and dataset
-        // Formats: //bigquery.googleapis.com/projects/{p}/datasets/{d}/tables/{t}
-        //          projects/{p}/datasets/{d}
-        //          bigquery:{project}.{dataset}.{table}
-        let iamProjectId, datasetId;
+    // Parse linkedResource to extract project and dataset
+    const linkedResource = originalRequest.linkedResource || originalRequest.assetName || req.body.linkedResource || '';
+    const requesterEmail = originalRequest.requesterEmail || '';
 
-        const bqMatch = linkedResource.match(/projects\/([^/]+)\/datasets\/([^/]+)/);
-        if (bqMatch && bqMatch.length >= 3) {
-          iamProjectId = bqMatch[1];
-          datasetId = bqMatch[2];
-        } else if (linkedResource.includes('bigquery:') || linkedResource.includes('bigquery://')) {
-          const fqn = linkedResource.replace('bigquery://', '').replace('bigquery:', '');
-          const parts = fqn.split('.');
-          if (parts.length >= 2) {
-            iamProjectId = parts[0];
-            datasetId = parts[1];
-          }
-        } else {
-          // Fallback for FQNs like //bigquery.googleapis.com/projects/p/datasets/d
-          const deepMatch = linkedResource.match(/projects\/([^/]+)\/datasets\/([^/]+)/);
-          if (deepMatch) {
-            iamProjectId = deepMatch[1];
-            datasetId = deepMatch[2];
-          }
+    let iamProjectId, datasetId;
+    if (linkedResource && requesterEmail) {
+      const bqMatch = linkedResource.match(/projects\/([^/]+)\/datasets\/([^/]+)/);
+      if (bqMatch && bqMatch.length >= 3) {
+        iamProjectId = bqMatch[1];
+        datasetId = bqMatch[2];
+      } else if (linkedResource.includes('bigquery:') || linkedResource.includes('bigquery://')) {
+        const fqn = linkedResource.replace('bigquery://', '').replace('bigquery:', '');
+        const parts = fqn.split('.');
+        if (parts.length >= 2) {
+          iamProjectId = parts[0];
+          datasetId = parts[1];
         }
+      }
+    }
 
-        if (iamProjectId && datasetId) {
-          try {
-            console.log(`[UPDATE] Granting BigQuery READER access: user=${requesterEmail}, project=${iamProjectId}, dataset=${datasetId}`);
-            const bigqueryClient = new BigQuery({ projectId: iamProjectId });
-            const dataset = bigqueryClient.dataset(datasetId);
-            const [metadata] = await dataset.getMetadata();
-            const accessList = metadata.access || [];
+    if (status === 'APPROVED' && iamProjectId && datasetId) {
+      try {
+        console.log(`[UPDATE] Granting BigQuery READER access: user=${requesterEmail}, project=${iamProjectId}, dataset=${datasetId}`);
+        const bigqueryClient = new BigQuery({ projectId: iamProjectId });
+        const dataset = bigqueryClient.dataset(datasetId);
+        const [metadata] = await dataset.getMetadata();
+        const accessList = metadata.access || [];
 
-            // Check for duplicates
-            const userExists = accessList.some(entry => entry.userByEmail === requesterEmail);
-            if (!userExists) {
-              accessList.push({ role: 'READER', userByEmail: requesterEmail });
-              await dataset.setMetadata({ access: accessList });
-              console.log(`[UPDATE] IAM READER access granted to ${requesterEmail} on ${datasetId}`);
-            } else {
-              console.log(`[UPDATE] User ${requesterEmail} already has access to ${datasetId}`);
-            }
-            iamGranted = true;
-
-            // Record the granted access in Firestore so the lock icon updates
-            try {
-              await grantedAccessService.createGrantedAccess({
-                userEmail: requesterEmail,
-                assetName: linkedResource,
-                gcpProjectId: iamProjectId,
-                role: 'roles/bigquery.dataViewer',
-                grantedBy: reviewerEmail,
-                originalRequestId: requestId
-              });
-              console.log(`[UPDATE] Granted access record created in Firestore for ${requesterEmail}`);
-            } catch (grantRecordErr) {
-              console.warn('[UPDATE] Failed to create granted access record (non-blocking):', grantRecordErr.message);
-            }
-          } catch (iamError) {
-            console.error('[UPDATE] IAM grant failed:', iamError.message);
-            // Still update Firestore but note the IAM failure
-            return res.status(500).json({
-              success: false,
-              error: 'Failed to grant BigQuery access. Request not approved.',
-              details: iamError.message
-            });
-          }
-        } else {
-          console.warn('[UPDATE] Could not parse linkedResource for IAM grant:', linkedResource);
-          // Proceed with DB update even if we can't parse the resource
+        const userExists = accessList.some(entry => entry.userByEmail?.toLowerCase() === requesterEmail.toLowerCase());
+        if (!userExists) {
+          accessList.push({ role: 'READER', userByEmail: requesterEmail });
+          await dataset.setMetadata({ access: accessList });
+          console.log(`[UPDATE] IAM READER access granted to ${requesterEmail}`);
         }
+        iamStatus = 'SUCCESS';
+
+        await grantedAccessService.createGrantedAccess({
+          userEmail: requesterEmail,
+          assetName: linkedResource,
+          gcpProjectId: iamProjectId,
+          role: 'roles/bigquery.dataViewer',
+          grantedBy: reviewerEmail,
+          originalRequestId: requestId
+        });
+      } catch (iamError) {
+        console.error('[UPDATE] IAM grant failed:', iamError.message);
+        return res.status(500).json({ success: false, error: 'Failed to grant BigQuery access.', details: iamError.message });
+      }
+    } else if (status === 'REVOKED' && iamProjectId && datasetId) {
+      try {
+        console.log(`[UPDATE] Revoking BigQuery access: user=${requesterEmail}, project=${iamProjectId}, dataset=${datasetId}`);
+        const bigqueryClient = new BigQuery({ projectId: iamProjectId });
+        const dataset = bigqueryClient.dataset(datasetId);
+        const [metadata] = await dataset.getMetadata();
+        let accessList = metadata.access || [];
+
+        const initialLength = accessList.length;
+        accessList = accessList.filter(a => a.userByEmail?.toLowerCase() !== requesterEmail.toLowerCase());
+
+        if (accessList.length < initialLength) {
+          await dataset.setMetadata({ access: accessList });
+          console.log(`[UPDATE] IAM access revoked for ${requesterEmail}`);
+        }
+        iamStatus = 'SUCCESS';
+
+        // Find and revoke the granted access record if it exists
+        const grant = await grantedAccessService.getGrantByRequestId(requestId);
+        if (grant) {
+          await grantedAccessService.revokeAccess(grant.id, reviewerEmail);
+        }
+      } catch (iamError) {
+        console.error('[UPDATE] IAM revocation failed:', iamError.message);
+        // We still proceed to update Firestore even if IAM removal fails (maybe already removed)
+        iamStatus = 'FAILED';
       }
     }
 
@@ -4057,31 +4055,27 @@ app.post('/api/v1/access-request/update', async (req, res) => {
     const updatedRequest = await updateAccessRequestStatus(requestId, status, adminNote, reviewerEmail);
 
     if (!updatedRequest) {
-      console.error('[UPDATE] Firestore update returned null.');
-      return res.status(404).json({ success: false, error: 'Request not found or failed to update' });
+      return res.status(404).json({ success: false, error: 'Request failed to update in Firestore.' });
     }
 
-    // --- SEND EMAIL NOTIFICATION (non-blocking) ---
+    // --- SEND EMAIL NOTIFICATION ---
     try {
-      const reqEmail = originalRequest.requesterEmail || '';
-      const asset = originalRequest.assetName || originalRequest.linkedResource || 'Unknown Asset';
-
-      if (reqEmail) {
+      if (requesterEmail) {
         if (status === 'APPROVED') {
-          await sendApprovalEmail(asset, reqEmail, PROJECT_ID, adminNote, reviewerEmail);
-        } else {
-          await sendRejectionEmail(asset, reqEmail, PROJECT_ID, adminNote, reviewerEmail);
+          await sendApprovalEmail(linkedResource, requesterEmail, PROJECT_ID, adminNote, reviewerEmail);
+        } else if (status === 'REJECTED') {
+          await sendRejectionEmail(linkedResource, requesterEmail, PROJECT_ID, adminNote, reviewerEmail);
         }
+        // Add revocation email if desired later
       }
     } catch (emailError) {
       console.warn('[UPDATE] Email notification failed (non-blocking):', emailError.message);
     }
 
-    console.log('[UPDATE] Success.');
     return res.json({
       success: true,
       data: updatedRequest,
-      iamGranted: iamGranted
+      iamStatus: iamStatus
     });
 
   } catch (error) {
