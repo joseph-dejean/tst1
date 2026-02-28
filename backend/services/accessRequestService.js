@@ -22,12 +22,13 @@ const COLLECTION_NAME = 'access-requests';
  *   gcpProjectId: string,       // The GCP Project ID where the resource lives
  *   requestedRole: string,      // The IAM role requested
  *   justification: string,      // "message" from the frontend
- *   status: 'PENDING' | 'APPROVED' | 'REJECTED',
+ *   status: 'PENDING' | 'PARTIALLY_APPROVED' | 'APPROVED' | 'REJECTED',
  *   adminNote: string,          // Optional note
  *   submittedAt: string (ISO),  // Creation time
  *   updatedAt: string (ISO),    // Last update time
- *   reviewedBy: string | null,  // Email of admin who reviewed
+ *   reviewedBy: string | null,  // Last reviewer email
  *   reviewedAt: string | null,  // Time of review
+ *   approvals: string[],        // List of emails who have approved (Dual-Approval)
  *   projectAdmin: string[],     // List of project admins notified
  * }
  */
@@ -48,6 +49,7 @@ const createAccessRequest = async (requestData) => {
         const newRequest = {
             ...requestData,
             status: 'PENDING',
+            approvals: [], // Initialize empty approvals array for dual-check
             submittedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             adminNote: '',
@@ -136,7 +138,7 @@ const getAccessRequestById = async (id) => {
 /**
  * Update an access request status
  */
-const updateAccessRequestStatus = async (id, status, adminNote, reviewerEmail) => {
+const updateAccessRequestStatus = async (id, status, adminNote, reviewerEmail, approvals) => {
     try {
         const docRef = getFirestore().collection(COLLECTION_NAME).doc(id);
 
@@ -146,6 +148,10 @@ const updateAccessRequestStatus = async (id, status, adminNote, reviewerEmail) =
             reviewedBy: reviewerEmail || 'system',
             reviewedAt: new Date().toISOString()
         };
+
+        if (approvals) {
+            updateData.approvals = approvals;
+        }
 
         if (adminNote) {
             updateData.adminNote = adminNote;

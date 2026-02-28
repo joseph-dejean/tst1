@@ -3987,10 +3987,7 @@ app.post('/api/v1/access-request/update', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Access request not found' });
     }
 
-    // --- IAM PROVISIONING/REVOCATION ---
-    let iamStatus = 'NOT_ATTEMPTED';
-
-    // Parse linkedResource to extract project and dataset
+    // --- RESOURCE PARSING ---
     const linkedResource = originalRequest.linkedResource || originalRequest.assetName || req.body.linkedResource || '';
     const requesterEmail = originalRequest.requesterEmail || '';
 
@@ -4010,7 +4007,36 @@ app.post('/api/v1/access-request/update', async (req, res) => {
       }
     }
 
-    if (status === 'APPROVED' && iamProjectId && datasetId) {
+    // --- DUAL-APPROVAL LOGIC ---
+    let effectiveStatus = status;
+    let currentApprovals = originalRequest.approvals || [];
+
+    if (status === 'APPROVED') {
+      // Prevent double-approvals from same user
+      if (currentApprovals.includes(reviewerEmail)) {
+        return res.status(400).json({
+          success: false,
+          error: 'You have already approved this request. Waiting for another Data Steward.'
+        });
+      }
+
+      currentApprovals.push(reviewerEmail);
+
+      // Check if we reached the threshold (2 stewards)
+      if (currentApprovals.length < 2) {
+        effectiveStatus = 'PARTIALLY_APPROVED';
+        console.log(`[UPDATE] Partial Approval (1/2) by ${reviewerEmail}. Status set to PARTIALLY_APPROVED.`);
+      } else {
+        effectiveStatus = 'APPROVED';
+        console.log(`[UPDATE] Consensus reached (2/2)! Final reviewer: ${reviewerEmail}. Proceeding to grant access.`);
+      }
+    }
+
+    // --- IAM PROVISIONING/REVOCATION ---
+    let iamStatus = 'NOT_ATTEMPTED';
+
+    // ONLY grant IAM access if we reached full approval (2 stewards)
+    if (effectiveStatus === 'APPROVED' && iamProjectId && datasetId) {
       try {
         console.log(`[UPDATE] Granting BigQuery READER access: user=${requesterEmail}, project=${iamProjectId}, dataset=${datasetId}`);
         const bigqueryClient = new BigQuery({ projectId: iamProjectId });
@@ -4038,7 +4064,9 @@ app.post('/api/v1/access-request/update', async (req, res) => {
         console.error('[UPDATE] IAM grant failed:', iamError.message);
         return res.status(500).json({ success: false, error: 'Failed to grant BigQuery access.', details: iamError.message });
       }
-    } else if (status === 'REVOKED' && iamProjectId && datasetId) {
+    } else if (effectiveStatus === 'PARTIALLY_APPROVED') {
+      iamStatus = 'WAITING_FOR_CONSENSUS';
+    } else if (effectiveStatus === 'REVOKED' && iamProjectId && datasetId) {
       try {
         console.log(`[UPDATE] Revoking BigQuery access: user=${requesterEmail}, project=${iamProjectId}, dataset=${datasetId}`);
         const bigqueryClient = new BigQuery({ projectId: iamProjectId });
@@ -4068,7 +4096,7 @@ app.post('/api/v1/access-request/update', async (req, res) => {
     }
 
     // --- UPDATE FIRESTORE ---
-    const updatedRequest = await updateAccessRequestStatus(requestId, status, adminNote, reviewerEmail);
+    const updatedRequest = await updateAccessRequestStatus(requestId, effectiveStatus, adminNote, reviewerEmail, currentApprovals);
 
     if (!updatedRequest) {
       return res.status(404).json({ success: false, error: 'Request failed to update in Firestore.' });
@@ -4077,12 +4105,12 @@ app.post('/api/v1/access-request/update', async (req, res) => {
     // --- SEND EMAIL NOTIFICATION ---
     try {
       if (requesterEmail) {
-        if (status === 'APPROVED') {
+        if (effectiveStatus === 'APPROVED') {
           await sendApprovalEmail(linkedResource, requesterEmail, PROJECT_ID, adminNote, reviewerEmail);
-        } else if (status === 'REJECTED') {
+        } else if (effectiveStatus === 'REJECTED') {
           await sendRejectionEmail(linkedResource, requesterEmail, PROJECT_ID, adminNote, reviewerEmail);
         }
-        // Add revocation email if desired later
+        // No email for PARTIALLY_APPROVED to avoid confusing the user - only send when final
       }
     } catch (emailError) {
       console.warn('[UPDATE] Email notification failed (non-blocking):', emailError.message);
@@ -4091,7 +4119,8 @@ app.post('/api/v1/access-request/update', async (req, res) => {
     return res.json({
       success: true,
       data: updatedRequest,
-      iamStatus: iamStatus
+      iamStatus: iamStatus,
+      approvalsNeeded: 2 - currentApprovals.length
     });
 
   } catch (error) {

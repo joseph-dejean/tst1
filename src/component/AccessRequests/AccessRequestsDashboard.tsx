@@ -37,12 +37,13 @@ interface AccessRequest {
   requesterEmail: string;
   projectId: string;
   projectAdmin: string[];
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'partially_approved' | 'approved' | 'rejected' | 'revoked';
   submittedAt: string;
   reviewedBy: string | null;
   reviewedAt: string | null;
   autoApproved: boolean;
   requestedRole?: string;
+  approvals?: string[]; // Emails of stewards who already approved
 }
 
 const AccessRequestsDashboard: React.FC = () => {
@@ -133,6 +134,8 @@ const AccessRequestsDashboard: React.FC = () => {
     switch (s) {
       case 'APPROVED':
         return 'success';
+      case 'PARTIALLY_APPROVED':
+        return 'info';
       case 'REJECTED':
         return 'error';
       case 'PENDING':
@@ -142,6 +145,15 @@ const AccessRequestsDashboard: React.FC = () => {
       default:
         return 'default';
     }
+  };
+
+  const getStatusLabel = (request: AccessRequest) => {
+    const s = request.status?.toUpperCase();
+    if (s === 'PARTIALLY_APPROVED') {
+      const count = request.approvals?.length || 0;
+      return `CONSENSUS (${count}/2)`;
+    }
+    return s || '';
   };
 
   const formatDate = (dateString: string) => {
@@ -356,7 +368,7 @@ const AccessRequestsDashboard: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={request.status.toUpperCase()}
+                        label={getStatusLabel(request)}
                         color={getStatusColor(request.status) as any}
                         size="small"
                         sx={{ fontWeight: 500, fontSize: '0.7rem' }}
@@ -374,17 +386,18 @@ const AccessRequestsDashboard: React.FC = () => {
                     </TableCell>
                     {(userRole === 'admin') && (
                       <TableCell align="right">
-                        {request.status?.toLowerCase() === 'pending' ? (
+                        {(request.status?.toLowerCase() === 'pending' || request.status?.toLowerCase() === 'partially_approved') ? (
                           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
                             <Button
                               size="small"
                               variant="contained"
                               color="success"
+                              disabled={request.approvals?.includes(user?.email || '')}
                               startIcon={<CheckCircle sx={{ fontSize: '16px !important' }} />}
                               onClick={() => handleUpdateStatus(request.id, 'approved')}
                               sx={{ textTransform: 'none', borderRadius: '16px', py: 0 }}
                             >
-                              Approve
+                              {request.status?.toLowerCase() === 'partially_approved' ? 'Confirm (2/2)' : 'Approve'}
                             </Button>
                             <Button
                               size="small"
