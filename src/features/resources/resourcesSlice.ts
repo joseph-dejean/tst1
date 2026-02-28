@@ -105,8 +105,8 @@ export const searchResourcesByTerm = createAsyncThunk('resources/searchResources
         });
 
         if (aspectType) searchString += (searchString !== '' ? ' ' : '') + `(${aspectType})`;
-        if (system) searchString += (searchString !== '' ? ' ' : '') + `system:(${system})`;
-        if (typeAliases) searchString += (searchString !== '' ? ' ' : '') + `type:(${typeAliases})`;
+        if (system) searchString += (searchString !== '' ? ' ' : '') + `system=(${system})`;
+        if (typeAliases) searchString += (searchString !== '' ? ' ' : '') + `type=(${typeAliases})`;
         if (project) searchString += (searchString !== '' ? ' ' : '') + `project:(${project})`;
       }
 

@@ -781,7 +781,11 @@ const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTa
                                 </Box>
                             </AccordionSummary>
                             <AccordionDetails sx={{ padding: 0 }}>
-                                <RelationshipGraph relationships={lineageRelations} height={400} />
+                                <RelationshipGraph
+                                    relationships={lineageRelations}
+                                    height={400}
+                                    currentTable={entry?.fullyQualifiedName ? entry.fullyQualifiedName.replace('bigquery:', '').split('.')[2] : undefined}
+                                />
                             </AccordionDetails>
                         </Accordion>
                     </Box>

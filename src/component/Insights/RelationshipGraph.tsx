@@ -25,6 +25,7 @@ export interface Relationship {
 interface RelationshipGraphProps {
   relationships: Relationship[];
   height?: number | string;
+  currentTable?: string;
 }
 
 const nodeWidth = 220;
@@ -61,40 +62,73 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => 
   return { nodes: layoutedNodes, edges };
 };
 
-const RelationshipGraphInner: React.FC<RelationshipGraphProps> = ({ relationships, height = 500 }) => {
+const RelationshipGraphInner: React.FC<RelationshipGraphProps> = ({ relationships, height = 500, currentTable }) => {
   const { initialNodes, initialEdges } = useMemo(() => {
-    if (!relationships || relationships.length === 0) {
+    let filteredRelationships = relationships || [];
+    if (currentTable) {
+      filteredRelationships = filteredRelationships.filter(rel => rel.table1 === currentTable || rel.table2 === currentTable);
+    }
+
+    if (filteredRelationships.length === 0) {
+      // If there are no relationships, but we have a currentTable, let's at least show the current table alone
+      if (currentTable) {
+        return {
+          initialNodes: [
+            {
+              id: currentTable,
+              data: { label: currentTable },
+              position: { x: 0, y: 0 },
+              style: {
+                background: '#0B57D0', // Highlight current table
+                color: '#FFFFFF',
+                border: '1px solid #0842A0',
+                borderRadius: '8px',
+                padding: '12px 16px',
+                fontSize: '13px',
+                fontFamily: '"Google Sans Text", sans-serif',
+                fontWeight: 600,
+                width: nodeWidth,
+                textAlign: 'center' as const,
+              },
+            }
+          ],
+          initialEdges: []
+        };
+      }
       return { initialNodes: [], initialEdges: [] };
     }
 
     // Extract unique tables
     const tableSet = new Set<string>();
-    relationships.forEach((rel) => {
+    filteredRelationships.forEach((rel) => {
       tableSet.add(rel.table1);
       tableSet.add(rel.table2);
     });
 
     // Create nodes
-    const nodes: Node[] = Array.from(tableSet).map((table) => ({
-      id: table,
-      data: { label: table },
-      position: { x: 0, y: 0 },
-      style: {
-        background: '#1E293B',
-        color: '#F1F5F9',
-        border: '1px solid #334155',
-        borderRadius: '8px',
-        padding: '12px 16px',
-        fontSize: '13px',
-        fontFamily: '"Google Sans Text", sans-serif',
-        fontWeight: 500,
-        width: nodeWidth,
-        textAlign: 'center' as const,
-      },
-    }));
+    const nodes: Node[] = Array.from(tableSet).map((table) => {
+      const isCurrentTable = table === currentTable;
+      return {
+        id: table,
+        data: { label: table },
+        position: { x: 0, y: 0 },
+        style: {
+          background: isCurrentTable ? '#0B57D0' : '#1E293B',
+          color: isCurrentTable ? '#FFFFFF' : '#F1F5F9',
+          border: isCurrentTable ? '2px solid #0842A0' : '1px solid #334155',
+          borderRadius: '8px',
+          padding: '12px 16px',
+          fontSize: '13px',
+          fontFamily: '"Google Sans Text", sans-serif',
+          fontWeight: isCurrentTable ? 600 : 500,
+          width: nodeWidth,
+          textAlign: 'center' as const,
+        },
+      };
+    });
 
     // Create edges
-    const edges: Edge[] = relationships.map((rel, idx) => ({
+    const edges: Edge[] = filteredRelationships.map((rel, idx) => ({
       id: `edge-${idx}`,
       source: rel.table1,
       target: rel.table2,
@@ -118,12 +152,17 @@ const RelationshipGraphInner: React.FC<RelationshipGraphProps> = ({ relationship
     // Apply dagre layout
     const layouted = getLayoutedElements(nodes, edges, 'TB');
     return { initialNodes: layouted.nodes, initialEdges: layouted.edges };
-  }, [relationships]);
+  }, [relationships, currentTable]);
 
-  const [nodes, , onNodesChange] = useNodesState(initialNodes);
-  const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  if (!relationships || relationships.length === 0) {
+  React.useEffect(() => {
+    setNodes(initialNodes);
+    setEdges(initialEdges);
+  }, [initialNodes, initialEdges, setNodes, setEdges]);
+
+  if (nodes.length === 0) {
     return (
       <Box sx={{
         display: 'flex',
