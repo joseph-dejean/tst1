@@ -107,7 +107,7 @@ const AccessRequestsDashboard: React.FC = () => {
     try {
       const response = await axios.post(`${URLS.API_URL}${URLS.UPDATE_ACCESS_REQUEST}`, {
         requestId,
-        status: newStatus,
+        status: newStatus.toUpperCase(),
         reviewerEmail: user?.email
       }, {
         headers: {
@@ -129,15 +129,15 @@ const AccessRequestsDashboard: React.FC = () => {
   };
 
   const getStatusColor = (status: string) => {
-    const s = status?.toLowerCase();
+    const s = status?.toUpperCase();
     switch (s) {
-      case 'approved':
+      case 'APPROVED':
         return 'success';
-      case 'rejected':
+      case 'REJECTED':
         return 'error';
-      case 'pending':
+      case 'PENDING':
         return 'warning';
-      case 'revoked':
+      case 'REVOKED':
         return 'secondary';
       default:
         return 'default';

@@ -1,4 +1,14 @@
 const { Firestore } = require('@google-cloud/firestore');
+const { DataScanServiceClient } = require('@google-cloud/dataplex');
+
+// Lazy DataScanServiceClient initialization
+let dataScanClient = null;
+const getDataScanClient = () => {
+    if (!dataScanClient) {
+        dataScanClient = new DataScanServiceClient();
+    }
+    return dataScanClient;
+};
 
 // Lazy Firestore initialization
 let firestore = null;
@@ -96,6 +106,79 @@ const inferRelationships = (tables) => {
     }
 
     return relationships;
+};
+
+/**
+ * Fetch relationships from DataScans API by analyzing Data Quality rules
+ */
+const fetchDataScanRelationships = async (projectId, location, tables) => {
+    const relationships = [];
+    try {
+        const client = getDataScanClient();
+        const parent = `projects/${projectId}/locations/${location || '-'}`;
+        console.log(`[RELATIONSHIPS] Fetching DataScans from ${parent}...`);
+
+        const [scans] = await client.listDataScans({ parent });
+
+        if (!scans || scans.length === 0) {
+            console.log('[RELATIONSHIPS] No DataScans found.');
+            return relationships;
+        }
+
+        for (const scan of scans) {
+            if (!scan.dataQualitySpec || !scan.dataQualitySpec.rules) continue;
+
+            let targetTable = null;
+            if (scan.data && scan.data.resource) {
+                const parts = scan.data.resource.split('/');
+                targetTable = parts[parts.length - 1];
+            }
+
+            if (!targetTable) continue;
+
+            for (const rule of scan.dataQualitySpec.rules) {
+                let sqlExpression = null;
+                if (rule.rowConditionExpectation && rule.rowConditionExpectation.sqlExpression) {
+                    sqlExpression = rule.rowConditionExpectation.sqlExpression;
+                } else if (rule.tableConditionExpectation && rule.tableConditionExpectation.sqlExpression) {
+                    sqlExpression = rule.tableConditionExpectation.sqlExpression;
+                }
+
+                if (sqlExpression) {
+                    const lowerSql = sqlExpression.toLowerCase();
+                    for (const otherTable of tables) {
+                        const otherName = otherTable.name.toLowerCase();
+                        if (otherName !== targetTable.toLowerCase() && lowerSql.includes(otherName)) {
+                            let matchColumn = 'unknown (DataScan)';
+                            const idRegex = new RegExp(`(\\w+_id)\\s*(?:=|in)`, 'i');
+                            const match = sqlExpression.match(idRegex);
+                            if (match && match[1]) matchColumn = match[1];
+
+                            const exists = relationships.some(r =>
+                                (r.table1 === targetTable && r.table2 === otherTable.name) ||
+                                (r.table1 === otherTable.name && r.table2 === targetTable)
+                            );
+
+                            if (!exists) {
+                                relationships.push({
+                                    table1: targetTable,
+                                    table2: otherTable.name,
+                                    relationship: matchColumn,
+                                    confidence: 'high',
+                                    source: 'DataScan',
+                                    description: `Inferred from Data Quality rule '${rule.description || rule.name || 'validation'}'`
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return relationships;
+    } catch (error) {
+        console.warn('[RELATIONSHIPS] Error fetching DataScans:', error.message);
+        return [];
+    }
 };
 
 /**
@@ -207,6 +290,7 @@ const addManualRelationship = async (projectId, datasetId, relationship) => {
 
 module.exports = {
     inferRelationships,
+    fetchDataScanRelationships,
     getCachedRelationships,
     cacheRelationships,
     invalidateCache,

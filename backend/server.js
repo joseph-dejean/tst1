@@ -3565,9 +3565,25 @@ app.get('/api/v1/dataset-relationships', async (req, res) => {
     console.log(`[RELATIONSHIPS] Got schemas for ${tables.length} tables`);
 
     // Infer relationships from schemas
-    const relationships = datasetRelationshipService.inferRelationships(tables);
+    const inferredRelationships = datasetRelationshipService.inferRelationships(tables);
 
-    console.log(`[RELATIONSHIPS] Inferred ${relationships.length} relationships`);
+    // Fetch relationships from DataScans
+    let location = process.env.GCP_LOCATION || '-';
+    const scanRelationships = await datasetRelationshipService.fetchDataScanRelationships(project, location, tables);
+
+    // Combine avoiding duplicates
+    const relationships = [...inferredRelationships];
+    for (const scanRel of scanRelationships) {
+      const exists = relationships.some(r =>
+        (r.table1 === scanRel.table1 && r.table2 === scanRel.table2) ||
+        (r.table1 === scanRel.table2 && r.table2 === scanRel.table1)
+      );
+      if (!exists) {
+        relationships.push(scanRel);
+      }
+    }
+
+    console.log(`[RELATIONSHIPS] Total ${relationships.length} relationships`);
 
     // Cache the results
     await datasetRelationshipService.cacheRelationships(project, dataset, relationships, tables);
