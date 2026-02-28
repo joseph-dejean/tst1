@@ -145,10 +145,11 @@ interface DetailPageOverviewProps {
     sampleTableData?: any; // Optional prop for sample data
     css: React.CSSProperties; // Optional CSS properties for the button
     accessDenied?: boolean; // True when user doesn't have permission to view this resource
+    onTableClick?: (tableName: string) => void;
 }
 
 // FilterDropdown component
-const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTableData, css, accessDenied }) => {
+const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTableData, css, accessDenied, onTableClick }) => {
 
     //   const aspects = entry.aspects;
     //   const number = entry.entryType.split('/')[1];
@@ -785,6 +786,7 @@ const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTa
                                     relationships={lineageRelations}
                                     height={400}
                                     currentTable={entry?.fullyQualifiedName ? entry.fullyQualifiedName.replace('bigquery:', '').split('.')[2] : undefined}
+                                    onNodeClick={onTableClick}
                                 />
                             </AccordionDetails>
                         </Accordion>

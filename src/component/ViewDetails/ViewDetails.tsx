@@ -280,6 +280,25 @@ const ViewDetails = () => {
 
   //   let schema = <Schema entry={entry} css={{width:"100%"}} />;
 
+  const handleTableClick = (tableName: string) => {
+    if (displayEntry?.name && displayEntry?.fullyQualifiedName) {
+      dispatch(pushToHistory());
+      const fqnParts = displayEntry.fullyQualifiedName.replace('bigquery:', '').split('.');
+      if (fqnParts.length >= 2) {
+        const project = fqnParts[0];
+        const dataset = fqnParts[1];
+
+        const entriesIndex = displayEntry.name.indexOf('/entries/');
+        if (entriesIndex !== -1) {
+          const entriesPrefix = displayEntry.name.substring(0, entriesIndex + 9);
+          const newEntryName = `${entriesPrefix}bigquery_${project}_${dataset}_${tableName}`;
+          dispatch(fetchEntry({ entryName: newEntryName, id_token: id_token || '' }));
+          return;
+        }
+      }
+    }
+  };
+
   let annotationTab = <PreviewAnnotation
     entry={filteredEntry || displayEntry}
     css={{ width: "100%", borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px', marginRight: '8px' }}
@@ -288,7 +307,7 @@ const ViewDetails = () => {
     setExpandedItems={setExpandedAnnotations}
 
   />;
-  let overviewTab = <DetailPageOverview entry={displayEntry} css={{ width: "100%" }} sampleTableData={sampleTableData} />;
+  let overviewTab = <DetailPageOverview entry={displayEntry} css={{ width: "100%" }} sampleTableData={sampleTableData} onTableClick={handleTableClick} />;
 
   //   useEffect(() => {
   //     if(getEntryType(entry.name, '/') == 'Tables') {

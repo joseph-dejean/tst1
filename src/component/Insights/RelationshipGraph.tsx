@@ -26,6 +26,7 @@ interface RelationshipGraphProps {
   relationships: Relationship[];
   height?: number | string;
   currentTable?: string;
+  onNodeClick?: (tableName: string) => void;
 }
 
 const nodeWidth = 220;
@@ -62,11 +63,49 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => 
   return { nodes: layoutedNodes, edges };
 };
 
-const RelationshipGraphInner: React.FC<RelationshipGraphProps> = ({ relationships, height = 500, currentTable }) => {
+const RelationshipGraphInner: React.FC<RelationshipGraphProps> = ({ relationships, height = 500, currentTable, onNodeClick }) => {
   const { initialNodes, initialEdges } = useMemo(() => {
     let filteredRelationships = relationships || [];
-    if (currentTable) {
-      filteredRelationships = filteredRelationships.filter(rel => rel.table1 === currentTable || rel.table2 === currentTable);
+
+    // BFS to find all relationships up to 3 degrees 
+    if (currentTable && filteredRelationships.length > 0) {
+      const adjList: Record<string, Relationship[]> = {};
+      filteredRelationships.forEach(rel => {
+        if (!adjList[rel.table1]) adjList[rel.table1] = [];
+        if (!adjList[rel.table2]) adjList[rel.table2] = [];
+        adjList[rel.table1].push(rel);
+        adjList[rel.table2].push(rel);
+      });
+
+      const maxDegrees = 3;
+      const visitedTables = new Set<string>();
+      const includedRelationships = new Set<Relationship>();
+
+      let currentLevel = [currentTable];
+      visitedTables.add(currentTable);
+
+      for (let degree = 0; degree < maxDegrees; degree++) {
+        let nextLevel: string[] = [];
+
+        for (const table of currentLevel) {
+          if (adjList[table]) {
+            adjList[table].forEach(rel => {
+              includedRelationships.add(rel);
+
+              const neighbor = rel.table1 === table ? rel.table2 : rel.table1;
+              if (!visitedTables.has(neighbor)) {
+                visitedTables.add(neighbor);
+                nextLevel.push(neighbor);
+              }
+            });
+          }
+        }
+
+        if (nextLevel.length === 0) break;
+        currentLevel = nextLevel;
+      }
+
+      filteredRelationships = Array.from(includedRelationships);
     }
 
     if (filteredRelationships.length === 0) {
@@ -123,6 +162,7 @@ const RelationshipGraphInner: React.FC<RelationshipGraphProps> = ({ relationship
           fontWeight: isCurrentTable ? 600 : 500,
           width: nodeWidth,
           textAlign: 'center' as const,
+          cursor: onNodeClick ? 'pointer' : 'default',
         },
       };
     });
@@ -152,7 +192,7 @@ const RelationshipGraphInner: React.FC<RelationshipGraphProps> = ({ relationship
     // Apply dagre layout
     const layouted = getLayoutedElements(nodes, edges, 'TB');
     return { initialNodes: layouted.nodes, initialEdges: layouted.edges };
-  }, [relationships, currentTable]);
+  }, [relationships, currentTable, onNodeClick]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -183,6 +223,11 @@ const RelationshipGraphInner: React.FC<RelationshipGraphProps> = ({ relationship
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeClick={(_, node) => {
+          if (onNodeClick) {
+            onNodeClick(node.id);
+          }
+        }}
         fitView
         attributionPosition="bottom-left"
         style={{ background: '#0F172A' }}
