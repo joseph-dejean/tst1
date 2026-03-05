@@ -164,7 +164,7 @@ const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTa
     // Fetch Dataset Relationships (inferred from schema)
     useEffect(() => {
         const fetchRelationships = async () => {
-            if (!entry?.fullyQualifiedName) return;
+            if (!entry?.fullyQualifiedName || !isTechnicalAsset) return;
             setRelationshipsLoading(true);
             try {
                 // Extract project and dataset from FQN like "bigquery:project.dataset.table"
@@ -230,11 +230,10 @@ const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTa
     const { date: updateDate, time: updateTime } = getFormattedDateTimeParts(entry?.updateTime?.seconds);
 
 
-    const getEntryType = (namePath: string = '', separator: string = '') => {
-        const segments: string[] = namePath.split(separator);
-        let eType = segments[segments.length - 2];
-        return (`${eType[0].toUpperCase()}${eType.slice(1)}`);
-    };
+    const entryType = getEntryType(entry?.name || '', '/');
+    const isTable = entryType === 'Tables';
+    const isDataset = entryType === 'Datasets';
+    const isTechnicalAsset = isTable || isDataset;
 
     const number = entry?.entryType?.split('/')[1] || '';
 
@@ -719,80 +718,9 @@ const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTa
 
                     </Box>
 
-                    {/* Relationships Accordion */}
-                    <Box sx={{
-                        border: "1px solid #DADCE0",
-                        borderRadius: "8px",
-                        marginTop: "10px",
-                        overflow: "hidden",
-                        backgroundColor: "#FFFFFF"
-                    }}>
-                        <Accordion
-                            defaultExpanded
-                            key="relationships-accordion"
-                            sx={{
-                                background: "none",
-                                boxShadow: "none",
-                                margin: "0px",
-                                borderRadius: "8px",
-                                minHeight: "64px",
-                                '&:before': { display: 'none' }
-                            }}
-                        >
-                            <AccordionSummary
-                                expandIcon={<ExpandMoreIcon />}
-                                aria-controls="relationships-content"
-                                id="relationships-header"
-                                sx={{
-                                    background: "#F8FAFD",
-                                    minHeight: "64px",
-                                    '& .MuiAccordionSummary-content': {
-                                        margin: 0
-                                    }
-                                }}
-                            >
-                                <Box sx={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "8px"
-                                }}>
-                                    <Typography
-                                        component="span"
-                                        variant="heading2Medium"
-                                        sx={{
-                                            fontWeight: 500,
-                                            fontSize: "1.125rem",
-                                            lineHeight: "1.33em",
-                                            color: "#1F1F1F",
-                                            textTransform: "capitalize",
-                                        }}
-                                    >
-                                        Relationships
-                                    </Typography>
-                                    <Tooltip title="Visualizes relationships between this table and others derived from foreign keys/joins." arrow placement="right">
-                                        <InfoOutline
-                                            sx={{
-                                                fontWeight: 800,
-                                                width: "18px",
-                                                height: "18px",
-                                                opacity: 0.9
-                                            }}
-                                        />
-                                    </Tooltip>
-                                </Box>
-                            </AccordionSummary>
-                            <AccordionDetails sx={{ padding: 0 }}>
-                                <RelationshipGraph
-                                    relationships={lineageRelations}
-                                    height={400}
-                                    currentTable={entry?.fullyQualifiedName ? entry.fullyQualifiedName.replace('bigquery:', '').split('.')[2] : undefined}
-                                    onNodeClick={onTableClick}
-                                />
-                            </AccordionDetails>
-                        </Accordion>
-                    </Box>
+
                     {/* Table Info Accordion */}
-                    {getEntryType(entry.name, '/') == 'Tables' ? (
+                    {isTable ? (
                         <Box sx={{
                             border: "1px solid #DADCE0",
                             borderRadius: "8px",
@@ -943,34 +871,41 @@ const DetailPageOverview: React.FC<DetailPageOverviewProps> = ({ entry, sampleTa
                     ) : null}
 
                     {/* Table Relationships Section */}
-                    <Box sx={{
-                        border: "1px solid #DADCE0",
-                        borderRadius: "8px",
-                        marginTop: "10px",
-                        overflow: "hidden",
-                        backgroundColor: "#FFFFFF",
-                        padding: "16px"
-                    }}>
-                        <Typography variant="heading2Medium" sx={{ mb: 2, display: 'block', textTransform: 'capitalize', fontSize: '18px', fontWeight: 500 }}>
-                            Table Relationships
-                        </Typography>
-                        {relationshipsLoading ? (
-                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
-                                <Typography variant="body2" sx={{ color: '#5F6368' }}>Loading relationships...</Typography>
-                            </Box>
-                        ) : lineageRelations.length > 0 ? (
-                            <RelationshipGraph relationships={lineageRelations} height={400} />
-                        ) : (
-                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200, flexDirection: 'column', gap: 1 }}>
-                                <Typography variant="body2" sx={{ color: '#5F6368' }}>
-                                    No relationships detected in this dataset.
-                                </Typography>
-                                <Typography variant="caption" sx={{ color: '#9AA0A6' }}>
-                                    Relationships are inferred from column names like customer_id, order_key, etc.
-                                </Typography>
-                            </Box>
-                        )}
-                    </Box>
+                    {isTechnicalAsset && (
+                        <Box sx={{
+                            border: "1px solid #DADCE0",
+                            borderRadius: "8px",
+                            marginTop: "10px",
+                            overflow: "hidden",
+                            backgroundColor: "#FFFFFF",
+                            padding: "16px"
+                        }}>
+                            <Typography variant="heading2Medium" sx={{ mb: 2, display: 'block', textTransform: 'capitalize', fontSize: '18px', fontWeight: 500 }}>
+                                Table Relationships
+                            </Typography>
+                            {relationshipsLoading ? (
+                                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
+                                    <Typography variant="body2" sx={{ color: '#5F6368' }}>Loading relationships...</Typography>
+                                </Box>
+                            ) : lineageRelations.length > 0 ? (
+                                <RelationshipGraph
+                                    relationships={lineageRelations}
+                                    height={400}
+                                    currentTable={entry?.fullyQualifiedName ? entry.fullyQualifiedName.replace('bigquery:', '').split('.')[2] : undefined}
+                                    onNodeClick={onTableClick}
+                                />
+                            ) : (
+                                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200, flexDirection: 'column', gap: 1 }}>
+                                    <Typography variant="body2" sx={{ color: '#5F6368' }}>
+                                        No relationships detected in this dataset.
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ color: '#9AA0A6' }}>
+                                        Relationships are inferred from column names like customer_id, order_key, etc.
+                                    </Typography>
+                                </Box>
+                            )}
+                        </Box>
+                    )}
 
                     {/* Documentation Accordion */}
                     <Box sx={{
