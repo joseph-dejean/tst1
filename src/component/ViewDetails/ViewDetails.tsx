@@ -383,12 +383,13 @@ const ViewDetails = () => {
       setLoading(true);
     }
     if (entryStatus === 'succeeded') {
-      // schema = <Schema entry={entry} css={{width:"100%"}} />;
       setLoading(false);
-      if (getEntryType(displayEntry?.name || '', '/') == 'Tables' && displayEntry?.entrySource?.system?.toLowerCase() === 'bigquery') {
+      if (getEntryType(displayEntry?.name || '', '/') === 'Tables' && displayEntry?.entrySource?.system?.toLowerCase() === 'bigquery') {
         dispatch(getSampleData({ fqn: displayEntry.fullyQualifiedName, id_token: id_token }));
       }
-      // console.log("loader:", loading);
+    }
+    if (entryStatus === 'failed') {
+      setLoading(false);
     }
   }, [entryStatus, isAssetPreviewOpen, displayEntry, id_token, dispatch]);
 
@@ -501,429 +502,460 @@ const ViewDetails = () => {
                 <Skeleton variant="rounded" width="100%" height={400} sx={{ borderRadius: '8px' }} />
               </Box>
             </Box>
-          ) : (<div style={{ padding: "0px 0rem", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
-            {/* Fixed Header Container - does not scroll */}
-            <div style={{
-              flexShrink: 0,
-              backgroundColor: '#ffffff',
-              zIndex: 1000,
-              borderRadius: '20px 20px 0 0'
+          ) : entryStatus === 'failed' ? (
+            <Box sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flex: 1,
+              gap: 2,
+              padding: 4
             }}>
-
-              {/* Primary Title Bar */}
+              <Typography variant="h6" color="error">Failed to load the selected asset</Typography>
+              <Typography variant="body2" color="textSecondary" align="center">
+                This asset might not exist in the Dataplex Catalog yet, or there was a connection error.
+              </Typography>
+              <button
+                onClick={goBack}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#0B57D0',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontFamily: '"Google Sans", sans-serif',
+                  fontWeight: 500
+                }}
+              >
+                Go Back
+              </button>
+            </Box>
+          ) : (
+            <div style={{ padding: "0px 0rem", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
+              {/* Fixed Header Container - does not scroll */}
               <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "24px 0px 4px 0px"
+                flexShrink: 0,
+                backgroundColor: '#ffffff',
+                zIndex: 1000,
+                borderRadius: '20px 20px 0 0'
               }}>
-                {/* Left Side - Back Arrow, Title, and Tags */}
-                <div style={{
-                  display: "flex",
-                  alignItems: "center"
-                }}>
-                  <button
-                    onClick={goBack}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "#0B57D0",
-                      cursor: "pointer",
-                      padding: "4px",
-                      display: "flex",
-                      alignItems: "center",
-                      marginRight: "1rem"
-                    }}
-                  >
-                    <ArrowBack style={{ fontSize: "24px" }} />
-                  </button>
-                  <Tooltip
-                    title={
-                      displayEntry.entrySource?.displayName?.length > 0
-                        ? displayEntry.entrySource.displayName
-                        : getName(displayEntry.name || '', '/')
-                    }
-                    arrow placement='top'
-                  >
-                    <label style={{
-                      fontFamily: '"Google Sans", sans-serif',
-                      color: "#1F1F1F",
-                      fontSize: "1.125rem",
-                      fontWeight: "500",
-                      marginRight: "0.5rem",
-                      maxWidth: '400px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {displayEntry.entrySource?.displayName?.length > 0 ? displayEntry.entrySource.displayName : getName(displayEntry.name || '', '/')}
-                    </label>
-                  </Tooltip>
-                  <Tag
-                    text={displayEntry.entrySource?.system ? (displayEntry.entrySource?.system.toLowerCase() === 'bigquery' ? 'BigQuery' : displayEntry.entrySource?.system.replace("_", " ").replace("-", " ").toLowerCase()) : 'Custom'}
-                    css={{
-                      fontFamily: '"Google Sans Text", sans-serif',
-                      backgroundColor: '#C2E7FF',
-                      color: '#004A77',
-                      borderRadius: '8px',
-                      padding: '4px 8px',
-                      height: '1.25rem',
-                      fontSize: '0.75rem',
-                      fontWeight: "500",
-                      border: 'none',
-                      textTransform: 'capitalize',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: '0.5rem',
-                      display: 'flex'
-                    }}
-                  />
-                  <Tag
-                    text={getEntryType(displayEntry.name, '/')}
-                    css={{
-                      fontFamily: '"Google Sans Text", sans-serif',
-                      backgroundColor: '#C2E7FF',
-                      color: '#004A77',
-                      borderRadius: '8px',
-                      padding: '4px 8px',
-                      height: '1.25rem',
-                      fontSize: '0.75rem',
-                      fontWeight: "500",
-                      border: 'none',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      display: 'flex'
-                    }}
-                  />
-                </div>
 
-                {/* Right Side - Action Buttons */}
+                {/* Primary Title Bar */}
                 <div style={{
                   display: "flex",
+                  justifyContent: "space-between",
                   alignItems: "center",
-                  gap: "16px",
-                  marginRight: "2rem"
+                  padding: "24px 0px 4px 0px"
                 }}>
-                  {
-                    displayEntry.entrySource?.system?.toLowerCase() === 'bigquery' ? (<>
-                      <button
-                        onClick={() => window.open(generateBigQueryLink(displayEntry), '_blank')}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          color: "#0B57D0",
-                          fontFamily: '"Google Sans Text", sans-serif',
-                          fontSize: "0.75rem",
-                          fontWeight: "700"
-                        }}>
-                        <img
-                          src="/assets/images/Product-Icons.png"
-                          alt="Open in BQ"
-                          style={{ width: "16px", height: "16px", position: 'relative', top: '-2px' }}
-                        />
-                        Open in BigQuery
-                      </button>
-                      <button
-                        onClick={() => window.open(generateLookerStudioLink(displayEntry), '_blank')}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          color: "#0B57D0",
-                          fontFamily: '"Google Sans Text", sans-serif',
-                          fontSize: "0.75rem",
-                          fontWeight: "700"
-                        }}>
-                        <img
-                          src="/assets/images/looker.png"
-                          alt="Open in Looker"
-                          style={{ width: "12px", position: 'relative', top: '-3px' }}
-                        />
-                        Explore with Looker Studio
-                      </button>
-                    </>
-                    ) : (<></>)
-                  }
-                </div>
-              </div>
-              {/* Navigation Tab Bar */}
-              <div style={{ paddingTop: "0px", marginTop: "0px" }}>
-                <Box
-                  sx={{
-                    width: "100%",
-                    borderBottom: 1,
-                    borderBottomColor: "#E0E0E0",
-                  }}
-                >
-                  <Box
-                    sx={{
-                      paddingLeft: "1.75rem",
-                      position: "relative",
-                      "& .MuiTabs-root": {
-                        minHeight: "48px",
-                      },
-                      "& .MuiTab-root": {
-                        fontFamily: '"Google Sans Text", sans-serif',
-                        fontSize: "0.875rem",
-                        fontWeight: "500",
-                        color: "#575757",
-                        textTransform: "none",
-                        minHeight: "48px",
-                        padding: "12px 20px 16px",
-                        "&.Mui-selected": {
-                          color: "#0B57D0",
-                          fontWeight: "600",
-                        },
-                      },
-                      "& .MuiTabs-indicator": {
-                        backgroundColor: "transparent",
-                        "&::after": {
-                          content: '""',
-                          position: "absolute",
-                          left: "20px",
-                          right: "20px",
-                          bottom: "-2px",
-                          height: "5px",
-                          backgroundColor: "white",
-                          borderTop: "4px solid #0B57D0",
-                          borderRadius: "2.5px 2.5px 0 0",
-                        },
-                      },
-                    }}>
-                    <Tabs value={tabValue}
-                      onChange={handleTabChange}
-                      aria-label="basic tabs"
-                      TabIndicatorProps={{
-                        children: <span className="indicator" />,
+                  {/* Left Side - Back Arrow, Title, and Tags */}
+                  <div style={{
+                    display: "flex",
+                    alignItems: "center"
+                  }}>
+                    <button
+                      onClick={goBack}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#0B57D0",
+                        cursor: "pointer",
+                        padding: "4px",
+                        display: "flex",
+                        alignItems: "center",
+                        marginRight: "1rem"
                       }}
                     >
-                      {getEntryType(displayEntry.name, '/') === 'Tables' && displayEntry.entrySource?.system?.toLowerCase() === 'bigquery' ? [
-                        <Tab key="overview" label="Overview" {...tabProps(0)} />,
-                        <Tab key="annotations" label="Aspects" {...tabProps(1)} />,
-                        <Tab key="lineage" label="Lineage" {...tabProps(2)} />,
-                        <Tab key="dataProfile" label="Data Profile" {...tabProps(3)} />,
-                        <Tab key="dataQuality" label="Data Quality" {...tabProps(4)} />,
-                        <Tab key="chat" label="Chat with Table" {...tabProps(5)} />,
+                      <ArrowBack style={{ fontSize: "24px" }} />
+                    </button>
+                    <Tooltip
+                      title={
+                        displayEntry.entrySource?.displayName?.length > 0
+                          ? displayEntry.entrySource.displayName
+                          : getName(displayEntry.name || '', '/')
+                      }
+                      arrow placement='top'
+                    >
+                      <label style={{
+                        fontFamily: '"Google Sans", sans-serif',
+                        color: "#1F1F1F",
+                        fontSize: "1.125rem",
+                        fontWeight: "500",
+                        marginRight: "0.5rem",
+                        maxWidth: '400px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {displayEntry.entrySource?.displayName?.length > 0 ? displayEntry.entrySource.displayName : getName(displayEntry.name || '', '/')}
+                      </label>
+                    </Tooltip>
+                    <Tag
+                      text={displayEntry.entrySource?.system ? (displayEntry.entrySource?.system.toLowerCase() === 'bigquery' ? 'BigQuery' : displayEntry.entrySource?.system.replace("_", " ").replace("-", " ").toLowerCase()) : 'Custom'}
+                      css={{
+                        fontFamily: '"Google Sans Text", sans-serif',
+                        backgroundColor: '#C2E7FF',
+                        color: '#004A77',
+                        borderRadius: '8px',
+                        padding: '4px 8px',
+                        height: '1.25rem',
+                        fontSize: '0.75rem',
+                        fontWeight: "500",
+                        border: 'none',
+                        textTransform: 'capitalize',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: '0.5rem',
+                        display: 'flex'
+                      }}
+                    />
+                    <Tag
+                      text={getEntryType(displayEntry.name, '/')}
+                      css={{
+                        fontFamily: '"Google Sans Text", sans-serif',
+                        backgroundColor: '#C2E7FF',
+                        color: '#004A77',
+                        borderRadius: '8px',
+                        padding: '4px 8px',
+                        height: '1.25rem',
+                        fontSize: '0.75rem',
+                        fontWeight: "500",
+                        border: 'none',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        display: 'flex'
+                      }}
+                    />
+                  </div>
 
-                      ] : getEntryType(displayEntry.name, '/') === 'Datasets' ? [
-                        <Tab key="overview" label="Overview" {...tabProps(0)} />,
-                        <Tab key="entryList" label="Entry List" {...tabProps(1)} />,
-                        <Tab key="annotations" label="Aspects" {...tabProps(2)} />,
-                        <Tab key="chat" label="Chat with Table" {...tabProps(3)} />
-                      ] : glossaryType === 'glossary' || glossaryType === 'category' ? [
-                        <Tab key="overview" label="Overview" {...tabProps(0)} />,
-                        <Tab key="categories" label="Categories" {...tabProps(1)} />,
-                        <Tab key="terms" label="Terms" {...tabProps(2)} />,
-                        <Tab key="annotations" label="Aspects" {...tabProps(3)} />
-                      ] : glossaryType === 'term' ? [
-                        <Tab key="overview" label="Overview" {...tabProps(0)} />,
-                        <Tab key="linkedAssets" label="Linked Assets" {...tabProps(1)} />,
-                        <Tab key="synonyms" label="Synonyms & Related Terms" {...tabProps(2)} />,
-                        <Tab key="annotations" label="Aspects" {...tabProps(3)} />
-                      ] : [
-                        <Tab key="overview" label="Overview" {...tabProps(0)} />,
-                        <Tab key="annotations" label="Aspects" {...tabProps(1)} />,
-                        <Tab key="chat" label="Chat with Table" {...tabProps(2)} />
-                      ]}
-                    </Tabs>
+                  {/* Right Side - Action Buttons */}
+                  <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "16px",
+                    marginRight: "2rem"
+                  }}>
+                    {
+                      displayEntry.entrySource?.system?.toLowerCase() === 'bigquery' ? (<>
+                        <button
+                          onClick={() => window.open(generateBigQueryLink(displayEntry), '_blank')}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            color: "#0B57D0",
+                            fontFamily: '"Google Sans Text", sans-serif',
+                            fontSize: "0.75rem",
+                            fontWeight: "700"
+                          }}>
+                          <img
+                            src="/assets/images/Product-Icons.png"
+                            alt="Open in BQ"
+                            style={{ width: "16px", height: "16px", position: 'relative', top: '-2px' }}
+                          />
+                          Open in BigQuery
+                        </button>
+                        <button
+                          onClick={() => window.open(generateLookerStudioLink(displayEntry), '_blank')}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            color: "#0B57D0",
+                            fontFamily: '"Google Sans Text", sans-serif',
+                            fontSize: "0.75rem",
+                            fontWeight: "700"
+                          }}>
+                          <img
+                            src="/assets/images/looker.png"
+                            alt="Open in Looker"
+                            style={{ width: "12px", position: 'relative', top: '-3px' }}
+                          />
+                          Explore with Looker Studio
+                        </button>
+                      </>
+                      ) : (<></>)
+                    }
+                  </div>
+                </div>
+                {/* Navigation Tab Bar */}
+                <div style={{ paddingTop: "0px", marginTop: "0px" }}>
+                  <Box
+                    sx={{
+                      width: "100%",
+                      borderBottom: 1,
+                      borderBottomColor: "#E0E0E0",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        paddingLeft: "1.75rem",
+                        position: "relative",
+                        "& .MuiTabs-root": {
+                          minHeight: "48px",
+                        },
+                        "& .MuiTab-root": {
+                          fontFamily: '"Google Sans Text", sans-serif',
+                          fontSize: "0.875rem",
+                          fontWeight: "500",
+                          color: "#575757",
+                          textTransform: "none",
+                          minHeight: "48px",
+                          padding: "12px 20px 16px",
+                          "&.Mui-selected": {
+                            color: "#0B57D0",
+                            fontWeight: "600",
+                          },
+                        },
+                        "& .MuiTabs-indicator": {
+                          backgroundColor: "transparent",
+                          "&::after": {
+                            content: '""',
+                            position: "absolute",
+                            left: "20px",
+                            right: "20px",
+                            bottom: "-2px",
+                            height: "5px",
+                            backgroundColor: "white",
+                            borderTop: "4px solid #0B57D0",
+                            borderRadius: "2.5px 2.5px 0 0",
+                          },
+                        },
+                      }}>
+                      <Tabs value={tabValue}
+                        onChange={handleTabChange}
+                        aria-label="basic tabs"
+                        TabIndicatorProps={{
+                          children: <span className="indicator" />,
+                        }}
+                      >
+                        {getEntryType(displayEntry.name, '/') === 'Tables' && displayEntry.entrySource?.system?.toLowerCase() === 'bigquery' ? [
+                          <Tab key="overview" label="Overview" {...tabProps(0)} />,
+                          <Tab key="annotations" label="Aspects" {...tabProps(1)} />,
+                          <Tab key="lineage" label="Lineage" {...tabProps(2)} />,
+                          <Tab key="dataProfile" label="Data Profile" {...tabProps(3)} />,
+                          <Tab key="dataQuality" label="Data Quality" {...tabProps(4)} />,
+                          <Tab key="chat" label="Chat with Table" {...tabProps(5)} />,
+
+                        ] : getEntryType(displayEntry.name, '/') === 'Datasets' ? [
+                          <Tab key="overview" label="Overview" {...tabProps(0)} />,
+                          <Tab key="entryList" label="Entry List" {...tabProps(1)} />,
+                          <Tab key="annotations" label="Aspects" {...tabProps(2)} />,
+                          <Tab key="chat" label="Chat with Table" {...tabProps(3)} />
+                        ] : glossaryType === 'glossary' || glossaryType === 'category' ? [
+                          <Tab key="overview" label="Overview" {...tabProps(0)} />,
+                          <Tab key="categories" label="Categories" {...tabProps(1)} />,
+                          <Tab key="terms" label="Terms" {...tabProps(2)} />,
+                          <Tab key="annotations" label="Aspects" {...tabProps(3)} />
+                        ] : glossaryType === 'term' ? [
+                          <Tab key="overview" label="Overview" {...tabProps(0)} />,
+                          <Tab key="linkedAssets" label="Linked Assets" {...tabProps(1)} />,
+                          <Tab key="synonyms" label="Synonyms & Related Terms" {...tabProps(2)} />,
+                          <Tab key="annotations" label="Aspects" {...tabProps(3)} />
+                        ] : [
+                          <Tab key="overview" label="Overview" {...tabProps(0)} />,
+                          <Tab key="annotations" label="Aspects" {...tabProps(1)} />,
+                          <Tab key="chat" label="Chat with Table" {...tabProps(2)} />
+                        ]}
+                      </Tabs>
+                    </Box>
                   </Box>
-                </Box>
+                </div>
               </div>
-            </div>
 
-            {/* Tab Content - Non-sticky, Scrollable */}
-            <div style={{ paddingTop: "0px", marginTop: "0px", marginLeft: "2.5rem", marginRight: "2rem", flex: 1, overflowY: "auto", minHeight: 0, paddingBottom: "2rem" }}>
-              <CustomTabPanel value={tabValue} index={0}>
-                {overviewTab}
-              </CustomTabPanel>
-              {getEntryType(displayEntry.name, '/') === 'Tables' && displayEntry.entrySource?.system?.toLowerCase() === 'bigquery' ? (
-                <>
-                  <CustomTabPanel value={tabValue} index={1}>
-                    <AnnotationFilter
-                      entry={displayEntry}
-                      onFilteredEntryChange={setFilteredEntry}
-                      sx={{ width: "100%", marginTop: '1.25rem' }}
-                      onCollapseAll={handleAnnotationCollapseAll}
-                      onExpandAll={handleAnnotationExpandAll}
-                    />
-                    {annotationTab}
-                  </CustomTabPanel>
-                  <CustomTabPanel value={tabValue} index={2}>
-                    {lineageTab}
-                  </CustomTabPanel>
-                  <CustomTabPanel value={tabValue} index={3}>
-                    <DataProfile scanName={dpScanName} />
-                  </CustomTabPanel>
-                  <CustomTabPanel value={tabValue} index={4}>
-                    <DataQuality scanName={dqScanName} />
-                  </CustomTabPanel>
-                  {/* Chat Interface - Tab Mode */}
-                  <CustomTabPanel value={tabValue} index={5}>
-                    <Box sx={{ marginTop: '2rem', marginBottom: '2rem' }}>
-                      <ChatInterface entry={displayEntry} mode="embedded" />
-                    </Box>
-                  </CustomTabPanel>
-                </>
-              ) : getEntryType(displayEntry.name, '/') === 'Datasets' ? (
-                <>
-                  <CustomTabPanel value={tabValue} index={1}>
-                    <EntryList entry={displayEntry} />
-                  </CustomTabPanel>
-                  <CustomTabPanel value={tabValue} index={2}>
-                    <AnnotationFilter
-                      entry={displayEntry}
-                      onFilteredEntryChange={setFilteredEntry}
-                      sx={{ marginTop: '1.25rem' }}
-                      onCollapseAll={handleAnnotationCollapseAll}
-                      onExpandAll={handleAnnotationExpandAll}
-                    />
-                    {annotationTab}
-                  </CustomTabPanel>
-                  <CustomTabPanel value={tabValue} index={3}>
-                    <Box sx={{ marginTop: '2rem', marginBottom: '2rem' }}>
-                      <ChatInterface entry={displayEntry} mode="embedded" />
-                    </Box>
-                  </CustomTabPanel>
-                </>
-              ) : glossaryType === 'glossary' || glossaryType === 'category' ? (
-                <>
-                  <CustomTabPanel value={tabValue} index={1}>
-                    {isGlossaryDataLoading ? (
-                      <Box sx={{ marginTop: '1.25rem', height: 'calc(100% - 1.25rem)' }}>
-                        <GlossariesCategoriesTermsSkeleton />
+              {/* Tab Content - Non-sticky, Scrollable */}
+              <div style={{ paddingTop: "0px", marginTop: "0px", marginLeft: "2.5rem", marginRight: "2rem", flex: 1, overflowY: "auto", minHeight: 0, paddingBottom: "2rem" }}>
+                <CustomTabPanel value={tabValue} index={0}>
+                  {overviewTab}
+                </CustomTabPanel>
+                {getEntryType(displayEntry.name, '/') === 'Tables' && displayEntry.entrySource?.system?.toLowerCase() === 'bigquery' ? (
+                  <>
+                    <CustomTabPanel value={tabValue} index={1}>
+                      <AnnotationFilter
+                        entry={displayEntry}
+                        onFilteredEntryChange={setFilteredEntry}
+                        sx={{ width: "100%", marginTop: '1.25rem' }}
+                        onCollapseAll={handleAnnotationCollapseAll}
+                        onExpandAll={handleAnnotationExpandAll}
+                      />
+                      {annotationTab}
+                    </CustomTabPanel>
+                    <CustomTabPanel value={tabValue} index={2}>
+                      {lineageTab}
+                    </CustomTabPanel>
+                    <CustomTabPanel value={tabValue} index={3}>
+                      <DataProfile scanName={dpScanName} />
+                    </CustomTabPanel>
+                    <CustomTabPanel value={tabValue} index={4}>
+                      <DataQuality scanName={dqScanName} />
+                    </CustomTabPanel>
+                    {/* Chat Interface - Tab Mode */}
+                    <CustomTabPanel value={tabValue} index={5}>
+                      <Box sx={{ marginTop: '2rem', marginBottom: '2rem' }}>
+                        <ChatInterface entry={displayEntry} mode="embedded" />
                       </Box>
-                    ) : (
-                      <Box sx={{ marginTop: '1.25rem', height: 'calc(100% - 1.25rem)' }}>
-                        <GlossariesCategoriesTerms
-                          mode="categories"
-                          items={filteredCategories}
-                          searchTerm={contentSearchTerm}
-                          onSearchTermChange={setContentSearchTerm}
-                          sortBy={sortBy}
-                          sortOrder={sortOrder}
-                          onSortByChange={setSortBy}
-                          onSortOrderToggle={handleSortDirectionToggle}
-                          onItemClick={handleResourceClick}
-                        />
+                    </CustomTabPanel>
+                  </>
+                ) : getEntryType(displayEntry.name, '/') === 'Datasets' ? (
+                  <>
+                    <CustomTabPanel value={tabValue} index={1}>
+                      <EntryList entry={displayEntry} />
+                    </CustomTabPanel>
+                    <CustomTabPanel value={tabValue} index={2}>
+                      <AnnotationFilter
+                        entry={displayEntry}
+                        onFilteredEntryChange={setFilteredEntry}
+                        sx={{ marginTop: '1.25rem' }}
+                        onCollapseAll={handleAnnotationCollapseAll}
+                        onExpandAll={handleAnnotationExpandAll}
+                      />
+                      {annotationTab}
+                    </CustomTabPanel>
+                    <CustomTabPanel value={tabValue} index={3}>
+                      <Box sx={{ marginTop: '2rem', marginBottom: '2rem' }}>
+                        <ChatInterface entry={displayEntry} mode="embedded" />
                       </Box>
-                    )}
-                  </CustomTabPanel>
-                  <CustomTabPanel value={tabValue} index={2}>
-                    {isGlossaryDataLoading ? (
-                      <Box sx={{ marginTop: '1.25rem', height: 'calc(100% - 1.25rem)' }}>
-                        <GlossariesCategoriesTermsSkeleton />
+                    </CustomTabPanel>
+                  </>
+                ) : glossaryType === 'glossary' || glossaryType === 'category' ? (
+                  <>
+                    <CustomTabPanel value={tabValue} index={1}>
+                      {isGlossaryDataLoading ? (
+                        <Box sx={{ marginTop: '1.25rem', height: 'calc(100% - 1.25rem)' }}>
+                          <GlossariesCategoriesTermsSkeleton />
+                        </Box>
+                      ) : (
+                        <Box sx={{ marginTop: '1.25rem', height: 'calc(100% - 1.25rem)' }}>
+                          <GlossariesCategoriesTerms
+                            mode="categories"
+                            items={filteredCategories}
+                            searchTerm={contentSearchTerm}
+                            onSearchTermChange={setContentSearchTerm}
+                            sortBy={sortBy}
+                            sortOrder={sortOrder}
+                            onSortByChange={setSortBy}
+                            onSortOrderToggle={handleSortDirectionToggle}
+                            onItemClick={handleResourceClick}
+                          />
+                        </Box>
+                      )}
+                    </CustomTabPanel>
+                    <CustomTabPanel value={tabValue} index={2}>
+                      {isGlossaryDataLoading ? (
+                        <Box sx={{ marginTop: '1.25rem', height: 'calc(100% - 1.25rem)' }}>
+                          <GlossariesCategoriesTermsSkeleton />
+                        </Box>
+                      ) : (
+                        <Box sx={{ marginTop: '1.25rem', height: 'calc(100% - 1.25rem)' }}>
+                          <GlossariesCategoriesTerms
+                            mode="terms"
+                            items={filteredTerms}
+                            searchTerm={contentSearchTerm}
+                            onSearchTermChange={setContentSearchTerm}
+                            sortBy={sortBy}
+                            sortOrder={sortOrder}
+                            onSortByChange={setSortBy}
+                            onSortOrderToggle={handleSortDirectionToggle}
+                            onItemClick={handleResourceClick}
+                          />
+                        </Box>
+                      )}
+                    </CustomTabPanel>
+                    <CustomTabPanel value={tabValue} index={3}>
+                      <AnnotationFilter
+                        entry={displayEntry}
+                        onFilteredEntryChange={setFilteredEntry}
+                        sx={{ marginTop: '1.25rem' }}
+                        onCollapseAll={handleAnnotationCollapseAll}
+                        onExpandAll={handleAnnotationExpandAll}
+                      />
+                      {annotationTab}
+                    </CustomTabPanel>
+                  </>
+                ) : glossaryType === 'term' ? (
+                  <>
+                    <CustomTabPanel value={tabValue} index={1}>
+                      {isGlossaryDataLoading ? (
+                        <Box sx={{ p: '20px', height: 'calc(100% - 40px)' }}>
+                          <ShimmerLoader count={6} type="card" />
+                        </Box>
+                      ) : (
+                        <Box sx={{ marginTop: '1.25rem', height: 'calc(100% - 1.25rem)' }}>
+                          <GlossariesLinkedAssets
+                            linkedAssets={currentGlossaryItem?.linkedAssets || []}
+                            searchTerm={contentSearchTerm}
+                            onSearchTermChange={setContentSearchTerm}
+                            idToken={id_token}
+                            onAssetPreviewChange={(data) => {
+                              setAssetPreviewData(data);
+                              setIsAssetPreviewOpen(!!data);
+                            }}
+                          />
+                        </Box>
+                      )}
+                    </CustomTabPanel>
+                    <CustomTabPanel value={tabValue} index={2}>
+                      {isGlossaryDataLoading ? (
+                        <Box sx={{ marginTop: '1.25rem', height: 'calc(100% - 1.25rem)' }}>
+                          <GlossariesSynonymsSkeleton />
+                        </Box>
+                      ) : (
+                        <Box sx={{ marginTop: '1.25rem', height: 'calc(100% - 1.25rem)' }}>
+                          <GlossariesSynonyms
+                            relations={relations}
+                            searchTerm={contentSearchTerm}
+                            onSearchTermChange={setContentSearchTerm}
+                            relationFilter={relationFilter}
+                            onRelationFilterChange={setRelationFilter}
+                            sortBy={sortBy}
+                            sortOrder={sortOrder}
+                            onSortByChange={setSortBy}
+                            onSortOrderToggle={handleSortDirectionToggle}
+                            onItemClick={handleResourceClick}
+                          />
+                        </Box>
+                      )}
+                    </CustomTabPanel>
+                    <CustomTabPanel value={tabValue} index={3}>
+                      <AnnotationFilter
+                        entry={displayEntry}
+                        onFilteredEntryChange={setFilteredEntry}
+                        sx={{ marginTop: '1.25rem' }}
+                        onCollapseAll={handleAnnotationCollapseAll}
+                        onExpandAll={handleAnnotationExpandAll}
+                      />
+                      {annotationTab}
+                    </CustomTabPanel>
+                  </>
+                ) : (
+                  <>
+                    <CustomTabPanel value={tabValue} index={1}>
+                      <AnnotationFilter
+                        entry={displayEntry}
+                        onFilteredEntryChange={setFilteredEntry}
+                        sx={{ marginTop: '1.25rem' }}
+                        onCollapseAll={handleAnnotationCollapseAll}
+                        onExpandAll={handleAnnotationExpandAll}
+                      />
+                      {annotationTab}
+                    </CustomTabPanel>
+                    <CustomTabPanel value={tabValue} index={2}>
+                      <Box sx={{ marginTop: '2rem', marginBottom: '2rem' }}>
+                        <ChatInterface entry={displayEntry} mode="embedded" />
                       </Box>
-                    ) : (
-                      <Box sx={{ marginTop: '1.25rem', height: 'calc(100% - 1.25rem)' }}>
-                        <GlossariesCategoriesTerms
-                          mode="terms"
-                          items={filteredTerms}
-                          searchTerm={contentSearchTerm}
-                          onSearchTermChange={setContentSearchTerm}
-                          sortBy={sortBy}
-                          sortOrder={sortOrder}
-                          onSortByChange={setSortBy}
-                          onSortOrderToggle={handleSortDirectionToggle}
-                          onItemClick={handleResourceClick}
-                        />
-                      </Box>
-                    )}
-                  </CustomTabPanel>
-                  <CustomTabPanel value={tabValue} index={3}>
-                    <AnnotationFilter
-                      entry={displayEntry}
-                      onFilteredEntryChange={setFilteredEntry}
-                      sx={{ marginTop: '1.25rem' }}
-                      onCollapseAll={handleAnnotationCollapseAll}
-                      onExpandAll={handleAnnotationExpandAll}
-                    />
-                    {annotationTab}
-                  </CustomTabPanel>
-                </>
-              ) : glossaryType === 'term' ? (
-                <>
-                  <CustomTabPanel value={tabValue} index={1}>
-                    {isGlossaryDataLoading ? (
-                      <Box sx={{ p: '20px', height: 'calc(100% - 40px)' }}>
-                        <ShimmerLoader count={6} type="card" />
-                      </Box>
-                    ) : (
-                      <Box sx={{ marginTop: '1.25rem', height: 'calc(100% - 1.25rem)' }}>
-                        <GlossariesLinkedAssets
-                          linkedAssets={currentGlossaryItem?.linkedAssets || []}
-                          searchTerm={contentSearchTerm}
-                          onSearchTermChange={setContentSearchTerm}
-                          idToken={id_token}
-                          onAssetPreviewChange={(data) => {
-                            setAssetPreviewData(data);
-                            setIsAssetPreviewOpen(!!data);
-                          }}
-                        />
-                      </Box>
-                    )}
-                  </CustomTabPanel>
-                  <CustomTabPanel value={tabValue} index={2}>
-                    {isGlossaryDataLoading ? (
-                      <Box sx={{ marginTop: '1.25rem', height: 'calc(100% - 1.25rem)' }}>
-                        <GlossariesSynonymsSkeleton />
-                      </Box>
-                    ) : (
-                      <Box sx={{ marginTop: '1.25rem', height: 'calc(100% - 1.25rem)' }}>
-                        <GlossariesSynonyms
-                          relations={relations}
-                          searchTerm={contentSearchTerm}
-                          onSearchTermChange={setContentSearchTerm}
-                          relationFilter={relationFilter}
-                          onRelationFilterChange={setRelationFilter}
-                          sortBy={sortBy}
-                          sortOrder={sortOrder}
-                          onSortByChange={setSortBy}
-                          onSortOrderToggle={handleSortDirectionToggle}
-                          onItemClick={handleResourceClick}
-                        />
-                      </Box>
-                    )}
-                  </CustomTabPanel>
-                  <CustomTabPanel value={tabValue} index={3}>
-                    <AnnotationFilter
-                      entry={displayEntry}
-                      onFilteredEntryChange={setFilteredEntry}
-                      sx={{ marginTop: '1.25rem' }}
-                      onCollapseAll={handleAnnotationCollapseAll}
-                      onExpandAll={handleAnnotationExpandAll}
-                    />
-                    {annotationTab}
-                  </CustomTabPanel>
-                </>
-              ) : (
-                <>
-                  <CustomTabPanel value={tabValue} index={1}>
-                    <AnnotationFilter
-                      entry={displayEntry}
-                      onFilteredEntryChange={setFilteredEntry}
-                      sx={{ marginTop: '1.25rem' }}
-                      onCollapseAll={handleAnnotationCollapseAll}
-                      onExpandAll={handleAnnotationExpandAll}
-                    />
-                    {annotationTab}
-                  </CustomTabPanel>
-                  <CustomTabPanel value={tabValue} index={2}>
-                    <Box sx={{ marginTop: '2rem', marginBottom: '2rem' }}>
-                      <ChatInterface entry={displayEntry} mode="embedded" />
-                    </Box>
-                  </CustomTabPanel>
+                    </CustomTabPanel>
 
-                </>
-              )}
-            </div>
-          </div>)
+                  </>
+                )}
+              </div>
+            </div>)
           }
         </div>
 

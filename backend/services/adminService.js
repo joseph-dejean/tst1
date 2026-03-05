@@ -1,4 +1,5 @@
 const { Firestore } = require('@google-cloud/firestore');
+const { CatalogServiceClient } = require('@google-cloud/dataplex');
 
 // Lazy Firestore initialization to avoid blocking server startup
 // Auto-detects project from Cloud Run environment (GOOGLE_CLOUD_PROJECT is set automatically by Cloud Run)
@@ -21,7 +22,7 @@ const COLLECTION_NAME = 'admin-roles';
  * {
  *   id: string,                    // Email as ID
  *   email: string,
- *   role: 'super-admin' | 'project-admin',
+ *   role: 'super-admin' | 'project-admin' | 'data-steward',
  *   assignedProjects: string[],    // For project-admin only
  *   createdAt: string (ISO),
  *   updatedAt: string (ISO),
@@ -273,7 +274,44 @@ const removeProjectFromAdmin = async (email, projectId) => {
 };
 
 /**
- * Resolve admin role with fallbacks (Firestore -> Super Admin Env -> GCP IAM)
+ * Helper: Check if a user is a Data Steward in Dataplex Catalog
+ * Searches for any entries where this user is listed in the contacts aspect.
+ */
+const isUserASteward = async (email) => {
+    if (!email) return false;
+
+    try {
+        const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID;
+        if (!projectId) return false;
+
+        const client = new CatalogServiceClient();
+        const location = 'global';
+
+        // Search query specifically looking for the email in any contact role (steward, owner, producer, etc.)
+        // We use the common pattern found in the app
+        const query = `(dataplex-types.global.contacts.steward:"${email}" OR dataplex-types.global.contacts.owner:"${email}")`;
+
+        console.log(`[ADMIN-RESOLVE] Checking Data Steward status for ${email} via Dataplex search...`);
+
+        const [results] = await client.searchEntries({
+            name: `projects/${projectId}/locations/${location}`,
+            query: query,
+            pageSize: 1
+        });
+
+        const isSteward = results && results.length > 0;
+        if (isSteward) {
+            console.log(`[ADMIN-RESOLVE] User ${email} is a Data Steward for at least one asset.`);
+        }
+        return isSteward;
+    } catch (err) {
+        console.warn(`[ADMIN-RESOLVE] Data Steward search failed for ${email}:`, err.message);
+        return false;
+    }
+};
+
+/**
+ * Resolve admin role with fallbacks (Firestore -> Super Admin Env -> GCP IAM -> Data Steward)
  * @param {string} email - User email
  * @returns {Object|null}
  */
@@ -298,7 +336,6 @@ const resolveAdminRole = async (email) => {
     }
 
     // 3. Optional: Check GCP IAM (Fallback for Project Owners/Editors)
-    // This is useful for "first-time" setup without manual Firestore entry
     try {
         const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID;
         if (projectId) {
@@ -319,6 +356,19 @@ const resolveAdminRole = async (email) => {
         }
     } catch (err) {
         console.warn('[ADMIN-RESOLVE] IAM fallback check failed:', err.message);
+    }
+
+    // 4. Data Steward Fallback (Dynamic Admin Rights)
+    const isSteward = await isUserASteward(email);
+    if (isSteward) {
+        const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID;
+        return {
+            email: email,
+            role: 'data-steward', // New role type for dynamic stewards
+            assignedProjects: projectId ? [projectId] : [],
+            isActive: true,
+            isStewardAligned: true
+        };
     }
 
     return null;

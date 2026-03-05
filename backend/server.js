@@ -24,6 +24,7 @@ const { grantIamAccess, revokeIamAccess, getIamBindings, verifyUserAccess } = re
 const adminService = require('./services/adminService');
 const grantedAccessService = require('./services/grantedAccessService');
 const notificationService = require('./services/notificationService');
+const serviceNowService = require('./services/serviceNowService');
 const datasetRelationshipService = require('./services/datasetRelationshipService');
 const { BigQuery } = require('@google-cloud/bigquery');
 console.log('[STARTUP] All modules loaded successfully');
@@ -3787,20 +3788,37 @@ app.post('/api/v1/access-request', async (req, res) => {
 
 
 
-    // Create access request object
+    // Create access request object (with placeholder for ServiceNow)
+    let snTicket = { number: '', sys_id: '' };
+    if (req.body.createServiceNowTicket !== false) {
+      try {
+        console.log('[ACCESS-REQUEST] Creating ServiceNow ticket...');
+        snTicket = await serviceNowService.createTicket({
+          requesterEmail,
+          assetName,
+          message: message || 'Access Request via Dataplex UI'
+        });
+        console.log('[ACCESS-REQUEST] ServiceNow ticket created:', snTicket.number);
+      } catch (snErr) {
+        console.warn('[ACCESS-REQUEST] ServiceNow integration failed, continuing without ticket:', snErr.message);
+      }
+    }
+
     const requestData = {
       id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       assetName,
       assetType: assetType || '',
-      linkedResource: linkedResource || '', // Full resource path for IAM provisioning
+      linkedResource: linkedResource || '',
       message: message || '',
       requesterEmail,
       projectId,
       gcpProjectId: projectId,
-      requestedRole: 'roles/bigquery.dataViewer', // Defaulting for now
+      requestedRole: 'roles/bigquery.dataViewer',
       projectAdmin: projectAdmin || [],
       status: 'pending',
-      autoApproved: false
+      autoApproved: false,
+      serviceNowTicket: snTicket.number,
+      serviceNowSysId: snTicket.sys_id
     };
 
     // Store the request in Firestore
@@ -3996,9 +4014,23 @@ app.post('/api/v1/access-request/update', async (req, res) => {
       if (currentApprovals.length < threshold) {
         effectiveStatus = 'PARTIALLY_APPROVED';
         console.log(`[UPDATE] Partial Approval (${currentApprovals.length}/${threshold}) by ${reviewerEmail}. Status set to PARTIALLY_APPROVED.`);
+        if (originalRequest.serviceNowSysId) {
+          serviceNowService.addComment(originalRequest.serviceNowSysId, `Partial Approval (${currentApprovals.length}/${threshold}) by ${reviewerEmail}. Waiting for consensus.`);
+        }
       } else {
         effectiveStatus = 'APPROVED';
         console.log(`[UPDATE] Consensus reached (${currentApprovals.length}/${threshold})! Final reviewer: ${reviewerEmail}. Proceeding to grant access.`);
+        if (originalRequest.serviceNowSysId) {
+          serviceNowService.addComment(originalRequest.serviceNowSysId, `Consensus reached! Approved by ${reviewerEmail}. Provisioning access.`);
+        }
+      }
+    } else if (status === 'REJECTED') {
+      if (originalRequest.serviceNowSysId) {
+        serviceNowService.addComment(originalRequest.serviceNowSysId, `Access Request Rejected by ${reviewerEmail}. Result: REJECTED.`);
+      }
+    } else if (status === 'REVOKED') {
+      if (originalRequest.serviceNowSysId) {
+        serviceNowService.addComment(originalRequest.serviceNowSysId, `Access Revoked by ${reviewerEmail}. Result: REVOKED.`);
       }
     }
 

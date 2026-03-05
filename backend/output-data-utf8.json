@@ -1,0 +1,79 @@
+﻿Data Products: {
+  "dataProducts": [
+    {
+      "name": "projects/aeyelytics/locations/us/dataProducts/hr-multi-region",
+      "uid": "38370f42-3449-4828-8f31-30fc53f83bec",
+      "displayName": "hr-multi-region",
+      "createTime": "2026-01-27T07:01:42.318400795Z",
+      "updateTime": "2026-01-27T07:04:34.723080779Z",
+      "etag": "yZrMYn02IUmt1QTq5tVFg4wWiYSQh5zbQwxvXVgEas0",
+      "description": "hr but multi region this time",
+      "ownerEmails": [
+        "joseph.dejean.pro@gmail.com"
+      ],
+      "assetCount": 4,
+      "accessGroups": {
+        "test1": {
+          "id": "test1",
+          "displayName": "test1",
+          "description": "the test 1 acess group",
+          "principal": {
+            "googleGroup": "jdejean@albertschool.com"
+          }
+        }
+      }
+    },
+    {
+      "name": "projects/aeyelytics/locations/us-west1/dataProducts/hr",
+      "uid": "3369888f-483a-4a7d-a52c-0feb6cdb7809",
+      "displayName": "HR",
+      "createTime": "2026-01-26T22:04:28.821398902Z",
+      "updateTime": "2026-01-26T22:04:30.156188665Z",
+      "etag": "2W3l0QerlNPIjDS6sNHmXncPrLccBM28kG76mM0fohQ",
+      "labels": {
+        "hrkey": "hrvalue"
+      },
+      "description": "HR I will put HR table in it",
+      "ownerEmails": [
+        "joseph.dejean.pro@gmail.com"
+      ]
+    }
+  ]
+}
+
+Data Assets for first product: {
+  "dataAssets": [
+    {
+      "name": "projects/aeyelytics/locations/us/dataProducts/hr-multi-region/dataAssets/fd309f3d-7a83-4dbf-acda-fc6050602954",
+      "uid": "7ebd1eab-71e9-4a9f-a2fe-f98872d73f15",
+      "createTime": "2026-01-27T07:02:07.973888025Z",
+      "updateTime": "2026-01-27T07:02:10.801205269Z",
+      "etag": "HFSvDL1wPDGSPQA9zzrJtvqc4X-qYTr7HB3CsfQcmq0",
+      "resource": "//bigquery.googleapis.com/projects/aeyelytics/datasets/hr_data/tables/departments"
+    },
+    {
+      "name": "projects/aeyelytics/locations/us/dataProducts/hr-multi-region/dataAssets/854b73ad-0cb4-4d87-a542-9d4e992bd851",
+      "uid": "4560441e-6036-4713-8459-704d08ca7fbb",
+      "createTime": "2026-01-27T07:02:08.010033699Z",
+      "updateTime": "2026-01-27T07:02:11.001685931Z",
+      "etag": "ebYDVLf4o4wdcKv89eHOS71-GXgBxoGv01TsHgeFFpA",
+      "resource": "//bigquery.googleapis.com/projects/aeyelytics/datasets/hr_data/tables/employees"
+    },
+    {
+      "name": "projects/aeyelytics/locations/us/dataProducts/hr-multi-region/dataAssets/5a248b26-320c-4162-83ca-f5acb68fa3af",
+      "uid": "8474724a-6728-4d07-a0b9-b8fb0371c4c8",
+      "createTime": "2026-01-27T07:02:07.814980937Z",
+      "updateTime": "2026-01-27T07:02:11.209024663Z",
+      "etag": "mU4rMIwCEhzUUJQfY8s1lu4HR1fAdymrauXdhUhA0jc",
+      "resource": "//bigquery.googleapis.com/projects/aeyelytics/datasets/hr_data"
+    },
+    {
+      "name": "projects/aeyelytics/locations/us/dataProducts/hr-multi-region/dataAssets/91a447f9-f978-408b-9874-fadaedaff5a9",
+      "uid": "448c7845-d2f8-4af0-8917-6afbfed1a402",
+      "createTime": "2026-01-27T07:02:07.923451809Z",
+      "updateTime": "2026-01-27T07:02:10.647697592Z",
+      "etag": "NK4t3Ium2UpK3m07xV-KuF3ensgaiQ4kPz0CAy1tpq0",
+      "resource": "//bigquery.googleapis.com/projects/aeyelytics/datasets/hr_data/tables/payroll"
+    }
+  ]
+}

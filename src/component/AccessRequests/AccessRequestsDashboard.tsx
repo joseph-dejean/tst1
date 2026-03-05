@@ -21,7 +21,8 @@ import {
   Tab,
   Button,
   TextField,
-  InputAdornment
+  InputAdornment,
+  Tooltip
 } from '@mui/material';
 import { ArrowBack, CheckCircle, Cancel, Refresh, Person, Assignment, AdminPanelSettings, Search } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -44,6 +45,7 @@ interface AccessRequest {
   autoApproved: boolean;
   requestedRole?: string;
   approvals?: string[]; // Emails of stewards who already approved
+  serviceNowTicket?: string;
 }
 
 const AccessRequestsDashboard: React.FC = () => {
@@ -366,6 +368,16 @@ const AccessRequestsDashboard: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" sx={{ color: '#1F1F1F' }}>{request.requesterEmail}</Typography>
+                      {request.serviceNowTicket && (
+                        <Tooltip title="ServiceNow Ticket">
+                          <Chip
+                            label={request.serviceNowTicket}
+                            size="small"
+                            variant="outlined"
+                            sx={{ fontSize: '10px', height: '18px', mt: 0.5, borderColor: '#DADCE0' }}
+                          />
+                        </Tooltip>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Chip
