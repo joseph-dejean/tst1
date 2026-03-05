@@ -144,30 +144,14 @@ const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName,
         message,
         requesterEmail: user.email,
         projectId: import.meta.env.VITE_GOOGLE_PROJECT_ID,
-        projectAdmin: contactEmails // Even if empty, let backend handle it
+        projectAdmin: contactEmails, // Even if empty, let backend handle it
+        createServiceNowTicket: createTicket
       }, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${user?.token || ''} `
         }
       });
-
-      // Create ServiceNow Ticket if requested
-      if (createTicket) {
-        try {
-          await ServiceNowService.createAccessRequestTicket(
-            user.email,
-            assetName,
-            'roles/bigquery.dataViewer', // Default role for now
-            message
-          );
-          console.log('ServiceNow ticket created successfully');
-        } catch (snError) {
-          console.error('Failed to create ServiceNow ticket:', snError);
-          // We don't block the UI success if ServiceNow fails, but maybe show a warning?
-          // For now, just log it.
-        }
-      }
 
       const data = response.data;
       if (data.success) {
