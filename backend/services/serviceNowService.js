@@ -34,6 +34,7 @@ class ServiceNowService {
                     u_requester: data.requesterEmail,
                     u_asset_name: data.assetName,
                     u_justification: data.message,
+                    u_correlation_id: data.requestId,
                     short_description: `Dataplex Access: ${data.assetName}`,
                     description: `User ${data.requesterEmail} requested access to ${data.assetName}.\nJustification: ${data.message}`
                 },

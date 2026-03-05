@@ -3789,11 +3789,13 @@ app.post('/api/v1/access-request', async (req, res) => {
 
 
     // Create access request object (with placeholder for ServiceNow)
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     let snTicket = { number: '', sys_id: '' };
     if (req.body.createServiceNowTicket !== false) {
       try {
         console.log('[ACCESS-REQUEST] Creating ServiceNow ticket...');
         snTicket = await serviceNowService.createTicket({
+          requestId,
           requesterEmail,
           assetName,
           message: message || 'Access Request via Dataplex UI'
@@ -3805,7 +3807,7 @@ app.post('/api/v1/access-request', async (req, res) => {
     }
 
     const requestData = {
-      id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: requestId,
       assetName,
       assetType: assetType || '',
       linkedResource: linkedResource || '',
@@ -4131,6 +4133,100 @@ app.post('/api/v1/access-request/update', async (req, res) => {
   }
 });
 
+
+/**
+ * POST /api/v1/access-request/webhook
+ * Webhook for ServiceNow integration.
+ * Enables Option B: Directly approving requests from ServiceNow.
+ */
+app.post('/api/v1/access-request/webhook', async (req, res) => {
+  try {
+    const { requestId, status, reviewerEmail, secret } = req.body;
+
+    // Security check (if secret is configured)
+    const webhookSecret = process.env.SERVICENOW_WEBHOOK_SECRET;
+    if (webhookSecret && secret !== webhookSecret) {
+      console.warn('[WEBHOOK] Invalid secret provided in webhook call');
+      return res.status(401).json({ success: false, error: 'Unauthorized: Invalid webhook secret' });
+    }
+
+    if (!requestId || !status) {
+      return res.status(400).json({ success: false, error: 'Missing requestId or status in payload' });
+    }
+
+    console.log(`[WEBHOOK] Received update for request ${requestId} from ServiceNow. New status: ${status}`);
+
+    // Fetch original request
+    const originalRequest = await getAccessRequestById(requestId);
+    if (!originalRequest) {
+      return res.status(404).json({ success: false, error: 'Request not found' });
+    }
+
+    if (originalRequest.status === 'APPROVED' || originalRequest.status === 'REJECTED') {
+      return res.json({ success: true, message: 'Request already processed' });
+    }
+
+    let effectiveStatus = status.toUpperCase();
+    let iamStatus = 'NOT_ATTEMPTED';
+
+    if (effectiveStatus === 'APPROVED') {
+      const { linkedResource, requesterEmail } = originalRequest;
+      const bqMatch = linkedResource?.match(/projects\/([^/]+)\/datasets\/([^/]+)/);
+
+      if (bqMatch) {
+        const iamProjectId = bqMatch[1];
+        const datasetId = bqMatch[2];
+
+        try {
+          console.log(`[WEBHOOK] Provisioning IAM access for ${requesterEmail}`);
+          const bigqueryClient = new BigQuery({ projectId: iamProjectId });
+          const dataset = bigqueryClient.dataset(datasetId);
+          const [metadata] = await dataset.getMetadata();
+          const accessList = metadata.access || [];
+
+          const userExists = accessList.some(entry => entry.userByEmail?.toLowerCase() === requesterEmail.toLowerCase());
+          if (!userExists) {
+            accessList.push({
+              role: 'READER',
+              userByEmail: requesterEmail
+            });
+            await dataset.setMetadata({ access: accessList });
+          }
+          iamStatus = 'SUCCESS';
+
+          // Create granted access record
+          await grantedAccessService.createGrantedAccess({
+            requestId: requestId,
+            assetName: originalRequest.assetName,
+            requesterEmail: requesterEmail,
+            role: 'roles/bigquery.dataViewer',
+            grantedBy: reviewerEmail || 'ServiceNow Workflow',
+            projectId: iamProjectId,
+            datasetId: datasetId
+          });
+        } catch (iamErr) {
+          console.error('[WEBHOOK] IAM provisioning failed:', iamErr.message);
+          iamStatus = 'FAILED';
+        }
+      }
+    }
+
+    // Update Firestore
+    const updated = await updateAccessRequestStatus(
+      requestId,
+      effectiveStatus,
+      `Processed via ServiceNow by ${reviewerEmail || 'System'}`,
+      reviewerEmail || 'ServiceNow',
+      originalRequest.approvals || []
+    );
+
+    res.json({ success: true, message: 'Webhook processed successfully', data: updated, iamStatus });
+
+  } catch (error) {
+    console.error('[WEBHOOK] Error processing ServiceNow callback:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
 
 /**
  * POST /api/v1/access/revoke
