@@ -28,8 +28,9 @@ class ServiceNowService {
         }
 
         try {
+            const tableName = process.env.SERVICENOW_TABLE_NAME || 'u_access_request';
             const response = await axios.post(
-                `${this.instanceUrl}/api/now/table/u_access_request`,
+                `${this.instanceUrl}/api/now/table/${tableName}`,
                 {
                     u_requester: data.requesterEmail,
                     u_asset_name: data.assetName,
@@ -59,8 +60,9 @@ class ServiceNowService {
         if (!this.isEnabled() || sysId === 'mock' || sysId === 'error') return;
 
         try {
+            const tableName = process.env.SERVICENOW_TABLE_NAME || 'u_access_request';
             await axios.put(
-                `${this.instanceUrl}/api/now/table/u_access_request/${sysId}`,
+                `${this.instanceUrl}/api/now/table/${tableName}/${sysId}`,
                 {
                     comments: comment
                 },
