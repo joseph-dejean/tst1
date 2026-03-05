@@ -1798,6 +1798,12 @@ app.get('/api/v1/get-entry', async (req, res) => {
     res.json(entry);
 
   } catch (error) {
+    if (error.code === 5 || error.message?.includes('NOT_FOUND')) {
+      return res.status(404).json({
+        message: 'Entry not found in Dataplex Catalog.',
+        details: 'This table might not have been discovered or scanned yet.'
+      });
+    }
     console.error('Error fetching entry', error);
     res.status(500).json({ message: 'An error occurred while fetching entry from Dataplex.', details: error.message });
   }
@@ -2425,27 +2431,8 @@ app.get('/api/v1/app-configs', async (req, res) => {
     const userEmail = req.query.email || req.headers['x-user-email'];
     if (userEmail) {
       try {
-        // 1. Check Firestore first
-        userAdminRole = await adminService.getAdminRole(userEmail);
-
-        // 2. If not in Firestore, check GCP IAM Roles (Alignment with GCP Rights)
-        if (!userAdminRole) {
-          const currentProjectId = PROJECT_ID;
-          if (currentProjectId) {
-            console.log(`Checking GCP IAM roles for ${userEmail} on ${currentProjectId}`);
-            const isOwner = await verifyUserAccess(currentProjectId, userEmail, 'roles/owner');
-            const isEditor = await verifyUserAccess(currentProjectId, userEmail, 'roles/editor');
-
-            if (isOwner || isEditor) {
-              console.log(`User ${userEmail} granted admin UI access via GCP IAM (${isOwner ? 'Owner' : 'Editor'})`);
-              userAdminRole = {
-                role: 'project-admin',
-                assignedProjects: [currentProjectId],
-                isGcpAligned: true
-              };
-            }
-          }
-        }
+        // Use centralized resolution logic (Firestore -> Env -> IAM -> Steward)
+        userAdminRole = await adminService.resolveAdminRole(userEmail);
       } catch (err) {
         console.error('Error fetching user role for app config:', err);
       }
@@ -3508,14 +3495,9 @@ app.get('/api/v1/dataset-relationships', async (req, res) => {
 
     // Fetch all tables in the dataset using Data Catalog search
     console.log(`[RELATIONSHIPS] Cache miss, fetching tables from Data Catalog...`);
-
-    // Use DataCatalogClient for searchCatalog, BigQuery for schemas
     const dataCatalogClient = new DataCatalogClient();
-    const bigquery = new BigQuery({ projectId: project });
 
-    // Search for all tables in this dataset
     const searchQuery = `system=bigquery type=TABLE parent:${project}.${dataset}`;
-
     const [searchResults] = await dataCatalogClient.searchCatalog({
       scope: {
         includeProjectIds: [project, PROJECT_ID],
@@ -3530,6 +3512,8 @@ app.get('/api/v1/dataset-relationships', async (req, res) => {
     if (!searchResults || searchResults.length === 0) {
       return res.json({
         relationships: [],
+        nodes: [],
+        edges: [],
         source: 'inferred',
         message: 'No tables found in dataset',
         project,
@@ -3537,61 +3521,42 @@ app.get('/api/v1/dataset-relationships', async (req, res) => {
       });
     }
 
-    // Fetch schema for each table using BigQuery directly
-    const tables = [];
-    for (const result of searchResults) {
-      try {
-        // Extract table name from FQN like "bigquery:project.dataset.table"
-        const fqn = result.fullyQualifiedName || '';
-        const tableName = fqn.split('.').pop() || result.displayName || 'unknown';
+    // Extract table FQNs
+    const rootTableFqns = searchResults.map(r => r.fullyQualifiedName || `bigquery:${project}.${dataset}.${r.displayName}`);
 
-        // Get table schema from BigQuery
-        const [metadata] = await bigquery.dataset(dataset).table(tableName).getMetadata();
-        const schema = (metadata.schema?.fields || []).map(f => ({
-          name: f.name,
-          type: f.type
-        }));
+    // Fetch relationships up to 3rd degree via Catalog API
+    let location = process.env.GCP_LOCATION || 'eu'; // Assuming eu based on user's earlier test or config
+    const billingProject = PROJECT_ID; // Billing project for API calls
 
-        tables.push({
-          name: tableName,
-          fullyQualifiedName: fqn,
-          schema
-        });
-      } catch (entryErr) {
-        console.warn(`[RELATIONSHIPS] Failed to get schema for table ${result.fullyQualifiedName}:`, entryErr.message);
-      }
-    }
+    const relationships = await datasetRelationshipService.fetchRelationshipsFromCatalog(
+      billingProject,
+      location,
+      rootTableFqns,
+      3 // max degree
+    );
 
-    console.log(`[RELATIONSHIPS] Got schemas for ${tables.length} tables`);
-
-    // Infer relationships from schemas
-    const inferredRelationships = datasetRelationshipService.inferRelationships(tables);
-
-    // Fetch relationships from DataScans
-    let location = process.env.GCP_LOCATION || '-';
-    const scanRelationships = await datasetRelationshipService.fetchDataScanRelationships(project, location, tables);
-
-    // Combine avoiding duplicates
-    const relationships = [...inferredRelationships];
-    for (const scanRel of scanRelationships) {
-      const exists = relationships.some(r =>
-        (r.table1 === scanRel.table1 && r.table2 === scanRel.table2) ||
-        (r.table1 === scanRel.table2 && r.table2 === scanRel.table1)
-      );
-      if (!exists) {
-        relationships.push(scanRel);
-      }
-    }
-
-    console.log(`[RELATIONSHIPS] Total ${relationships.length} relationships`);
+    console.log(`[RELATIONSHIPS] Total ${relationships.length} edges found via Catalog API`);
 
     // Cache the results
-    await datasetRelationshipService.cacheRelationships(project, dataset, relationships, tables);
+    await datasetRelationshipService.cacheRelationships(project, dataset, relationships, searchResults.length);
+
+    // Build unique nodes from edges + root tables
+    const nodeSet = new Set();
+    rootTableFqns.forEach(fqn => {
+      const parts = fqn.replace('bigquery:', '').replace('bigquery://', '').split('.');
+      if (parts.length >= 3) nodeSet.add(parts[2]);
+    });
+    relationships.forEach(r => {
+      nodeSet.add(r.table1);
+      nodeSet.add(r.table2);
+    });
 
     res.json({
-      relationships,
-      source: 'inferred',
-      tableCount: tables.length,
+      relationships, // Keep backward compatible field
+      nodes: Array.from(nodeSet).map(id => ({ id, label: id })),
+      edges: relationships,
+      source: 'catalog_documentation',
+      tableCount: searchResults.length,
       project,
       dataset
     });
@@ -4011,31 +3976,36 @@ app.post('/api/v1/access-request/update', async (req, res) => {
     let effectiveStatus = status;
     let currentApprovals = originalRequest.approvals || [];
 
+    // Calculate dynamic threshold based on number of project admins (stewards)
+    // Rule: 1 steward = 1 approval needed, 2+ stewards = 2 approvals needed, No stewards = 2 (fallback) 
+    const stewardList = originalRequest.projectAdmin || [];
+    const threshold = Math.max(1, Math.min(stewardList.length || 2, 2));
+
     if (status === 'APPROVED') {
       // Prevent double-approvals from same user
       if (currentApprovals.includes(reviewerEmail)) {
         return res.status(400).json({
           success: false,
-          error: 'You have already approved this request. Waiting for another Data Steward.'
+          error: `You have already approved this request. Waiting for another Data Steward (Threshold: ${currentApprovals.length}/${threshold}).`
         });
       }
 
       currentApprovals.push(reviewerEmail);
 
-      // Check if we reached the threshold (2 stewards)
-      if (currentApprovals.length < 2) {
+      // Check if we reached the required threshold
+      if (currentApprovals.length < threshold) {
         effectiveStatus = 'PARTIALLY_APPROVED';
-        console.log(`[UPDATE] Partial Approval (1/2) by ${reviewerEmail}. Status set to PARTIALLY_APPROVED.`);
+        console.log(`[UPDATE] Partial Approval (${currentApprovals.length}/${threshold}) by ${reviewerEmail}. Status set to PARTIALLY_APPROVED.`);
       } else {
         effectiveStatus = 'APPROVED';
-        console.log(`[UPDATE] Consensus reached (2/2)! Final reviewer: ${reviewerEmail}. Proceeding to grant access.`);
+        console.log(`[UPDATE] Consensus reached (${currentApprovals.length}/${threshold})! Final reviewer: ${reviewerEmail}. Proceeding to grant access.`);
       }
     }
 
     // --- IAM PROVISIONING/REVOCATION ---
     let iamStatus = 'NOT_ATTEMPTED';
 
-    // ONLY grant IAM access if we reached full approval (2 stewards)
+    // ONLY grant IAM access if we reached full approval threshold
     if (effectiveStatus === 'APPROVED' && iamProjectId && datasetId) {
       try {
         console.log(`[UPDATE] Granting BigQuery READER access: user=${requesterEmail}, project=${iamProjectId}, dataset=${datasetId}`);

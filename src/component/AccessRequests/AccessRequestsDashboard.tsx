@@ -151,7 +151,8 @@ const AccessRequestsDashboard: React.FC = () => {
     const s = request.status?.toUpperCase();
     if (s === 'PARTIALLY_APPROVED') {
       const count = request.approvals?.length || 0;
-      return `CONSENSUS (${count}/2)`;
+      const threshold = Math.max(1, Math.min(request.projectAdmin?.length || 2, 2));
+      return `CONSENSUS (${count}/${threshold})`;
     }
     return s || '';
   };
@@ -397,7 +398,9 @@ const AccessRequestsDashboard: React.FC = () => {
                               onClick={() => handleUpdateStatus(request.id, 'approved')}
                               sx={{ textTransform: 'none', borderRadius: '16px', py: 0 }}
                             >
-                              {request.status?.toLowerCase() === 'partially_approved' ? 'Confirm (2/2)' : 'Approve'}
+                              {request.status?.toLowerCase() === 'partially_approved'
+                                ? `Confirm (${(request.approvals?.length || 0) + 1}/${Math.max(1, Math.min(request.projectAdmin?.length || 2, 2))})`
+                                : 'Approve'}
                             </Button>
                             <Button
                               size="small"
