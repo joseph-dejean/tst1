@@ -187,6 +187,7 @@ const getAssetIcon = (assetName: string) => {
 const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSelected = false, onDoubleClick, disableHoverEffect = false, hideTopBorderOnHover = false, index }) => {
   //const [parentName, setParentName] = useState<string>('');
   const [name, setName] = useState<string>('');
+  const [datasetName, setDatasetName] = useState<string>('');
   const [entryType, setEntryType] = useState<string>('');
   const [modifiedDate, setModifiedDate] = useState<string>('');
   const [systemName, setSystemName] = useState<string>('');
@@ -259,19 +260,20 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
       baseName = segments[segments.length - 1];
     }
 
-    let calculatedName = baseName;
     const resourcePath = entry.linkedResource || entry.relativeResourceName || entry.name || '';
     if (resourcePath.includes('/datasets/')) {
       const parts = resourcePath.split('/datasets/');
       if (parts.length > 1) {
-        const datasetName = parts[1].split('/')[0];
-        if (datasetName && !baseName.startsWith(datasetName + '.')) {
-          calculatedName = `${datasetName}.${baseName}`;
-        }
+        const parsedDatasetName = parts[1].split('/')[0];
+        setDatasetName(parsedDatasetName || '');
+      } else {
+        setDatasetName('');
       }
+    } else {
+      setDatasetName('');
     }
 
-    setName(calculatedName);
+    setName(baseName);
 
     // Map System: integratedSystem (SearchResult) OR entrySource.system (Entry)
     const systemVal = entry.integratedSystem || entrySource.system || 'Custom';
@@ -475,6 +477,22 @@ const SearchEntriesCard: React.FC<SearchEntriesCardProps> = ({ entry, sx, isSele
                     textTransform: 'capitalize',
                     flexShrink: 0 // Prevent tag from shrinking
                   }} />
+                  {datasetName && (
+                    <Tag text={`Dataset: ${datasetName}`} css={{
+                      fontFamily: '"Google Sans Text", sans-serif',
+                      color: '#575757',
+                      backgroundColor: '#EEEEEE',
+                      border: '1px solid #DADCE0',
+                      margin: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "0.25rem 0.5rem",
+                      fontWeight: 500,
+                      borderRadius: '8px',
+                      flexShrink: 0
+                    }} />
+                  )}
                 </div>
                 <Tooltip title={`Last Modified at ${modifiedDate}`} arrow placement='top'>
                   <span style={{
