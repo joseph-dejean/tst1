@@ -135,39 +135,53 @@ app.post('/api/v1/chat', async (req, res) => {
     // Format: bigquery://project.dataset.table or project:dataset.table
     let projectId, datasetId, tableId;
 
+    console.log('[CA_DEBUG] Step 1: Parsing FQN. Raw fullyQualifiedName:', context.fullyQualifiedName);
+
     if (context.fullyQualifiedName) {
       let fqn = context.fullyQualifiedName;
 
       // Handle "bigquery:" prefix (common in Dataplex FQNs)
       if (fqn.startsWith('bigquery:')) {
         fqn = fqn.substring(9); // Remove "bigquery:"
-        // Example now: dataplex-ui.coffee_shop.order_item
+        console.log('[CA_DEBUG] Removed bigquery: prefix. FQN now:', fqn);
       } else if (fqn.startsWith('bigquery://')) {
         fqn = fqn.replace('bigquery://', '');
+        console.log('[CA_DEBUG] Removed bigquery:// prefix. FQN now:', fqn);
+      } else {
+        console.log('[CA_DEBUG] No bigquery prefix found. FQN as-is:', fqn);
       }
 
       const parts = fqn.split('.');
+      console.log('[CA_DEBUG] Split by dot:', JSON.stringify(parts), 'Count:', parts.length);
       if (parts.length >= 3) {
         projectId = parts[0];
         datasetId = parts[1];
         tableId = parts[2];
+        console.log(`[CA_DEBUG] Parsed OK: project=${projectId}, dataset=${datasetId}, table=${tableId}`);
       } else if (fqn.includes(':') && !fqn.startsWith('bigquery:')) {
-        // Handle older format project:dataset.table if still used, but unlikely with new cleaning
+        // Handle older format project:dataset.table if still used
         const [project, rest] = fqn.split(':');
         projectId = project;
         const restParts = rest.split('.');
         if (restParts.length >= 2) {
           datasetId = restParts[0];
           tableId = restParts[1];
+          console.log(`[CA_DEBUG] Parsed colon format: project=${projectId}, dataset=${datasetId}, table=${tableId}`);
         }
+      } else {
+        console.log('[CA_DEBUG] Could not parse FQN - not enough parts');
       }
+    } else {
+      console.log('[CA_DEBUG] No fullyQualifiedName in context!');
     }
 
     // Check if this is a Data Product
     const isDataProduct = context.isDataProduct === true;
+    console.log('[CA_DEBUG] Step 2: isDataProduct:', isDataProduct, 'projectId:', projectId, 'datasetId:', datasetId, 'tableId:', tableId);
 
     // If we can't extract BigQuery reference, fall back to metadata-only mode
     if (!projectId || !datasetId || !tableId) {
+      console.log('[CA_DEBUG] FALLBACK: Missing project/dataset/table -> Using Vertex AI metadata-only mode');
       // Fallback: Use Vertex AI for non-BigQuery tables or when FQN is not available
       // Vertex AI requires a specific region (not multi-region like 'us'), default to europe-west1
       const vertexLocation = (process.env.GCP_LOCATION && process.env.GCP_LOCATION.includes('-')) ? process.env.GCP_LOCATION : 'europe-west1';
@@ -349,6 +363,7 @@ app.post('/api/v1/chat', async (req, res) => {
 
     // Use ADC (service account) token for CA API - the user's OAuth token lacks the cloud-platform scope
     // needed by geminidataanalytics.googleapis.com. The service account has the proper IAM roles.
+    console.log('[CA_DEBUG] Step 3: Getting ADC token for CA API...');
     const adcAuth = new AdcGoogleAuth();
     const adcClient = await adcAuth.getClient();
     const adcToken = (await adcClient.getAccessToken()).token;
@@ -426,6 +441,12 @@ app.post('/api/v1/chat', async (req, res) => {
     }
 
     // Make request to Conversational Analytics API using ADC service account token
+    console.log('[CA_DEBUG] Step 4: Calling CA API at:', chatUrl);
+    console.log('[CA_DEBUG] Payload parent:', chatPayload.parent);
+    console.log('[CA_DEBUG] Has inlineContext:', !!chatPayload.inlineContext);
+    console.log('[CA_DEBUG] Has dataAgentContext:', !!chatPayload.dataAgentContext);
+    console.log('[CA_DEBUG] Has conversationReference:', !!chatPayload.conversationReference);
+    console.log('[CA_DEBUG] Table refs count:', tableReferences.length);
     const chatResponse = await axios.post(chatUrl, chatPayload, {
       headers: {
         'Authorization': `Bearer ${adcToken}`,
@@ -442,8 +463,8 @@ app.post('/api/v1/chat', async (req, res) => {
     let returnedConversationId = existingConversationId || null; // Will be updated from response
     let accumulatedJson = chatResponse.data.toString('utf-8'); // Convert buffer to string properly
 
-    console.log('DEBUG_RAW_RESPONSE_LENGTH:', accumulatedJson.length);
-    console.log('DEBUG_FULL_RAW_RESPONSE:', accumulatedJson); // Log EVERYTHING to find hidden data
+    console.log('[CA_DEBUG] Step 5: CA API call SUCCEEDED! Response length:', accumulatedJson.length);
+    console.log('[CA_DEBUG] Raw response (first 2000 chars):', accumulatedJson.substring(0, 2000));
 
     // Parse the full accumulated JSON
     try {
@@ -856,7 +877,7 @@ Rules:
     }
 
     // Send structured response
-    console.log('Sending response to frontend:', { replyLength: fullResponseText.length, hasChart: !!finalChart, hasSql: !!finalSql, hasData: rawDataRows.length > 0, conversationId: returnedConversationId });
+    console.log('[CA_DEBUG] Step 6: FINAL RESPONSE from CA API:', { replyLength: fullResponseText.length, hasChart: !!finalChart, hasSql: !!finalSql, dataRowCount: rawDataRows.length, conversationId: returnedConversationId });
 
     // If no text was extracted, provide helpful feedback
     if (!fullResponseText || fullResponseText.trim().length === 0) {
@@ -924,13 +945,17 @@ Rules:
     });
 
   } catch (err) {
-    console.error("Conversational Analytics API Error:", err.message);
+    console.error("[CA_DEBUG] CA API FAILED! Error:", err.message);
+    if (err.response) {
+      console.error("[CA_DEBUG] CA API Error Status:", err.response.status);
+      console.error("[CA_DEBUG] CA API Error Data:", JSON.stringify(err.response.data?.toString?.() || err.response.data, null, 2));
+    }
 
     // --- FALLBACK MECHANISM ---
     // If the specialized API fails (Auth, 404, etc.), fallback to standard Gemini 1.5 Flash
     // This ensures the user always gets an answer.
     try {
-      console.log('Attempting fallback to Gemini 1.5 Flash...');
+      console.log('[CA_DEBUG] FALLBACK: Attempting Gemini fallback because CA API failed...');
       // Vertex AI requires a specific region (not multi-region like 'us'), default to europe-west1
       const fallbackLocation = (process.env.GCP_LOCATION && process.env.GCP_LOCATION.includes('-')) ? process.env.GCP_LOCATION : 'europe-west1';
       const fallbackVertex = new VertexAI({

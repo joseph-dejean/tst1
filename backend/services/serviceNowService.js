@@ -8,10 +8,12 @@ class ServiceNowService {
         this.instanceUrl = process.env.SERVICENOW_INSTANCE_URL;
         this.username = process.env.SERVICENOW_USERNAME;
         this.password = process.env.SERVICENOW_PASSWORD;
+        this.tableName = process.env.SERVICENOW_TABLE_NAME || 'x_1945757_datapl_0_access_request';
         this.auth = this.username && this.password ? {
             username: this.username,
             password: this.password
         } : null;
+        console.log(`[ServiceNow] Config: instance=${this.instanceUrl}, table=${this.tableName}, enabled=${this.isEnabled()}`);
     }
 
     isEnabled() {
@@ -27,7 +29,7 @@ class ServiceNowService {
             return { number: `MOCK-SN-${Date.now()}`, sys_id: 'mock' };
         }
 
-        const tableName = process.env.SERVICENOW_TABLE_NAME || 'x_1945757_datapl_0_access_request';
+        const tableName = this.tableName;
         const prefix = process.env.SERVICENOW_FIELD_PREFIX || '';
 
         const payload = {};
@@ -38,6 +40,7 @@ class ServiceNowService {
         payload.description = `User ${data.requesterEmail} requested access to ${data.assetName}.\nJustification: ${data.message}`;
 
         console.log('[ServiceNow] Creating ticket on table:', tableName);
+        console.log('[ServiceNow] URL:', `${this.instanceUrl}/api/now/table/${tableName}`);
         console.log('[ServiceNow] Payload:', JSON.stringify(payload, null, 2));
 
         try {
@@ -68,9 +71,8 @@ class ServiceNowService {
         if (!this.isEnabled() || sysId === 'mock' || sysId === 'error') return;
 
         try {
-            const tableName = process.env.SERVICENOW_TABLE_NAME || 'x_1945757_datapl_0_access_request';
             await axios.put(
-                `${this.instanceUrl}/api/now/table/${tableName}/${sysId}`,
+                `${this.instanceUrl}/api/now/table/${this.tableName}/${sysId}`,
                 {
                     comments: comment
                 },
