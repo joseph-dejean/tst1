@@ -554,6 +554,44 @@ const Assets: React.FC<AssetsProps> = ({ entry, css, onAssetPreviewChange, onReq
             {dataProductAssetsStatus === 'loading' && (
               <Typography sx={{ fontSize: '14px', color: '#575757', marginTop: 40 }}>Loading data product assets...</Typography>
             )}
+            {dataProductAssetsStatus === 'failed' && (
+              /* Failed to fetch asset list — likely no Dataplex access. Show request access prompt. */
+              <Box sx={{ marginTop: '1.25rem' }}>
+                <Alert
+                  severity="warning"
+                  icon={<LockOutlined />}
+                  sx={{
+                    mb: 2,
+                    borderRadius: '12px',
+                    fontFamily: '"Google Sans Text", sans-serif',
+                    fontSize: '13px',
+                    backgroundColor: '#FFF8E1',
+                    color: '#F57C00',
+                    '& .MuiAlert-icon': { color: '#F57C00' }
+                  }}
+                  action={
+                    onRequestAccess && (
+                      <Button
+                        size="small"
+                        onClick={() => onRequestAccess(entry)}
+                        sx={{
+                          fontFamily: '"Google Sans Text", sans-serif',
+                          textTransform: 'none',
+                          color: '#E65100',
+                          fontWeight: 600,
+                          fontSize: '12px',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        Request Access
+                      </Button>
+                    )
+                  }
+                >
+                  You don't have permission to view this data product's assets. Request access to see the contents.
+                </Alert>
+              </Box>
+            )}
             {dataProductAssetsStatus === 'succeeded' && dataProductAssets.length === 0 && assetListLoader && (
               <Typography sx={{ fontSize: '14px', color: '#575757', marginTop: 40 }}>No data product assets found.</Typography>
             )}

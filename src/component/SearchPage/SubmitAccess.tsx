@@ -147,7 +147,7 @@ const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName,
         ? `${assetName} (in Data Product: ${entry?.entrySource?.displayName || 'Unknown'})`
         : assetName;
 
-      const response = await axios.post(`${URLS.API_URL}${URLS.ACCESS_REQUEST} `, {
+      const response = await axios.post(`${URLS.API_URL}${URLS.ACCESS_REQUEST}`, {
         assetName: ticketAssetName,
         linkedResource,
         assetType,
@@ -159,7 +159,7 @@ const SubmitAccess: React.FC<SubmitAccessProps> = ({ isOpen, onClose, assetName,
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.token || ''} `
+          'Authorization': `Bearer ${user?.token || ''}`
         }
       });
 
