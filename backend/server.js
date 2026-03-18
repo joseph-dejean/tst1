@@ -4373,6 +4373,36 @@ app.post('/api/v1/access-request/update', async (req, res) => {
           datasetId = parts[1];
         }
       }
+
+      // Fallback for Dataplex entries (glossary terms, data products, etc.)
+      // Look up the entry to find its underlying BigQuery resource
+      if (!iamProjectId && linkedResource.includes('/entryGroups/')) {
+        try {
+          console.log(`[UPDATE] linkedResource is a Dataplex entry path, looking up BQ resource: ${linkedResource}`);
+          const lookupClient = new CatalogServiceClient();
+          const [entry] = await lookupClient.getEntry({ name: linkedResource, view: 'FULL' });
+          const entryResource = entry?.entrySource?.resource || '';
+          const entryFqn = entry?.fullyQualifiedName || '';
+
+          // Try to extract BQ project/dataset from the entry's actual resource
+          const resBqMatch = entryResource.match(/projects\/([^/]+)\/datasets\/([^/]+)/);
+          if (resBqMatch && resBqMatch.length >= 3) {
+            iamProjectId = resBqMatch[1];
+            datasetId = resBqMatch[2];
+            console.log(`[UPDATE] Resolved BQ resource from entry: project=${iamProjectId}, dataset=${datasetId}`);
+          } else if (entryFqn.includes('bigquery:')) {
+            const fqnClean = entryFqn.replace('bigquery://', '').replace('bigquery:', '');
+            const fqnParts = fqnClean.split('.');
+            if (fqnParts.length >= 2) {
+              iamProjectId = fqnParts[0];
+              datasetId = fqnParts[1];
+              console.log(`[UPDATE] Resolved BQ resource from FQN: project=${iamProjectId}, dataset=${datasetId}`);
+            }
+          }
+        } catch (lookupErr) {
+          console.warn(`[UPDATE] Could not look up Dataplex entry for IAM: ${lookupErr.message}`);
+        }
+      }
     }
 
     // --- DUAL-APPROVAL LOGIC ---
