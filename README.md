@@ -1,336 +1,300 @@
-# Dataplex Universal Catalog Business Interface - 1.2.0
+# Dataplex Business User Interface
 
-An open-source, web-based application called **`Dataplex Business Interface`** which aims to help business users of BigQuery customers discover and access data assets in the **Dataplex** Universal Catalog (formerly Data Catalog).
-## Key objectives of the application include:
-- Empowering business users to find relevant data independently.
-- Streamlining the data access request process using **Dataplex's** API.
-**Improving** data governance and compliance with an audit trail for access requests.
-Increasing data literacy by making data more discoverable.
-Providing a customizable platform for future data governance enhancements.
-## The target user personas are:
-Business users and others who need to access and understand data in **Dataplex**.
-Data Stewards.
+A web application that helps business users discover, explore, and request access to data assets in **Google Cloud Dataplex Universal Catalog**. Built with React + TypeScript (frontend) and Node.js + Express (backend), deployed as a single container on Cloud Run.
 
-## Key Features
-### Secure Google Sign-In: 
-Integration with @react-oauth/google for a smooth and secure login experience.
-### Protected Routes: 
-Utilizes react-router-dom to protect specific routes, redirecting unauthenticated users to the login page.
-### Modern Tech Stack: 
-Built with Vite for a fast development experience, TypeScript for type safety, and Tailwind CSS for utility-first styling.
-### Mock Backend Simulation: 
-Includes a simulated API to demonstrate the frontend's interaction with a backend for exchanging the authorization code, allowing the frontend to be run standalone for development.
-### **GCP APIs** Permission Check: 
-After successful authentication, the application will use **GCP APIs** to check if the logged-in user has **Dataplex** permissions. This check will ensure that only authorized users can access **Dataplex** data.
-### Search with Filters: 
-The UI will allow users to search for **Dataplex** datasets using various filters. The search functionality will leverage **Dataplex** APIs to query the data.
-### Catalogs Retrieval: 
-The application will retrieve and display **Dataplex** catalogs. Users will be able to browse through the catalogs to find datasets.
-### Dataset Details: 
-When a user selects a dataset, the application will fetch and display details such as Asset name, description, Project ID, and metadata using the **Dataplex** API.
+## What It Does
 
-## Libraries & Tools
-**React**: The core UI library.
+- **Search & Discover** data assets across your Dataplex catalog with natural language and filters
+- **AI-Powered Chat** with your data tables using Google Conversational Analytics and Gemini
+- **Data Products** browse and explore curated data products
+- **Access Requests** workflow with admin approval, email notifications, and optional ServiceNow integration
+- **Table Relationships** automatic detection of relationships between tables in a dataset
+- **Data Quality** view Data Quality scan results and profiling
+- **Data Lineage** visualize upstream/downstream data dependencies
+- **Role-Based Access** with super-admin, project-admin, and data-steward roles
 
-**TypeScript**: For static typing and improved code quality.
+## Architecture
 
-**Vite**: A next-generation frontend tooling for fast development builds.
+```
+Browser ──► Cloud Run
+             ├── Express Backend (port 8080)
+             │    ├── Dataplex Catalog API
+             │    ├── BigQuery API
+             │    ├── Conversational Analytics API
+             │    ├── Vertex AI (Gemini)
+             │    ├── Data Lineage API
+             │    ├── Cloud Resource Manager / IAM
+             │    ├── Firestore (state: requests, notifications, roles)
+             │    └── ServiceNow (optional)
+             └── React Frontend (served as static files)
+```
 
-**@react-oauth/google**: The primary library for handling the Google OAuth flow on the client side.
+## Prerequisites
 
-**React Router**: For client-side routing and managing protected routes.
+- **Node.js** v20 or later
+- A **Google Cloud** project with billing enabled
+- The following **APIs enabled**:
+  - Dataplex API
+  - BigQuery API
+  - Cloud Resource Manager API
+  - Firestore (Native mode)
+  - Vertex AI API (for AI chat)
+  - Data Lineage API (for lineage features)
+- An **OAuth 2.0 Client ID** (Web application type)
 
-**Material UI**: For modern, responsive, utility-first styling.
+## Quick Start (Local Development)
 
-## Getting Started: Running Locally
-Follow these steps to set up and run the project on your local machine.
+### 1. Clone and install
 
-### Prerequisites
-Node.js (v20 or later)
-
-An active Google Cloud account
-
-#### Step 1: Clone & Install Dependencies
-Clone the repository and install the necessary npm packages.
-
-```cmd
-git clone https://github.com/GoogleCloudPlatform/dataplex-business-user-interface
+```bash
+git clone <repository-url>
 cd dataplex-business-user-interface
+
+# Frontend dependencies
 npm install
+
+# Backend dependencies
+cd backend && npm install && cd ..
 ```
 
-#### Step 2: Configure Google OAuth Client ID
-Go to the **Google Cloud Console**.
+### 2. Configure environment
 
-Create a new project or select an existing one.
-
-Navigate to APIs & Services > Credentials.
-
-Click + CREATE CREDENTIALS and select OAuth client ID.
-
-Choose **Web application** as the application type.
-
-Under Authorized JavaScript origins, add http://localhost:5173.
-
-Under Authorized redirect URIs, add http://localhost:5173.
-
-Click CREATE and copy the generated **Client ID and Secret**.
-
-#### Step 3: Update Client ID in the Project
-Open the `.env` file and replace the placeholder with your actual Client ID:
-```shell
-// .env
-VITE_GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com'; // <-- PASTE YOUR ID HERE
-VITE_GOOGLE_CLIENT_SECRET = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+```bash
+cp .env.example .env
 ```
-#### Step 4: Run the Application
-Start the Vite development server.
 
+Edit `.env` with your values:
+- `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_SECRET` from your OAuth credentials
+- `VITE_GOOGLE_PROJECT_ID` / `GOOGLE_CLOUD_PROJECT_ID` — your GCP project
+- `GCP_LOCATION` — the region where your Dataplex resources are (e.g., `europe-west1`)
+- `SUPER_ADMIN_EMAIL` — the email of the initial admin user
+
+### 3. Authenticate to GCP
+
+```bash
+gcloud auth application-default login
+```
+
+This gives the backend Application Default Credentials to call GCP APIs.
+
+### 4. Configure OAuth redirect URIs
+
+In the [Google Cloud Console > Auth Clients](https://console.cloud.google.com/auth/clients):
+- Add `http://localhost:5173` to **Authorized JavaScript origins**
+- Add `http://localhost:5173` and `http://localhost:8080/auth/google/callback` to **Authorized redirect URIs**
+
+### 5. Run the application
+
+```bash
+# Terminal 1 — Backend
+cd backend
+node server.js
+
+# Terminal 2 — Frontend (Vite dev server with hot reload)
 npm run dev
+```
 
-Open your browser to http://localhost:5173 to see the application running.
+Open http://localhost:5173. Sign in with your Google account.
 
-Deployment Guide: **Google Cloud Run**
-This guide covers deploying the static frontend to **Google Cloud Run**.
+### 6. Configure Browse by Aspects (Optional)
 
-**Note: This deploys the frontend only, which relies on the mockApi. For a full production application, you must also deploy a secure backend to handle the token exchange logic.**
+Edit `backend/configData.json` to configure aspect types for the browse feature:
 
-For backend deployment in local you should check the readme file in backend folder
-and set the VITE_API_URL="http://localhost:8080/api" in the .env file for frontend
-if you are running your backend on other port make sure to set the api url accordingly 
+```json
+{
+  "aspectType": {
+    "projects/PROJECT_NUMBER/locations/LOCATION/entryGroups/@dataplex/entries/ASPECT_ID_aspectType": [
+      "field1",
+      "field2"
+    ]
+  },
+  "assets": {},
+  "products": []
+}
+```
 
-## Cloud Run Deployment Steps for production
+To find these values:
+1. Go to **GCP Console > Cloud Overview > Dashboard** to get your project number
+2. Go to **Dataplex Universal Catalog** and search for your aspect type to get its ID and location
 
-### Prerequisites
-You should have access to **GCP Cloud Shell** or **Google Cloud SDK (gcloud)** installed and authenticated.
-A GCP project with billing enabled.
-You should have access to cloud run, and api enable permissions in the project.
-Assumption that dataplex api and BigQuery API is enabled and you have sufficient permissions
+## Deployment to Cloud Run
 
-Create a OAuth client using google auth platform as it is used for authentication
-Visit here https://console.cloud.google.com/auth/clients
-The steps are already mentioned above as **step 2 in Running locally**
-In this step you would get client id and secret save it some where secure 
+### Option A: Using Cloud Build (CI/CD)
 
-#### Step 1: Auth to Cloud shell or Google Cloud SDK
-Login with the account in which you have access of the project for deployment
-```shell
+The repo includes `cloudbuild.yaml` for automated builds. Set up a Cloud Build trigger:
+
+1. **Enable APIs**:
+```bash
+gcloud services enable \
+  run.googleapis.com \
+  cloudbuild.googleapis.com \
+  artifactregistry.googleapis.com \
+  cloudresourcemanager.googleapis.com
+```
+
+2. **Create an Artifact Registry repository** (one-time):
+```bash
+gcloud artifacts repositories create dataplex-ui-repo \
+  --repository-format=docker \
+  --location=us-central1 \
+  --description="Dataplex Business UI"
+```
+
+3. **Create a Cloud Build trigger** in the console pointing to your repo, with substitution variables:
+   - `_REGION`: e.g., `us-central1`
+   - `_REPO_NAME`: `dataplex-ui-repo`
+   - `_APP_NAME`: `dataplex-business-ui`
+   - `_SERVICE_NAME`: `dataplex-business-ui`
+   - `_ADMIN_EMAIL`: your admin email
+   - `_CLIENT_ID`: your OAuth Client ID
+   - `_CLIENT_SECRET`: your OAuth Client Secret
+   - `_GCP_LOCATION`: region for Dataplex resources (e.g., `europe-west1`)
+   - `_GCP_REGION`: same as above
+
+### Option B: Manual deployment
+
+```bash
+# 1. Authenticate
 gcloud auth login
-```
-#### Step 2: Set the project in which you are going to deploy this application
-Replace YOUR_PROJECT_ID with the actual Project id in the below command before running it 
-```shell
 gcloud config set project YOUR_PROJECT_ID
-```
 
-#### Step 3: Enable Cloud run and artifact API's for deployment
-```shell
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com cloudresourcemanager.googleapis.com
-```
+# 2. Build
+gcloud builds submit . \
+  --tag us-central1-docker.pkg.dev/PROJECT_ID/dataplex-ui-repo/dataplex-ui:latest
 
-#### Step 4: Clone the repo into you Cloud shell or in case of Google cloud SDK clone it into the installed computer 
-```shell
-git clone https://github.com/GoogleCloudPlatform/dataplex-business-user-interface
-```
-After cloning go inside the cloned repo
-```shell
-cd dataplex-business-user-interface
-```
-
-now before building the container if we want to do any default configs setting for ui change we can do that
-via changing the **configData.json** inside the backend folder 
-
-### This is manadotory if you want to use **Browse by aspects** functionality in the UI, if you don't want to use **Browse by aspects** functionality you can skip this and move on to Step 5 of deployment steps .
-
-```shell
-vi backend/configData.json // or use any code/text editor
-```
-Once you open this file you will see the json structure as mentioned below.
-
-```json
-{
-  "aspectType": {},
-  "assets": {},
-  "products": []
-}
-```
-
-Now to use browse by aspects we have to set the aspectType here in the below format.
-
-```json
-{
-  "aspectType": {
-    // this is the format to put full name as the key and fields of aspects as value
-    "projects/{replace-project-number}/locations/{replace-location-here}/entryGroups/@dataplex/entries/{replace-aspect-id-here}_aspectType":[
-      //the below fields are just samples, please use the fields name which exists in your aspect you have mentioned in the name
-      "sales",
-      "hr",
-    ],
-    "projects/{replace-project-number}/locations/{replace-location-here}/entryGroups/@dataplex/entries/{replace-aspect-id-here}_aspectType":[
-      //the below fields are just samples, please use the fields name which exists in your aspect you have mentioned in the name
-      "marketing",
-      "domainname",
-    ],
-
-  },
-  "assets": {},
-  "products": []
-}
-```
-
-To populate the aspects name you need project-number, location of the apsects, and aspect type id
-Folllow these steps to get the values for configuration:
-1. Open the **GCP Console**
-2. Open the sidebar **cloud overview** and the select **Dashboard**.
-3. Here you can see the project number.
-4. Copy the project number and replace it in the name.
-  `projects/1069*****1809/locations/{replace-location-here}/entryGroups/@dataplex/entries/{replace-aspect-id-here}_aspectType`
-5. Now go to **Dataplex Universal Catalog**.
-6. Search for the name of the aspect and open the detail view.
-7. In here you can find the aspect type id, location and we already have the project number from the previous steps using that our name would be.
-  `projects/1069*****1809/locations/us-central1/entryGroups/@dataplex/entries/aspecttype3_aspectType`.
-8. Now to get the field values we can see in the same details screen we have the fields mentioned.
-9. Copy the names create the string array with the name and use all small cases in here.
-10. Now the json file would look like this.
-```json
-{
-  "aspectType": {
-    "projects/1069*****1809/locations/us-central1/entryGroups/@dataplex/entries/aspecttype3_aspectType":[
-      "sales",
-      "finance",
-      "marketing",
-    ],
-    //you can add more aspects here 
-  },
-  "assets": {},
-  "products": []
-}
-```
-11. You can add as many aspects you want in the same manner.
-12. And save this in configData.json under backend folder.
-
-
-**Now you are done with the aspects configuration for browse by funationality**
-
-#### Step 5: Create the artifact repository to store the container artifact, this command require to run only once for the deployment if you are redeplying skip this step
-Replace `[REPO_NAME]` with the name you want to give like (dataplex-business-ui-artifact, etc.) and set up your preferred region by setting that in --location flag below command is using `us-central1` but you can replace it but make sure if you replace it then use the same region in below steps by replacing `us-central1` with the the used value.
-```shell
-gcloud artifacts repositories create `[REPO_NAME]` --repository-format=docker --location=us-central1 --description="Docker repository for dataplex-business-ui project"
-```
-
-#### Step 6 Build the Docker Image with Cloud Build
-Submit your project to **Google Cloud Build** to create a container image. Replace `[PROJECT_ID]`with your GCP Project ID,
-`[REPO_NAME]` which you created in step 5 and `[APP_NAME]`with your desired application name.
-
-```shell
-gcloud builds submit . --tag us-central1-docker.pkg.dev/[PROJECT_ID]/[REPO_NAME]/[APP_NAME]:latest
-```
-
-#### Step 7: Deploy to Cloud Run
-Replace the [PROJECT_ID],[REPO_NAME],[APP_NAME] with the value you have used above and replace [SERVICE_NAME] with the name you want to set your cloud run service, [ADMIN_EMAIL_ID] to your admin email you want to set, then the most important replace the [CLIENT_ID] and [CLIENT_SCERET] with the **OAuth credentials** you created in earlier steps.
-
-Deploy the container image you just built to **Cloud Run** using the below command after replacing the mentioned values.
-After successful deployment it will return a url to access the application.
-
-```shell
-gcloud run deploy [SERVICE_NAME] \
-  --image us-central1-docker.pkg.dev/[PROJECT_ID]/[REPO_NAME]/[APP_NAME]:latest \
+# 3. Deploy
+gcloud run deploy dataplex-ui \
+  --image us-central1-docker.pkg.dev/PROJECT_ID/dataplex-ui-repo/dataplex-ui:latest \
   --platform managed \
   --region us-central1 \
   --allow-unauthenticated \
   --port 8080 \
-  --set-env-vars  VITE_API_URL="/api" \
-  --set-env-vars  VITE_API_VERSION="v1" \
-  --set-env-vars  VITE_ADMIN_EMAIL="[ADMIN_EMAIL_ID]" \
-  --set-env-vars  VITE_GOOGLE_PROJECT_ID="[PROJECT_ID]" \
-  --set-env-vars  VITE_GOOGLE_CLIENT_ID="[CLIENT_ID]" \
-  --set-env-vars  VITE_GOOGLE_REDIRECT_URI="/auth/google/callback" \
-  --set-env-vars  GOOGLE_CLOUD_PROJECT_ID="[PROJECT_ID]" \
-  --set-env-vars  GCP_LOCATION="global" \
-  --set-env-vars  GCP_REGION="global" \
-  --set-env-vars  VITE_GOOGLE_CLIENT_SECRET="[CLIENT_SCERET]"
-```
-**--platform managed**: Specifies the fully managed Cloud Run environment.
-
-**--region**: Choose a region that is close to you.
-
-**--allow-unauthenticated**: Makes the frontend publicly accessible.
-
-Cloud Run will provide you with a public URL for your service.
-
-#### Step 8: Update OAuth Credentials for Production
-Go back to your **Google Cloud Console** > Credentials page.
-
-Edit your Web application client ID.
-
-Add the URL provided by **Cloud Run** (e.g., https://your-app-name-....run.app) to the Authorized JavaScript origins and Authorized redirect URIs.
-
-Save your changes.
-
-**Your application is now deployed and accessible, with both front-end and backend in one single container and cloud run service!**
- 
-### For redeployment follow the steps below 
-
-#### Step 1: Pull the latest changes from the code repository
-if you want to redeploy the changes with the latest codes.
-Go to the repository folder inside the cloud shell and run the command below.
-
-```shell
-git pull
+  --set-env-vars "VITE_API_URL=/api,VITE_API_VERSION=v1,VITE_ADMIN_EMAIL=admin@example.com,VITE_GOOGLE_PROJECT_ID=PROJECT_ID,VITE_GOOGLE_CLIENT_ID=YOUR_CLIENT_ID,VITE_GOOGLE_REDIRECT_URI=/auth/google/callback,GOOGLE_CLOUD_PROJECT_ID=PROJECT_ID,GCP_LOCATION=europe-west1,GCP_REGION=europe-west1,VITE_GOOGLE_CLIENT_SECRET=YOUR_SECRET,SUPER_ADMIN_EMAIL=admin@example.com"
 ```
 
-#### Step 2: Modify the backend/configData.json if required
-if you want any changes in your backend/configData.json for the browse experience, you can do so or if you don't want the changes in that use the same file. 
-for modification of the configData.json file run the command below.
-```shell
-vi backend/configData.json
+4. **Update OAuth redirect URIs** with the Cloud Run URL (e.g., `https://dataplex-ui-xxxxx.run.app`)
+
+### Option C: Using GitHub Actions
+
+The repo includes `.github/workflows/deploy.yml`. Configure these GitHub secrets:
+- `GCP_PROJECT_ID`
+- `GCP_WORKLOAD_IDENTITY_PROVIDER`
+- `GCP_SERVICE_ACCOUNT`
+- `VITE_GOOGLE_CLIENT_SECRET`
+
+## Admin Setup
+
+After deployment, the user specified in `SUPER_ADMIN_EMAIL` automatically has super-admin access.
+
+### Role hierarchy
+
+| Role | Scope | Can do |
+|------|-------|--------|
+| **Super Admin** | Global | Manage all admins, approve/reject all requests, manage all projects |
+| **Project Admin** | Per-project | Approve/reject requests for assigned projects |
+| **Data Steward** | Auto-detected | Users who are Data Stewards in Dataplex get admin-like access for their assets |
+
+### Managing admins
+
+Go to **Admin Panel > Role Management** in the UI to:
+- Add project admins and assign them to specific projects
+- View all admin roles
+
+## Features Guide
+
+### Search
+- Type in the search bar to find tables, datasets, and data products
+- Results show access status (green check = you have access)
+- Click any result to view its details, schema, sample data, and quality scans
+
+### AI Chat
+- Open any table and go to the **Chat** tab
+- Ask natural language questions about the data (e.g., "What are the top 5 departments by employee count?")
+- The AI generates SQL, runs it, and can create charts from the results
+
+### Access Requests
+- When you don't have access to a dataset, click **Request Access**
+- Provide a justification message
+- Admins receive email notifications and can approve/reject with an optional reason
+- Once approved, IAM permissions are granted automatically on the GCP project
+
+### Table Relationships
+- Open any table and scroll to the **Relationships** section
+- Relationships are detected automatically by analyzing column names across all tables in the dataset
+- Click any related table to navigate to it
+
+### Data Products
+- Browse curated data products in the **Data Products** page
+- View all tables contained in a data product
+- Request access to data within a product
+
+### Data Quality
+- View Data Quality scan results for any table
+- See rule pass/fail rates, row-level statistics, and quality scores
+
+## Project Structure
+
+```
+dataplex-business-user-interface/
+├── backend/
+│   ├── server.js              # Express API server (all endpoints)
+│   ├── services/              # Business logic services
+│   │   ├── accessRequestService.js
+│   │   ├── adminService.js
+│   │   ├── dataAgentService.js
+│   │   ├── datasetRelationshipService.js
+│   │   ├── emailService.js
+│   │   ├── gcpIamService.js
+│   │   ├── grantedAccessService.js
+│   │   ├── notificationService.js
+│   │   └── serviceNowService.js
+│   ├── configData.json        # Browse-by-aspects configuration
+│   └── package.json
+├── src/                       # React frontend source
+│   ├── component/             # UI components
+│   ├── features/              # Redux slices
+│   ├── services/              # API client functions
+│   └── types/                 # TypeScript type definitions
+├── public/                    # Static assets (images, icons)
+├── .env.example               # Environment variable template
+├── cloudbuild.yaml            # Cloud Build configuration
+├── Dockerfile                 # Multi-stage Docker build
+├── entrypoint.sh              # Runtime env var injection
+└── vite.config.ts             # Frontend build config
 ```
 
-#### Step 3: we have to re build the Docker Image with Cloud Build
-Submit your project to **Google Cloud Build** to create a container image. Replace `[PROJECT_ID]`with your GCP Project ID,
-`[REPO_NAME]` which you created in step 5 and `[APP_NAME]`with your desired application name.
+## Environment Variables Reference
 
-```shell
-gcloud builds submit . --tag us-central1-docker.pkg.dev/[PROJECT_ID]/[REPO_NAME]/[APP_NAME]:latest
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_GOOGLE_PROJECT_ID` | Yes | GCP project ID |
+| `GOOGLE_CLOUD_PROJECT_ID` | Yes | GCP project ID (backend) |
+| `VITE_GOOGLE_CLIENT_ID` | Yes | OAuth 2.0 Client ID |
+| `VITE_GOOGLE_CLIENT_SECRET` | Yes | OAuth 2.0 Client Secret |
+| `VITE_GOOGLE_REDIRECT_URI` | Yes | OAuth redirect URI (usually `/auth/google/callback`) |
+| `VITE_API_URL` | Yes | API base URL (usually `/api`) |
+| `VITE_API_VERSION` | Yes | API version (usually `v1`) |
+| `GCP_LOCATION` | Yes | Dataplex resource region (e.g., `europe-west1`) |
+| `GCP_REGION` | Yes | Same as GCP_LOCATION |
+| `SUPER_ADMIN_EMAIL` | Yes | Initial super-admin email |
+| `SMTP_EMAIL` | No | Gmail address for email notifications |
+| `SMTP_PASSWORD` | No | Gmail App Password for SMTP |
+| `SERVICENOW_INSTANCE_URL` | No | ServiceNow instance for ticket integration |
+| `SERVICENOW_USERNAME` | No | ServiceNow API username |
+| `SERVICENOW_PASSWORD` | No | ServiceNow API password |
 
-#### Step 4: Deploy to Cloud Run
-Replace the [PROJECT_ID],[REPO_NAME],[APP_NAME] with the value you have used above and replace [SERVICE_NAME] with the name you want to set your cloud run service, [ADMIN_EMAIL_ID] to your admin email you want to set, then the most important replace the [CLIENT_ID] and [CLIENT_SCERET] with the **OAuth credentials** you created in earlier steps.
+## GCP APIs Used
 
-Deploy the container image you just built to Cloud Run using the below command after replacing the mentioned values.
-After successful deployment it will return a url to access the application.
+| API | Purpose |
+|-----|---------|
+| Dataplex API | Catalog search, entry details, aspects, data products, data scans |
+| BigQuery API | Table schemas, sample data, dataset access checks |
+| Conversational Analytics API | AI chat with data tables |
+| Vertex AI API | Gemini for AI search and chart generation |
+| Data Lineage API | Upstream/downstream data flow visualization |
+| Cloud Resource Manager API | Project listing, IAM policy management |
+| Firestore | Persistent storage for access requests, notifications, admin roles |
 
-```shell
-gcloud run deploy [SERVICE_NAME] \
-  --image us-central1-docker.pkg.dev/[PROJECT_ID]/[REPO_NAME]/[APP_NAME]:latest \
-  --platform managed \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --port 8080 \
-  --set-env-vars  VITE_API_URL="/api" \
-  --set-env-vars  VITE_API_VERSION="v1" \
-  --set-env-vars  VITE_ADMIN_EMAIL="[ADMIN_EMAIL_ID]" \
-  --set-env-vars  VITE_GOOGLE_PROJECT_ID="[PROJECT_ID]" \
-  --set-env-vars  VITE_GOOGLE_CLIENT_ID="[CLIENT_ID]" \
-  --set-env-vars  VITE_GOOGLE_REDIRECT_URI="/auth/google/callback" \
-  --set-env-vars  GOOGLE_CLOUD_PROJECT_ID="[PROJECT_ID]" \
-  --set-env-vars  GCP_LOCATION="global" \
-  --set-env-vars  GCP_REGION="global" \
-  --set-env-vars  VITE_GOOGLE_CLIENT_SECRET="[CLIENT_SCERET]"
-```
+## License
 
-**Your application is now redeployed and accessible, with both front-end and backend in one single container and cloud run service!**
-
-
-## Release Note : 1.2.0
-This is a minor release with features, identified bug/fixes and some user interface changes.
-Feature Enhancements:
-
-  - Data Product is also available to browse.
-  - New navigation sidebar.
-  - Creating consisteny between the UI/UX of multiple componenets.
-
-Bug Fixes:
-
-  - Bug fix in glossary.
-
+ISC License. See [LICENSE](LICENSE) for details.

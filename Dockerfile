@@ -3,7 +3,7 @@ FROM node:20-alpine AS builder
 # Set working directory
 WORKDIR /app/frontend
 
-COPY package.json .pnp.cjs .pnp.loader.mjs ./
+COPY package.json package-lock.json ./
 RUN npm install -f
 COPY . .
 RUN VITE_API_URL=__VITE_API_URL__ \
