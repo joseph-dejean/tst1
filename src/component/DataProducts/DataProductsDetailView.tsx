@@ -600,6 +600,9 @@ const DataProductsDetailView: React.FC<DataProductsDetailViewProps> = ({ onReque
                 handleResourceClick(previewEntry.name);
               }
             }}
+            onRequestAccess={(assetEntry) => {
+              handleRequestAccess(assetEntry);
+            }}
             id_token={id_token}
             isGlossary={true}
             previewMode="isolated"

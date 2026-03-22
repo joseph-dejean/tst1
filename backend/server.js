@@ -5360,9 +5360,10 @@ app.get('/api/access-request/health', (req, res) => {
   });
 });
 
-// Basic health check endpoint
+// Basic health check endpoint with version for deployment verification
+const BUILD_VERSION = '3.5-' + new Date().toISOString().slice(0, 16).replace(/[:-]/g, '');
 app.get('/api/health', (req, res) => {
-  res.status(200).send('API is running!');
+  res.json({ status: 'ok', version: BUILD_VERSION });
 });
 // Basic health check endpoint
 app.get('/', (req, res) => {

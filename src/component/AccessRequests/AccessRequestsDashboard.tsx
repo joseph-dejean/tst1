@@ -376,6 +376,7 @@ const AccessRequestsDashboard: React.FC = () => {
               <TableHead>
                 <TableRow sx={{ backgroundColor: '#F8FAFD' }}>
                   <TableCell><strong>Asset Name</strong></TableCell>
+                  <TableCell><strong>Asset Type</strong></TableCell>
                   <TableCell><strong>Requester</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
                   <TableCell><strong>Submitted</strong></TableCell>
@@ -391,6 +392,13 @@ const AccessRequestsDashboard: React.FC = () => {
                     <TableCell>
                       <div style={{ fontWeight: 500, color: '#1F1F1F' }}>{request.assetName}</div>
                       <div style={{ fontSize: '0.75rem', color: '#5F6368' }}>{request.projectId}</div>
+                    </TableCell>
+                    <TableCell>
+                      {request.assetType ? (
+                        <Chip label={request.assetType} size="small" variant="outlined" sx={{ fontSize: '11px', height: '22px' }} />
+                      ) : (
+                        <Typography variant="caption" sx={{ color: '#9AA0A6' }}>—</Typography>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" sx={{ color: '#1F1F1F' }}>{request.requesterEmail}</Typography>
